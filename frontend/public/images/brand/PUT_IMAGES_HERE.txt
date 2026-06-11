@@ -1,0 +1,5 @@
+Drop brand assets here.
+
+Expected files (referenced in src/lib/assets/images.ts → IMAGES.brand):
+  logo.png      – primary logo (transparent background recommended)
+  og-image.jpg  – Open Graph / social share image (1200×630px)

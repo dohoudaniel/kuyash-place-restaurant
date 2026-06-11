@@ -1,0 +1,6 @@
+Drop hero images here.
+
+Expected files (referenced in src/lib/assets/images.ts):
+  main-plate.jpg   – main food plate shown in the right hero panel
+  tomato.png       – floating tomato ingredient (transparent background)
+  garlic.png       – floating garlic ingredient (transparent background)

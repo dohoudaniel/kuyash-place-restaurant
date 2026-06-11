@@ -1,0 +1,23 @@
+Drop menu dish images here.
+
+Expected files (referenced in src/lib/assets/images.ts → IMAGES.menu):
+  signature-grill-plate.jpg
+  fire-chicken-combo.jpg
+  chefs-special-pasta.jpg
+  classic-smash-burger.jpg
+  bbq-bacon-stack.jpg
+  spicy-jalapeno-burger.jpg
+  grilled-chicken-breast.jpg
+  caesar-salad.jpg
+  crispy-chicken-strips.jpg
+  street-tacos.jpg
+  loaded-fries.jpg
+  onion-rings.jpg
+  full-breakfast-plate.jpg
+  pancake-stack.jpg
+  avocado-toast.jpg
+  chocolate-lava-cake.jpg
+  berry-cheesecake.jpg
+  classic-milkshake.jpg
+
+Recommended size: 800×600px, JPG quality 80+

@@ -1,45 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { MENU_CATEGORIES } from "@/data/menuCategories";
-
-const MENU_ITEMS: Record<string, { name: string; description: string; price: string }[]> = {
-  "whats-hot": [
-    { name: "Signature Grill Plate", description: "Slow-cooked beef with roasted garlic & herbs", price: "$14.90" },
-    { name: "Fire Chicken Combo", description: "Crispy chicken, spicy sauce, pickles & slaw", price: "$12.50" },
-    { name: "Chef's Special Pasta", description: "House-made fettuccine, truffle cream, parmesan", price: "$13.90" },
-  ],
-  burgers: [
-    { name: "Classic Smash Burger", description: "Double smash patty, American cheese, pickles", price: "$10.90" },
-    { name: "BBQ Bacon Stack", description: "Beef patty, streaky bacon, BBQ sauce, onion rings", price: "$13.50" },
-    { name: "Spicy Jalapeño Burger", description: "Beef patty, jalapeños, pepper jack, chipotle mayo", price: "$11.90" },
-  ],
-  "chicken-salad": [
-    { name: "Grilled Chicken Breast", description: "Herb-marinated chicken, lemon butter, greens", price: "$12.90" },
-    { name: "Caesar Salad", description: "Romaine, parmesan, house-made croutons, anchovy dressing", price: "$9.90" },
-    { name: "Crispy Chicken Strips", description: "5 pieces, served with honey mustard & fries", price: "$11.50" },
-  ],
-  tacos: [
-    { name: "Street Tacos (3 pcs)", description: "Pulled beef, pico de gallo, avocado, lime", price: "$10.90" },
-    { name: "Loaded Fries", description: "Seasoned fries, cheese sauce, jalapeños, sour cream", price: "$7.50" },
-    { name: "Onion Rings", description: "Beer-battered, golden crispy, ranch dip", price: "$6.90" },
-  ],
-  breakfast: [
-    { name: "Full Breakfast Plate", description: "Eggs, bacon, sausage, toast, baked beans", price: "$11.90" },
-    { name: "Pancake Stack", description: "3 fluffy pancakes, maple syrup, fresh berries", price: "$9.50" },
-    { name: "Avocado Toast", description: "Sourdough, smashed avo, poached egg, chilli flakes", price: "$10.90" },
-  ],
-  desserts: [
-    { name: "Chocolate Lava Cake", description: "Warm dark chocolate cake, vanilla ice cream", price: "$7.90" },
-    { name: "Berry Cheesecake", description: "New York style, mixed berry compote", price: "$8.50" },
-    { name: "Classic Milkshake", description: "Vanilla, chocolate or strawberry — your choice", price: "$6.90" },
-  ],
-};
+import Image from "next/image";
+import { MENU_CATEGORIES, MENU_ITEMS } from "@/src/lib/data/menu";
+import { IMAGES, type ImageKey } from "@/src/lib/assets/images";
 
 export default function MenuSection() {
   const [activeSlug, setActiveSlug] = useState("burgers");
 
   const items = MENU_ITEMS[activeSlug] ?? [];
+  const activeCategory = MENU_CATEGORIES.find((c) => c.slug === activeSlug);
 
   return (
     <section id="menu" className="py-16 md:py-24 px-6 md:px-14" style={{ background: "var(--cream)" }}>
@@ -82,43 +52,73 @@ export default function MenuSection() {
 
       {/* Menu item cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-        {items.map((item) => (
-          <div
-            key={item.name}
-            className="bg-white rounded-2xl p-6 flex flex-col gap-3 transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer"
-            style={{ border: "1px solid var(--cream-dark)" }}
-          >
-            {/* Placeholder image area */}
+        {items.map((item) => {
+          const imageSrc = item.imageKey
+            ? IMAGES.menu[item.imageKey as ImageKey]
+            : null;
+
+          return (
             <div
-              className="w-full rounded-xl flex items-center justify-center text-5xl"
-              style={{ height: "120px", background: "var(--cream)" }}
-              aria-hidden="true"
+              key={item.name}
+              className="bg-white rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer"
+              style={{ border: "1px solid var(--cream-dark)" }}
             >
-              {MENU_CATEGORIES.find((c) => c.slug === activeSlug)?.emoji}
-            </div>
-
-            <div>
-              <h3 className="font-bold text-base" style={{ color: "var(--brown-dark)" }}>
-                {item.name}
-              </h3>
-              <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {item.description}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between mt-auto pt-2">
-              <span className="font-black text-lg" style={{ color: "var(--orange)" }}>
-                {item.price}
-              </span>
-              <button
-                className="px-4 py-2 rounded-full text-xs font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95"
-                style={{ background: "var(--orange)" }}
+              {/* Image area */}
+              <div
+                className="relative w-full flex items-center justify-center"
+                style={{ height: "160px", background: "var(--cream)" }}
               >
-                Add to cart
-              </button>
+                {imageSrc ? (
+                  <Image
+                    src={imageSrc}
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                ) : (
+                  <span className="text-5xl" aria-hidden="true">
+                    {activeCategory?.emoji}
+                  </span>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="p-5 flex flex-col gap-3 flex-1">
+                <div>
+                  <h3 className="font-bold text-base" style={{ color: "var(--brown-dark)" }}>
+                    {item.name}
+                  </h3>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    {item.description}
+                  </p>
+                </div>
+
+                {/* Star rating */}
+                <div className="flex items-center gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <svg key={i} className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="var(--red)">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                  <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>5.0</span>
+                </div>
+
+                <div className="flex items-center justify-between mt-auto pt-1">
+                  <span className="font-black text-lg" style={{ color: "var(--red)" }}>
+                    {item.price}
+                  </span>
+                  <button
+                    className="px-4 py-2 rounded-full text-xs font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95"
+                    style={{ background: "var(--red)" }}
+                  >
+                    Add to cart
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

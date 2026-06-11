@@ -1,28 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  --cream: #FAF6F0;
-  --cream-dark: #F2EAE0;
-  --orange: #E05B2B;
-  --orange-dark: #C04A20;
-  --orange-light: #F07040;
-  --brown-dark: #1A0800;
-  --brown-mid: #3D1F0A;
-  --text-muted: #7A6A5A;
+  --white:       #FFFFFF;
+  --off-white:   #F8F8F8;
+  --red:         #D90429;
+  --red-dark:    #A8021F;
+  --red-light:   #F0183A;
+  --black:       #0F0F0F;
+  --black-mid:   #1A1A1A;
+  --gray:        #F8F8F8;
+  --gray-mid:    #E5E5E5;
+  --text-muted:  #6B6B6B;
+
+  /* keep orange as alias so no existing var(--orange) references break */
+  --orange:      var(--red);
+  --orange-dark: var(--red-dark);
+  --orange-light: var(--red-light);
+  --cream:       var(--off-white);
+  --cream-dark:  var(--gray-mid);
+  --brown-dark:  var(--black);
+  --brown-mid:   #3A3A3A;
 }
 
 @theme inline {
-  --color-cream: var(--cream);
-  --color-cream-dark: var(--cream-dark);
-  --color-orange: var(--orange);
-  --color-orange-dark: var(--orange-dark);
-  --color-orange-light: var(--orange-light);
-  --color-brown-dark: var(--brown-dark);
-  --color-brown-mid: var(--brown-mid);
+  --color-white:      var(--white);
+  --color-off-white:  var(--off-white);
+  --color-red:        var(--red);
+  --color-red-dark:   var(--red-dark);
+  --color-black:      var(--black);
+  --color-gray:       var(--gray);
+  --color-gray-mid:   var(--gray-mid);
   --color-text-muted: var(--text-muted);
+  --color-orange:     var(--red);
+  --color-cream:      var(--off-white);
+  --color-cream-dark: var(--gray-mid);
+  --color-brown-dark: var(--black);
+  --color-brown-mid:  #3A3A3A;
 }
 
 body {
-  background: var(--cream);
-  color: var(--brown-dark);
+  background: var(--white);
+  color: var(--black);
 }

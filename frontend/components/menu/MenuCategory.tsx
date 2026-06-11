@@ -1,7 +1,4 @@
-"use client";
-
-import { useState } from "react";
-import type { MenuCategory } from "@/data/menuCategories";
+import type { MenuCategory } from "@/src/lib/types";
 
 interface Props {
   category: MenuCategory;
