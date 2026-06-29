@@ -1,9 +1,7 @@
-import HeroSection from "@/components/hero/HeroSection";
-import StatsSection from "@/components/stats/StatsSection";
-import MenuSection from "@/components/menu/MenuSection";
-import WhyChooseUs from "@/components/why/WhyChooseUs";
-import Footer from "@/components/layout/Footer";
-import ChatButton from "@/components/ui/ChatButton";
+import HeroSection from "@/components/features/hero";
+import StatsSection from "@/components/features/stats";
+import MenuSection from "@/components/features/menu";
+import WhyChooseUs from "@/components/features/why-choose-us";
 
 export default function Home() {
   return (
@@ -12,8 +10,6 @@ export default function Home() {
       <StatsSection />
       <MenuSection />
       <WhyChooseUs />
-      <Footer />
-      <ChatButton />
     </main>
   );
 }

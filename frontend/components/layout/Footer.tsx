@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { NAV_LINKS } from "@/src/lib/data/navigation";
-import { IMAGES } from "@/src/lib/assets/images";
+import { NAV_LINKS } from "@/lib/data/navigation";
+import { IMAGES } from "@/lib/assets/images";
 
 const SOCIAL_LINKS = [
   {

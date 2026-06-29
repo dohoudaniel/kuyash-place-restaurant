@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { IMAGES } from "@/src/lib/assets/images";
+import { IMAGES } from "@/lib/assets/images";
 
 const NAV_LINKS = [
   { label: "Home",             href: "/",              highlight: false },

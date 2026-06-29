@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { MENU_CATEGORIES, MENU_ITEMS } from "@/src/lib/data/menu";
-import { IMAGES, type ImageKey } from "@/src/lib/assets/images";
+import { MENU_CATEGORIES, MENU_ITEMS } from "@/lib/data/menu";
+import type { MenuItem } from "@/lib/types";
+import { IMAGES, type ImageKey } from "@/lib/assets/images";
 
 export default function MenuSection() {
   const [activeSlug, setActiveSlug] = useState("burgers");
 
-  const items = MENU_ITEMS[activeSlug] ?? [];
+  const items: MenuItem[] = MENU_ITEMS[activeSlug] ?? [];
   const activeCategory = MENU_CATEGORIES.find((c) => c.slug === activeSlug);
 
   return (
