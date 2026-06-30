@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display } from "next/font/google";
+import { Inter, Playfair_Display, Geist } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+import Navbar from "@/components/layouts/navbar/Navbar";
+import Footer from "@/components/layouts/footer";
+import ChatButton from "@/components/features/chat";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const inter = Inter({
   subsets: ["latin"],
@@ -28,8 +34,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${playfair.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-[var(--font-inter)]">{children}</body>
+    <html lang="en" className={cn("h-full", "antialiased", inter.variable, playfair.variable, "font-sans", geist.variable)}>
+      <body className="min-h-full flex flex-col font-[var(--font-inter)]">
+        <Navbar />
+        {children}
+        <Footer />
+        <ChatButton />
+      </body>
     </html>
   );
 }
