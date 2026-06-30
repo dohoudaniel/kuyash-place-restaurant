@@ -56,6 +56,11 @@ export const IMAGES = {
     classicMilkshake:     "/images/menu/classic-milkshake.jpg",
   },
 
+  // ── Academy ─────────────────────────────────────────────────────────────────
+  academy: {
+    chef: "/images/chef.png",
+  },
+
   // ── Brand ───────────────────────────────────────────────────────────────────
   brand: {
     logo:   "/images/brand/kuyash.png",

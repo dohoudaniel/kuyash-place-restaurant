@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { label: "Gallery",          href: "#gallery",       highlight: false },
   { label: "About",            href: "#about",         highlight: false },
   { label: "Contact",          href: "#contact",       highlight: false },
-  { label: "Kuyash Academy",   href: "#academy",       highlight: true  },
+  { label: "Kuyash Academy",   href: "/academy",       highlight: true  },
 ];
 
 export default function Navbar() {
