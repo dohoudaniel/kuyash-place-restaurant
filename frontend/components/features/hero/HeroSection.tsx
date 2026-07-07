@@ -3,33 +3,52 @@
 import Navbar from "@/components/layouts/navbar";
 import HeroContent from "./HeroContent";
 import HeroStats from "./HeroStats";
-import HeroImage from "./HeroImage";
 
 export default function HeroSection() {
   return (
     <section
-      className="relative min-h-screen overflow-hidden"
-      style={{ background: "var(--white)" }}
+      className="relative overflow-hidden"
+      style={{ background: "#0d0d0d", height: "100vh" }}
     >
-      {/* Faint decorative circle watermarks */}
+      {/* Decorative red circle rings */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute rounded-full hidden md:block" style={{ width: "clamp(300px, 40vw, 520px)", height: "clamp(300px, 40vw, 520px)", top: "5%", left: "20%", border: "1.5px solid rgba(217,4,41,0.08)" }} />
-        <div className="absolute rounded-full hidden md:block" style={{ width: "clamp(200px, 28vw, 360px)", height: "clamp(200px, 28vw, 360px)", top: "18%", left: "30%", border: "1.5px solid rgba(217,4,41,0.05)" }} />
-        <div className="absolute rounded-full" style={{ width: "clamp(120px, 18vw, 200px)", height: "clamp(120px, 18vw, 200px)", top: "8%", left: "8%", border: "1.5px solid rgba(217,4,41,0.05)" }} />
+        <div
+          className="absolute rounded-full hidden lg:block"
+          style={{
+            width: "520px",
+            height: "520px",
+            top: "55%",
+            left: "27%",
+            transform: "translate(-50%, -50%)",
+            border: "1px solid rgba(217,4,41,0.15)",
+          }}
+        />
+        <div
+          className="absolute rounded-full hidden lg:block"
+          style={{
+            width: "360px",
+            height: "360px",
+            top: "55%",
+            left: "27%",
+            transform: "translate(-50%, -50%)",
+            border: "1px solid rgba(217,4,41,0.10)",
+          }}
+        />
       </div>
 
+      {/* Navbar fixed at top */}
       <Navbar />
 
-      {/* Hero content */}
-      <div className="relative z-10 flex flex-col lg:flex-row items-center lg:items-stretch min-h-screen pt-28 sm:pt-32 md:pt-36 lg:pt-32">
-        {/* ── Left panel ── */}
-        <div className="flex-1 flex flex-col justify-between px-4 sm:px-6 md:px-12 lg:px-16 xl:px-20 py-8 sm:py-10 lg:py-0 lg:min-h-screen w-full lg:w-auto lg:max-w-[55%]">
+      {/* Content row — starts BELOW navbar via pt-24 */}
+      <div className="flex flex-row h-full pt-24">
+
+        {/* Left panel */}
+        <div className="flex flex-col justify-between w-[52%] px-16 xl:px-20 pb-14">
           <HeroContent />
           <HeroStats />
         </div>
 
-        {/* ── Right panel ── */}
-        <HeroImage />
+
       </div>
     </section>
   );

@@ -28,7 +28,7 @@ export default function NavLinks() {
             <a
               href={link.href}
               className="text-xs xl:text-sm font-semibold tracking-wide transition-colors duration-200 hover:text-red relative group whitespace-nowrap"
-              style={{ color: "var(--black)" }}
+              style={{ color: "#fff" }}
             >
               {link.label}
               <span

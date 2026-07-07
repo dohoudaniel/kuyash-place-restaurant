@@ -32,10 +32,10 @@ export default function Navbar() {
     <motion.nav
       className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-6 md:px-8 lg:px-16 transition-all duration-500"
       style={{
-        background: scrolled ? "rgba(255,255,255,0.85)" : "transparent",
+        background: scrolled ? "rgba(10,10,10,0.92)" : "transparent",
         backdropFilter: scrolled ? "blur(16px)" : "none",
         WebkitBackdropFilter: scrolled ? "blur(16px)" : "none",
-        borderBottom: scrolled ? "1px solid rgba(0,0,0,0.06)" : "none",
+        borderBottom: scrolled ? "1px solid rgba(255,255,255,0.06)" : "none",
         paddingTop: scrolled ? "6px" : "8px",
         paddingBottom: scrolled ? "6px" : "8px",
       }}
@@ -70,8 +70,8 @@ export default function Navbar() {
       <div className="hidden lg:flex items-center gap-3 xl:gap-4 shrink-0">
         <Link
           href="/wishlist"
-          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-gray-mid hover:scale-105"
-          style={{ border: "1.5px solid var(--gray-mid)" }}
+          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
+          style={{ border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff" }}
           aria-label={`Wishlist (${wishlistCount} items)`}
         >
           <Heart className="w-4 h-4 xl:w-5 xl:h-5" />
@@ -86,8 +86,8 @@ export default function Navbar() {
         </Link>
         <Link
           href="/cart"
-          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-gray-mid hover:scale-105"
-          style={{ border: "1.5px solid var(--gray-mid)" }}
+          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
+          style={{ border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff" }}
           aria-label={`Cart (${cartCount} items)`}
         >
           <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
@@ -107,8 +107,8 @@ export default function Navbar() {
             setAuthView("login");
             setShowAuthModal(true);
           }}
-          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-gray-mid hover:scale-105"
-          style={{ border: "1.5px solid var(--gray-mid)" }}
+          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
+          style={{ border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff" }}
           aria-label="Account"
         >
           <User className="w-4 h-4 xl:w-5 xl:h-5" />
@@ -128,7 +128,7 @@ export default function Navbar() {
       {/* ── Mobile hamburger ── */}
       <button
         className="lg:hidden p-2 z-10"
-        style={{ color: "var(--black)" }}
+        style={{ color: "#fff" }}
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle menu"
       >
