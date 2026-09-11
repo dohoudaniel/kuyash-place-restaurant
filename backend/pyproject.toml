@@ -1,0 +1,91 @@
+[project]
+name = "kuyash-backend"
+version = "0.1.0"
+description = "Backend for Kuyash Place Restaurant"
+requires-python = ">=3.12"
+dependencies = [
+    "Django==5.2.6",
+    "djangorestframework==3.16.1",
+    "django-environ==0.12.0",
+    "psycopg[binary]==3.2.9",
+    "django-cors-headers==4.7.0",
+    "drf-spectacular==0.28.0",
+    "django-allauth[socialaccount]==65.11.2",
+    "celery[redis]==5.5.3",
+    "redis==5.2.1",
+    "django-storages[s3]==1.14.6",
+    "argon2-cffi==25.1.0",
+    "sentry-sdk[django]==2.35.0",
+    "python-json-logger==3.3.0",
+    "whitenoise==6.9.0",
+    "Pillow==11.3.0",
+    "gunicorn==23.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.4.1",
+    "pytest-django==4.11.1",
+    "pytest-cov==6.2.1",
+    "factory-boy==3.3.3",
+    "responses==0.25.7",
+    "ruff==0.12.7",
+    "mypy==1.17.1",
+    "django-stubs[compatible-mypy]==5.2.2",
+    "djangorestframework-stubs==3.16.1",
+    "pip-audit==2.9.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "migrations", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "DJ", "S", "RUF"]
+ignore = [
+    "S101",    # assert is fine in tests
+    "DJ001",   # null=True on CharField is deliberate in some snapshot fields
+    "RUF012",  # mutable class attrs in Django Meta are idiomatic
+    # Prose and docstrings deliberately use en dashes and the naira sign.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106"]
+"conftest.py" = ["S105", "S106"]
+"config/settings/*" = ["F403", "F405"]
+"config/settings/dev.py" = ["S104"]  # binding 0.0.0.0 is local-only
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+addopts = "--strict-markers --tb=short"
+testpaths = ["apps"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = ["*/migrations/*", "*/tests/*", "*/apps.py", "*/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+# Tests are scaffolding: they deliberately pass None for unused view arguments
+# and build duck-typed stand-ins. Strict typing there costs more than it catches.
+exclude = ["migrations", ".venv", "/tests/", "conftest.py"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"

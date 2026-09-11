@@ -11,7 +11,7 @@ Estimates assume **one full-time backend developer**. Adjust proportionally.
 | # | Task |
 |---|---|
 | 0.1 | Django project scaffold, split settings, `django-environ` |
-| 0.2 | `docker-compose`: Postgres 16, Redis 7, web, worker, beat |
+| 0.2 | Dependency-free local dev: SQLite, in-memory cache, eager Celery (ADR-015). No Docker. |
 | 0.3 | `apps/common`: `TimeStampedModel`, `MoneyField`, `Money` value object, VAT maths |
 | 0.4 | DRF + `drf-spectacular` + problem-details exception handler |
 | 0.5 | Custom `User` (email login) + allauth wiring |
@@ -21,7 +21,7 @@ Estimates assume **one full-time backend developer**. Adjust proportionally.
 | 0.9 | CI: ruff, mypy, pytest, `check --deploy`, gitleaks, **the card-field grep gate** |
 | 0.10 | Sentry + structured JSON logging |
 
-**Gate 0:** `docker compose up` gives a working Django with OpenAPI docs, a seeded branch, a passing CI pipeline, and a money module with 100% test coverage.
+**Gate 0:** `make install migrate seed run` gives a working Django with OpenAPI docs, a seeded branch, a passing CI pipeline, and a money module with 100% test coverage — with no database or queue daemon installed.
 
 ---
 

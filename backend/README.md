@@ -2,7 +2,7 @@
 
 Django backend for Kuyash Place Restaurant: ordering, payments, reservations, catering, academy and loyalty for a single-location Nigerian restaurant.
 
-**Status:** specification complete, implementation not started.
+**Status:** Phase 0 (foundations) implemented. Phase 1 not started.
 **Stack:** Django 5.x · DRF · PostgreSQL 16 · Redis 7 · Celery · django-allauth · Supabase Storage
 
 ---
@@ -94,21 +94,21 @@ Agreed with the product owner on 2026-09-11. Rationale in [`docs/DECISIONS.md`](
 
 ## Getting started (once implementation begins)
 
+No Docker, no database server, no Redis — local development runs on a plain
+virtualenv (ADR-015).
+
 ```bash
 cd backend
-cp .env.example .env                 # fill in secrets
-docker compose up -d                 # postgres + redis
-uv sync                              # or: pip install -e ".[dev]"
-
-python manage.py migrate
-python manage.py seed_initial        # branch, categories, 18 items (needs_repricing=True)
-python manage.py createsuperuser
-python manage.py runserver
-
-# in separate terminals
-celery -A config worker -l info
-celery -A config beat   -l info
+make venv install            # virtualenv + dependencies
+cp .env.example .env         # defaults work as-is
+make migrate seed            # SQLite database + baseline branch, hours, role groups
+.venv/bin/python manage.py createsuperuser
+make run                     # http://localhost:8000
 ```
+
+Defaults: SQLite, in-memory cache, Celery running tasks eagerly in-process,
+email printed to the console. Point `DATABASE_URL` / `REDIS_URL` at real
+services when you want them — see `docs/DEPLOYMENT.md` §1a.
 
 | URL | What |
 |---|---|
@@ -119,12 +119,12 @@ celery -A config beat   -l info
 ### Quality gates
 
 ```bash
-ruff check . && ruff format --check .
-mypy apps/common apps/carts/services apps/payments/services apps/orders/services
-pytest --cov=apps --cov-fail-under=85
-pytest --cov=apps/common/money.py --cov=apps/carts/services --cov-fail-under=100
-python manage.py check --deploy --fail-level WARNING
-./scripts/check-no-card-fields.sh
+make lint          # ruff
+make typecheck     # mypy on the money layer
+make test          # pytest
+make coverage      # 85% overall, 100% on apps/common/money.py
+make gate          # PCI card-field gate
+make check         # everything CI runs
 ```
 
 ---

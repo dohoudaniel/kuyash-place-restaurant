@@ -8,11 +8,42 @@
 
 | Environment | Purpose | Data |
 |---|---|---|
-| `local` | Docker Compose on a developer machine | Seeded fixtures |
+| `local` | Plain virtualenv, no daemons (ADR-015) | Seeded fixtures |
 | `staging` | Pre-production verification, provider **test** keys | Anonymised copy |
 | `production` | Live | Real |
 
 Settings modules: `config.settings.dev` · `config.settings.test` · `config.settings.prod`. `prod.py` **raises at import** on any missing required variable — a misconfigured deploy fails immediately rather than at the first customer order.
+
+---
+
+## 1a. Local development (no Docker)
+
+Local development deliberately requires **no database server, no Redis and no containers**.
+
+```bash
+cd backend
+make venv install        # virtualenv + dependencies
+cp .env.example .env     # defaults already work as-is
+make migrate seed
+make run                 # http://localhost:8000/api/v1/docs/
+```
+
+What the defaults give you:
+
+| Component | Local default | Switch to the real thing |
+|---|---|---|
+| Database | SQLite (`db.sqlite3`) | `DATABASE_URL=postgres://…` |
+| Cache | In-memory `LocMemCache` | `REDIS_URL=redis://localhost:6379/0` |
+| Celery | Eager — tasks run in-process | Set `REDIS_URL`, then `celery -A config worker -l info` |
+| Email | Printed to the console | Set `EMAIL_BACKEND` and provider credentials |
+| Media | Local `media/` directory | Set `SUPABASE_S3_ENDPOINT` and keys |
+
+**The one caveat.** SQLite is not Postgres. Two Phase 1/2 features depend on
+Postgres specifically — full-text menu search (GIN) and the reservation
+double-booking `ExclusionConstraint`. Develop and test those with `DATABASE_URL`
+pointed at a real Postgres; `settings.USING_POSTGRES` guards the code paths, and
+from Phase 1A CI runs the suite against both engines so divergence fails the
+build rather than reaching a customer.
 
 ---
 

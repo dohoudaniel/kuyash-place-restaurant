@@ -1,2 +1,5 @@
 CLAUDE.md
 */CLAUDE.md
+*/.venv
+*/.env
+!*/.env.example

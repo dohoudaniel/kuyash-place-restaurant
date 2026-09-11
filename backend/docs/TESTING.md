@@ -59,10 +59,21 @@ def test_rounding_applied_once_not_accumulated():
     assert compute_total([333, 333, 333]) == 999
 
 
-def test_no_float_in_money_path():
-    """Static guard: the money module must not import or use float."""
-    src = Path("apps/common/money.py").read_text()
-    assert "float(" not in src and ": float" not in src
+def test_no_binary_floating_point_in_the_money_path():
+    """Structural guard: the money module must never reference Python's float.
+
+    An AST check, not a substring search. The original substring version was
+    wrong in both directions: it failed on a docstring that merely mentioned the
+    word, and it would have passed `eval("float")`.
+    """
+    tree = ast.parse(Path("apps/common/money.py").read_text())
+    names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert "float" not in names and "float" not in attrs
+    assert not [
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.Constant) and isinstance(n.value, float)
+    ]
 ```
 
 ### 3.1 The regression tests for the audit findings

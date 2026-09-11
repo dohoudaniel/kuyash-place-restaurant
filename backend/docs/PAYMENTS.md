@@ -31,7 +31,16 @@ Today this is a dark pattern: the data is collected and thrown away. **The dange
 
 ### 1.1 Enforcement
 
-Add to CI, failing the build:
+Implemented at `backend/scripts/check-no-card-fields.sh` and wired into CI.
+
+Behaviour: a hit anywhere in `backend/` is a **hard failure** — there is no
+legitimate server-side card field, ever. A hit in `frontend/` is also a hard
+failure *except* for an explicit allowlist of the five pre-existing files
+scheduled for Phase 1 deletion; that list can only shrink. The Sentry scrubber
+is exempt, since naming a key in order to redact it is the opposite of handling
+card data.
+
+Sketch:
 
 ```bash
 # scripts/check-no-card-fields.sh

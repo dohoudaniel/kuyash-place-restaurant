@@ -168,6 +168,34 @@ Decisions taken for the Kuyash Place backend, with the reasoning preserved so th
 
 ---
 
+## ADR-015 — No Docker for local development
+
+**Date:** 2026-09-11 · **Status:** Accepted · **Supersedes part of ADR-nil (Phase 0 plan)**
+
+**Context.** The original Phase 0 plan assumed `docker compose up` for Postgres and Redis. The team does not use Docker locally.
+
+**Decision.** Local development runs on a plain virtualenv with **zero external services**:
+
+- **Database** — SQLite by default. `DATABASE_URL` switches to Postgres when one is available.
+- **Cache** — in-memory `LocMemCache` when `REDIS_URL` is unset.
+- **Celery** — `CELERY_TASK_ALWAYS_EAGER` defaults to `True` when `REDIS_URL` is unset, so tasks run synchronously in-process.
+- **Email** — console backend.
+- **Media** — local disk until `SUPABASE_S3_ENDPOINT` is set.
+
+Staging and production still require Postgres and Redis; `config/settings/prod.py` raises at import if `REDIS_URL` is missing.
+
+**Consequences.** `make venv install migrate seed run` gets a working API with no daemons to install — the fastest possible path to a running system, which matters most in the phase where nothing works yet.
+
+The cost is a dev/prod database divergence. It is bounded and managed:
+
+- `settings.USING_POSTGRES` guards Postgres-only features.
+- Postgres-only constructs arrive in Phase 1A (GIN search) and Phase 2 (`ExclusionConstraint` for reservation double-booking). **Those must be developed and tested against Postgres**, not SQLite — set `DATABASE_URL` locally or rely on CI.
+- CI runs the suite against **both** SQLite (fast) and Postgres (truthful) from Phase 1A onward, so divergence is caught by the build rather than by a customer.
+
+**Rejected:** requiring a locally installed Postgres (setup friction for a one-developer project); SQLite everywhere including production (no concurrency, no exclusion constraints, no PITR).
+
+---
+
 ## Open decisions
 
 | # | Question | Needed by | Owner |

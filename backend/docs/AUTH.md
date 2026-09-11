@@ -83,10 +83,16 @@ ACCOUNT_EMAIL_VERIFICATION   = "mandatory"
 ACCOUNT_CONFIRM_EMAIL_ON_GET = False              # GET must not mutate state
 ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
 ACCOUNT_PASSWORD_MIN_LENGTH  = 10                 # UI currently claims 8 — update the copy
-ACCOUNT_LOGIN_ATTEMPTS_LIMIT   = 5
-ACCOUNT_LOGIN_ATTEMPTS_TIMEOUT = 300
 ACCOUNT_UNIQUE_EMAIL         = True
 ACCOUNT_ADAPTER              = "apps.accounts.adapters.KuyashAccountAdapter"
+
+# Throttled per IP *and* per account (AS-4). Replaces the deprecated
+# ACCOUNT_LOGIN_ATTEMPTS_LIMIT / _TIMEOUT pair.
+ACCOUNT_RATE_LIMITS = {
+    "login_failed":  "5/5m/ip,10/h/key",
+    "signup":        "3/h/ip",
+    "reset_password":"3/h/ip,3/h/key",
+}
 
 PASSWORD_RESET_TIMEOUT = 3600                     # 1 hour — matches the existing UI copy
 ```

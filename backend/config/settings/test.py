@@ -1,0 +1,38 @@
+"""Test settings: fast, hermetic, no external services."""
+
+from .base import *
+
+DEBUG = False
+SECRET_KEY = "test-only-key-not-secret"  # noqa: S105
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
+    }
+}
+USING_POSTGRES = False
+
+# Fast hashing — tests create a lot of users.
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
+# Throttling off by default; individual tests re-enable it.
+REST_FRAMEWORK = {**REST_FRAMEWORK, "DEFAULT_THROTTLE_CLASSES": []}
+
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+
+MIDDLEWARE = [m for m in MIDDLEWARE if "whitenoise" not in m]
+
+LOGGING = {"version": 1, "disable_existing_loggers": True, "root": {"handlers": []}}

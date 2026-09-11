@@ -125,6 +125,22 @@ const [formData, setFormData] = useState<PaymentData>({
 
 Full PAN, cardholder name, expiry and **CVV** are captured into component state and passed to the review step as props.
 
+> **Correction (2026-09-11, found by the CI gate, not by this audit's manual read):**
+> the card number does not stay in the payment step. It propagates into the review
+> step, which renders `paymentData.cardNumber.slice(-4)`. **Five** files touch card
+> data, not two:
+>
+> | File | What it does |
+> |---|---|
+> | `checkout/PaymentStep.tsx` | captures PAN, name, expiry, CVV |
+> | `checkout/PaymentStepCompact.tsx` | same, compact variant |
+> | `checkout/ReviewStep.tsx` | reads `cardNumber.slice(-4)` |
+> | `checkout/ReviewStepCompact.tsx` | reads `cardNumber.slice(-4)` |
+> | `account/PaymentMethodsSection.tsx` | hardcoded card records |
+>
+> This is the value of a mechanical gate over a careful reading: the reading
+> missed two files. All five are **deletions**, not rewrites.
+
 Today this is "merely" a dark pattern — the data is thrown away. **The danger is the obvious next step.** If anyone wires this existing form to a Django endpoint, Kuyash Place instantly enters **PCI-DSS scope at the hardest tier (SAQ D)**: you would be transmitting and processing raw cardholder data, and CVV storage is prohibited outright under PCI-DSS Req. 3.2.
 
 **This form must be deleted, not connected.** See `PAYMENTS.md`.
@@ -516,6 +532,7 @@ Every claim above is anchored to a file. Quick reference for the highest-severit
 | Fake signup | `frontend/components/features/auth/SignupForm.tsx:37` |
 | Fake password reset | `frontend/components/features/auth/ForgotPasswordForm.tsx:18` |
 | Raw PAN/CVV capture | `frontend/components/features/checkout/PaymentStep.tsx`, `PaymentStepCompact.tsx` |
+| PAN propagated to review | `frontend/components/features/checkout/ReviewStep.tsx:157`, `ReviewStepCompact.tsx:138` |
 | Fake order creation | `frontend/app/checkout/page.tsx:44` |
 | Hardcoded order | `frontend/app/orders/[id]/page.tsx:38` |
 | Unwritten order store | `frontend/lib/store/orderHistoryStore.ts` |

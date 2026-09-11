@@ -121,6 +121,7 @@ Without this, every menu and gallery image from Supabase Storage fails to render
 | `components/academy/` | Dead |
 | `components/features/menu/MenuItemDetailModal.old.tsx` | Dead |
 | Card fields in `checkout/PaymentStep*.tsx` | **PCI-DSS. Delete, do not connect.** |
+| Card fields in `checkout/ReviewStep*.tsx` | **PCI-DSS.** These read `cardNumber.slice(-4)` — found by the CI gate, missed by the manual audit. |
 
 Roughly 1,500 lines removed before a single integration line is written.
 
