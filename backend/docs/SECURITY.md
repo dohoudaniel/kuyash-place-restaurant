@@ -1,0 +1,165 @@
+# Security & Compliance
+
+---
+
+## 1. Threat model
+
+| Threat | Current exposure (frontend as-is) | Mitigation |
+|---|---|---|
+| **Price tampering** | **Total.** Every price, discount, VAT and fee is computed in the browser. Devtools sets any total to ₦0 | Server-authoritative pricing; `expected_total` guard; provider amount read from the persisted order |
+| **Promo abuse** | **Total.** Codes and rules ship in the JS bundle; `usedCount` resets on refresh | Server-side codes, redemption ledger, per-user caps, rate-limited apply endpoint |
+| **Payment forgery** | N/A today (no payments) — but the naive wiring is "client says success" | Webhook signature verification + server-side verification + amount matching |
+| **Cardholder data breach** | **Imminent** — PAN/CVV collected in React state | Delete the form; hosted provider checkout only; CI grep gate |
+| **Account takeover** | N/A (no accounts) | Argon2, rate limits, mandatory verification, session invalidation on password change |
+| **Account enumeration** | N/A | Uniform responses on reset and registration |
+| **IDOR on orders** | **Total** — `/orders/{anything}` returns data | UUID PKs, opaque references, object-level permissions, guest tokens |
+| **Order enumeration** | **Total** — `Date.now()` references are guessable | Random 32⁶ reference space |
+| **Spam / bot submissions** | **Total** — no protection on any form | Rate limits, honeypot, optional Turnstile |
+| **XSS** | Moderate — React escapes by default, but no CSP | CSP headers; no `dangerouslySetInnerHTML`; HttpOnly session cookie |
+| **CSRF** | N/A | Django CSRF + SameSite=Lax + explicit trusted origins |
+| **Mass assignment** | N/A | Explicit serializer fields; price fields ignored on input |
+| **DoS via expensive queries** | N/A | Pagination caps, query timeouts, Redis caching |
+
+---
+
+## 2. PCI-DSS posture
+
+**Target: SAQ A** — the lightest tier, available to merchants who fully outsource cardholder data handling.
+
+| Requirement | How we satisfy it |
+|---|---|
+| No storage of PAN | No such field exists in the schema |
+| No storage of CVV | Prohibited by PCI-DSS Req. 3.2; no such field exists |
+| No transmission through our servers | Hosted/inline provider checkout only |
+| Payment page integrity | Provider-hosted; CSP restricts script sources |
+| Provider is PCI-DSS Level 1 | Paystack and Flutterwave both are |
+| Saved cards | Provider `authorization_code` tokens only, plus `last4`/`brand` for display |
+
+**The single action that preserves this posture:** delete `cardNumber`, `cardName`, `cardExpiry` and `cardCvv` from `PaymentStep.tsx` and `PaymentStepCompact.tsx`. Connecting them instead moves the business to SAQ D — roughly 300 controls, annual assessment, and quarterly ASV scans.
+
+CI gate (see `PAYMENTS.md` §1.1) fails the build if those identifiers reappear.
+
+---
+
+## 3. NDPR / data protection
+
+Nigeria Data Protection Regulation obligations:
+
+| Right | Implementation |
+|---|---|
+| Access | `GET /accounts/me/export/` returns a JSON archive of the user's data |
+| Rectification | `PATCH /accounts/me/`, address CRUD |
+| Erasure | `DELETE /accounts/me/` — **anonymises** rather than deletes: PII scrubbed, financial records retained 7 years for tax |
+| Portability | Same JSON export |
+| Consent | `marketing_opt_in` captured explicitly, withdrawable, one-click unsubscribe |
+| Breach notification | Documented incident runbook; 72-hour notification |
+
+**Data minimisation:** we do not collect date of birth unless the user opts into birthday rewards, and we never collect card data at all.
+
+**Retention:** orders 7 years (tax); carts 30 days; anonymous sessions 14 days; webhook payloads 90 days; support tickets 2 years.
+
+---
+
+## 4. Application hardening checklist
+
+```python
+# config/settings/prod.py
+DEBUG = False
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")          # never ["*"]
+
+SECURE_SSL_REDIRECT           = True
+SECURE_HSTS_SECONDS           = 31_536_000
+SECURE_HSTS_INCLUDE_SUBDOMAINS= True
+SECURE_HSTS_PRELOAD           = True
+SECURE_CONTENT_TYPE_NOSNIFF   = True
+SECURE_REFERRER_POLICY        = "strict-origin-when-cross-origin"
+SECURE_PROXY_SSL_HEADER       = ("HTTP_X_FORWARDED_PROTO", "https")
+X_FRAME_OPTIONS               = "DENY"
+
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.Argon2PasswordHasher", ...]
+
+DATA_UPLOAD_MAX_MEMORY_SIZE  = 5 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 500
+```
+
+Run `python manage.py check --deploy` in CI; the build fails on any warning.
+
+### 4.1 Content Security Policy (frontend)
+
+```
+default-src 'self';
+script-src  'self' https://js.paystack.co https://checkout.flutterwave.com;
+frame-src   https://checkout.paystack.com https://checkout.flutterwave.com;
+connect-src 'self' https://api.kuyashplace.com;
+img-src     'self' data: https://<ref>.supabase.co;
+style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src    https://fonts.gstatic.com;
+object-src  'none'; base-uri 'self'; frame-ancestors 'none';
+```
+
+> Note `'unsafe-inline'` in `style-src` is currently **required** because the frontend uses 1,639 inline `style={{}}` attributes. Migrating those to Tailwind classes lets us drop it — a concrete security benefit from paying down that debt.
+
+---
+
+## 5. Secrets
+
+| Secret | Storage |
+|---|---|
+| `DJANGO_SECRET_KEY` | Secret manager; rotated annually |
+| `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY` | Secret manager; **never** `NEXT_PUBLIC_*` |
+| `SUPABASE_S3_SECRET_KEY` | Secret manager |
+| `DATABASE_URL` | Secret manager |
+| Email provider key | Secret manager |
+
+Rules: no secrets in the repo, in `next.config.ts`, or in any `NEXT_PUBLIC_` variable. `gitleaks` runs in CI. Any leaked key is rotated immediately, not "watched".
+
+---
+
+## 6. Logging and PII
+
+**Never logged:** passwords, session keys, CSRF tokens, card data (which we never have), full addresses, `Authorization` headers, `guest_token`.
+
+**Always logged:** request ID, user ID (not email), endpoint, status, duration, order reference, payment transaction ID.
+
+Sentry: `send_default_pii=False`, with a `before_send` scrubber for `password`, `token`, `card`, `cvv`, `secret` and `authorization`.
+
+---
+
+## 7. Abuse prevention
+
+| Vector | Control |
+|---|---|
+| Promo brute force | 10/min per cart; lockout after 20 failures/hour |
+| Login brute force | 5/min per IP + 10/hour per email; `django-axes` on admin |
+| Contact/catering spam | 3–5/hour per IP, honeypot field, optional Turnstile |
+| Review spam | Verified purchase required + moderation queue |
+| COD fraud | Order cap, verified account or prior delivery required |
+| Order enumeration | Random references + object-level permissions |
+| Scraping the menu | Public data; rate-limited, not blocked |
+
+---
+
+## 8. Pre-launch security gate
+
+Phase 1 does not ship until every box is ticked:
+
+- [ ] Card fields deleted from the frontend; CI grep gate passing
+- [ ] `manage.py check --deploy` clean
+- [ ] `DEBUG = False`, `ALLOWED_HOSTS` explicit, HSTS on
+- [ ] All secrets in a secret manager; `gitleaks` clean on full history
+- [ ] Webhook signature verification tested against forged payloads
+- [ ] Amount-mismatch path tested — order stays unpaid
+- [ ] Idempotency verified under concurrent double-submit
+- [ ] Object-level permissions tested: user A cannot read user B's order
+- [ ] Rate limits verified on auth, promo and order endpoints
+- [ ] 2FA enabled on all staff and admin accounts
+- [ ] Admin behind IP allowlist / VPN on a non-default path
+- [ ] CSP deployed and verified
+- [ ] Automated backups running; **a restore actually tested**
+- [ ] Sentry live with PII scrubbing confirmed
+- [ ] `pip-audit` / `npm audit` clean of high and critical findings
+- [ ] Tax policy (`PRD.md` §7) decided and the published copy corrected
+- [ ] No menu item has `needs_repricing=True`
