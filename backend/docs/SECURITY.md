@@ -161,5 +161,6 @@ Phase 1 does not ship until every box is ticked:
 - [ ] Automated backups running; **a restore actually tested**
 - [ ] Sentry live with PII scrubbing confirmed
 - [ ] `pip-audit` / `npm audit` clean of high and critical findings
-- [ ] Tax policy (`PRD.md` §7) decided and the published copy corrected
-- [ ] No menu item has `needs_repricing=True`
+- [ ] Tax policy (`PRD.md` §7) decided and the published copy corrected — enforced by `kuyash.E002`
+- [ ] Terms, privacy and refund pages published — warned by `kuyash.W003`
+- [ ] No menu item has `needs_repricing=True` — enforced by `kuyash.E001`

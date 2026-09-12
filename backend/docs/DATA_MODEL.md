@@ -74,18 +74,36 @@ One row today; the FK target that makes a second outlet a data change rather tha
 
 Social links, hero copy, homepage statistics (currently hardcoded in the frontend), contact emails, map embed. One row, enforced by `save()`.
 
-### LegalPage  *(Phase 2)*
+### LegalPage  *(Phase 2.6 — delivered)*
 
 | Field | Type | Notes |
 |---|---|---|
-| `slug` | `SlugField(unique=True)` | `terms`, `privacy`, `cookies`, `refunds`, `accessibility` |
+| `slug` | `SlugField` | `terms`, `privacy`, `cookies`, `refunds`, `accessibility` — **not unique on its own** |
+| `version` | `PositiveIntegerField` | unique together with `slug` |
 | `title` | `CharField(200)` | |
 | `body` | `TextField` | markdown |
-| `version` | `PositiveIntegerField` | |
-| `effective_from` | `DateField` | |
-| `published` | `BooleanField` | |
+| `summary` | `CharField(300)` | what changed in this version |
+| `effective_from` | `DateField` | a future date is a *scheduled* change, not the current policy |
+| `published` | `BooleanField` | drafts are invisible to customers and to the API |
+
+Constraint: `unique_legal_page_version` on `(slug, version)`.
+
+**Versions are retained, not overwritten.** `slug` is deliberately not unique: which
+wording a customer agreed to matters if it is ever disputed, so a change is a new row
+and the old one stays readable. In the admin, a published version is read-only except
+for `published` itself — you withdraw a page by unpublishing it, and change it with the
+*Draft a new version* action. `LegalPage.current(slug)` resolves the wording in force
+today, ignoring drafts and future-dated versions.
 
 > Replaces five hardcoded route files, **and is where the tax-copy contradiction gets fixed** (`app/help/page.tsx:120` and `app/terms/page.tsx:47` claim tax-inclusive pricing while the cart adds 7.5% on top).
+>
+> The fix is structural, not editorial. The pricing sentence in the seeded terms is
+> *generated* from `Branch.prices_include_vat` (`apps/core/legal_seed.py`), and
+> `manage.py check --deploy` fails with **`kuyash.E002`** if any published page asserts a
+> VAT direction the branch does not charge. The check looks for the *opposing* claim
+> rather than for exact seeded wording, so staff can reword the pages freely — only a
+> contradiction fails the build. `kuyash.W003` warns when `terms`, `privacy` or `refunds`
+> has no published version at all.
 
 ---
 

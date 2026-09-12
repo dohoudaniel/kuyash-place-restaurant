@@ -199,10 +199,10 @@ Notes:
 | 2.1 | Reservations: tables, areas, service periods, **exclusion-constraint availability**, confirmation emails, admin book view | 1.5 wk | ✅ |
 | 2.2 | Catering: packages, enquiries, staff workflow, indicative totals, overdue-response view | 0.5 wk | ✅ |
 | 2.3 | Support: contact → tickets, replies, FAQ admin, spam protection | 0.5 wk | ✅ |
-| 2.4 | Wishlist sync + saved payment methods (provider tokens) | 0.5 wk | |
-| 2.5 | Social login (Google, Facebook) | 0.3 wk | |
-| 2.6 | CMS: legal pages with versioning, opening-hours editing, site settings | 0.5 wk | |
-| 2.7 | Reorder with revalidation; PDF receipts | 0.3 wk | |
+| 2.4 | Wishlist sync + saved payment methods (provider tokens) | 0.5 wk | ✅ |
+| 2.5 | Social login (Google, Facebook) | 0.3 wk | ✅ |
+| 2.6 | CMS: legal pages with versioning, opening-hours editing, site settings | 0.5 wk | ✅ |
+| 2.7 | Reorder with revalidation; PDF receipts | 0.3 wk | ✅ |
 
 #### 2.1 delivered
 
@@ -254,12 +254,150 @@ generated from `Branch.prices_include_vat`, so it cannot disagree with what the
 system actually charges. That said, **OD-1 is still open** — the decision itself
 has not been made, only made consistent.
 
+#### 2.4 delivered
+
+`WishlistItem` (in `catalog`, so the dependency runs the right way) and
+`SavedPaymentMethod` (in `payments`). 31 tests, 100% coverage on both view
+modules.
+
+**Wishlist** — server-side, so a saved dish survives a new device, a cleared
+browser and a private window, none of which `localStorage` does. `POST
+/wishlist/sync/` folds a browser's list into the account on first sign-in;
+it is **additive**, so signing in never loses something saved on either side,
+and unmatched slugs are reported rather than dropped — the frontend's list is
+keyed on an image filename (`signatureGrillPlate`) and will contain stale
+entries.
+
+**Saved cards** — a provider token and a last-four, never a card. Two decisions
+worth recording:
+
+- **A card is saved only if the customer asked.** A provider returns a reusable
+  token whether or not anyone wanted the card kept; persisting one regardless
+  would be collecting a payment credential without consent. `save_card` on
+  initialise sets `PaymentTransaction.save_method`, and only then does
+  settlement store a token.
+- **Forgetting a card deactivates it.** A hard delete would orphan the token's
+  trail on historical transactions.
+
+Found while building: a serializer field named `label` shadows DRF's
+`Field.label`. Exposed as `card_label` instead.
+
+#### 2.5 delivered
+
+Google and Facebook sign-in through allauth, replacing
+`alert("Google login - Integration needed")`. 13 tests, 100% coverage on the
+adapters.
+
+The security question this had to settle: **can social sign-in take over
+someone else's account?** It cannot. The two providers are configured
+differently on purpose:
+
+- **Google** asserts `email_verified`, so it auto-links to an existing
+  password account. Without that, a customer who registered with a password and
+  later clicks "Continue with Google" hits a confusing duplicate-email error.
+- **Facebook** does not verify reliably, so it does **not** auto-link. A
+  `pre_social_login` check refuses the link and returns 409
+  `social_email_unverified`. The attack it blocks: create an account at a
+  provider that does not verify addresses, assert the victim's email, and be
+  signed in as them.
+
+Also: provider access tokens are not stored (`SOCIALACCOUNT_STORE_TOKENS =
+False`) — we never act on the customer's behalf, so keeping one would be
+holding a credential with no purpose. Auto-signup requires an email, since
+without one there is nothing to send an order confirmation to.
+
+#### 2.6 delivered
+
+Legal pages as data, versioned. `GET /core/legal/` and `GET /core/legal/{slug}/`
+replace five hardcoded route files; the admin holds the history. 36 tests, 100%
+coverage on the model, views, checks, seed and admin.
+
+Two decisions worth stating, because both are the kind of thing that quietly
+rots otherwise.
+
+**A published version is read-only.** Which wording a customer agreed to matters
+if it is ever disputed, and a page that staff can edit in place means that
+record is whatever the last person to touch it decided it was. Changing the text
+drafts a new version (`(slug, version)` is unique); the old one stays readable
+and `LegalPage.current()` picks the one in force today. Drafts and future-dated
+versions return 404 rather than leaking wording that does not yet apply. The
+`published` flag stays editable so a bad page can still be pulled.
+
+**The tax-copy contradiction is now a build failure.** `app/terms/page.tsx:47`
+and `app/help/page.tsx:120` promised "prices … include applicable taxes" while
+`CartSummary.tsx:23` added 7.5% on top — a misleading price representation under
+the FCCPA 2018, and one that survived because the copy and the arithmetic lived
+in different files owned by different people. Two things now prevent it:
+
+- The pricing sentence in the seeded terms is **generated** from
+  `Branch.prices_include_vat`, so the seeded copy cannot disagree with the cart.
+- `manage.py check --deploy` fails with **`kuyash.E002`** when any published page
+  asserts a VAT direction the branch does not charge. It looks for the
+  *opposing* claim rather than for exact seeded wording — staff can reword these
+  pages freely, and only a contradiction fails the build. A check that fired on
+  every legitimate edit would be switched off within a week.
+
+`kuyash.W003` additionally warns when `terms`, `privacy` or `refunds` has no
+published version, because a footer link that 404s is worse than no link.
+
+This does **not** close OD-1. Whichever direction the owner picks, the published
+pages and the cart now have to agree — that is all the gate enforces.
+
+---
+
+#### 2.7 delivered
+
+Reorder and PDF receipts. 40 tests, 100% coverage on
+`apps/orders/services/reorder.py`, `services/receipt.py` and `reorder_views.py`.
+
+**Reorder is a fresh quote, not a copy.** `OrderHistorySection.tsx` pushes the
+stored line objects straight back into the cart store — the old prices, dishes
+that may have left the menu, options that may no longer exist. Every line is now
+re-resolved against the current catalogue: it comes back at today's price with
+any difference reported, and a delisted dish, a withdrawn size or a required
+option with nothing left to choose is skipped and named rather than substituted.
+The repricing gate applies here too, so an unpriced item cannot re-enter a
+basket through order history.
+
+It also refuses to overwrite a basket that already has lines (`409
+cart_not_empty`) unless the caller confirms. Silently discarding what the
+customer had already chosen, to save them a tap, is not a convenience.
+
+**Receipts are refused for unpaid orders** (`409 order_not_paid`). A document
+headed "Receipt" for money that was never received causes the dispute it is
+meant to settle.
+
+One trap worth recording: **the naira sign does not survive a PDF.** The
+standard PDF fonts use WinAnsiEncoding, which has no U+20A6, and reportlab
+substitutes it without warning — `₦33,120.00` prints as `n33,120.00`. Receipts
+use `format_money_ascii` (`NGN 33,120.00`) and a test asserts the symbol never
+appears in the rendered bytes. The JSON API is unchanged.
+
+Receipts print the VAT rate and direction snapshotted on the order, never
+today's branch settings; a receipt already issued must not change because the
+restaurant later changed its pricing.
+
+---
+
 **Gate 2:** a reservation cannot be double-booked (proven by a concurrency test); every catering enquiry reaches a human with an SLA timer; no form anywhere in the app still `alert()`s.
 
 Status: the first two are **met and demonstrated**. The third is met on the
 backend for every Phase 2 form (contact, catering, reservations) — reviews and
 academy enrolment are Phase 3, and the frontend still has to be wired to these
 endpoints (`docs/FRONTEND_INTEGRATION.md`).
+
+**Phase 2 is code-complete**: 2.1 through 2.7 all delivered, 866 tests passing,
+97% coverage overall and 100% on every money, pricing, order-state, payment,
+reorder and receipt path. What remains before Gate 2 can be signed off is not
+backend work:
+
+1. The frontend has to actually call these endpoints. Nothing in `frontend/`
+   makes a network request yet — that is `docs/FRONTEND_INTEGRATION.md`.
+2. The card fields have to be **deleted** from the five files listed in
+   `scripts/check-no-card-fields.sh`, not connected to anything.
+3. The owner decisions in `DECISIONS.md` (OD-1 through OD-6) still block Gate 1,
+   and Gate 1 comes first. `manage.py check --deploy` fails today with
+   `kuyash.E001` for 18 unpriced items, by design.
 
 ---
 

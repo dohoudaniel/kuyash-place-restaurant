@@ -215,3 +215,62 @@ class SiteSettings(SingletonModel):
 
     def __str__(self) -> str:
         return self.site_name
+
+
+class LegalPage(TimeStampedModel):
+    """A published policy page.
+
+    Replaces five hardcoded route files (`terms`, `privacy`, `cookies`,
+    `refunds`, `accessibility`), and is where the tax-copy contradiction gets
+    fixed: `app/terms/page.tsx:47` and `app/help/page.tsx:120` both promise
+    tax-inclusive pricing while the cart adds 7.5% on top.
+
+    **Versions are retained, not overwritten.** Which wording a customer agreed
+    to matters if it is ever disputed, so a new version is a new row and the old
+    one stays readable. ``(slug, version)`` is unique rather than ``slug``.
+    """
+
+    slug = models.SlugField(
+        help_text="terms, privacy, cookies, refunds, accessibility…",
+    )
+    version = models.PositiveIntegerField(default=1)
+    title = models.CharField(max_length=200)
+    body = models.TextField(help_text="Markdown.")
+    summary = models.CharField(
+        max_length=300, blank=True, help_text="What changed in this version."
+    )
+    effective_from = models.DateField(
+        default=dt.date.today, help_text="The date this wording takes effect."
+    )
+    published = models.BooleanField(
+        default=False,
+        help_text="Unpublished drafts are invisible to customers and to the API.",
+    )
+
+    class Meta:
+        ordering = ["slug", "-version"]
+        constraints = [
+            models.UniqueConstraint(fields=["slug", "version"], name="unique_legal_page_version")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.title} v{self.version}"
+
+    @classmethod
+    def current(cls, slug: str, *, on: dt.date | None = None) -> LegalPage | None:
+        """The wording in force on a given date.
+
+        A version dated in the future is a scheduled change, not the current
+        policy, so it is excluded until its date arrives.
+        """
+        on = on or timezone.localdate()
+        return (
+            cls.objects.filter(slug=slug, published=True, effective_from__lte=on)
+            .order_by("-effective_from", "-version")
+            .first()
+        )
+
+    @classmethod
+    def next_version_for(cls, slug: str) -> int:
+        highest = cls.objects.filter(slug=slug).order_by("-version").first()
+        return (highest.version + 1) if highest else 1

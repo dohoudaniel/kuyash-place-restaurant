@@ -13,6 +13,7 @@ from drf_spectacular.views import (
 )
 
 from apps.accounts.urls import account_urlpatterns, auth_urlpatterns
+from apps.catalog.urls import wishlist_urlpatterns
 from apps.common.views import (
     api_bad_request,
     api_not_found,
@@ -37,6 +38,7 @@ api_v1 = [
     path("reservations/", include("apps.reservations.urls")),
     path("catering/", include("apps.catering.urls")),
     path("support/", include("apps.support.urls")),
+    path("wishlist/", include((wishlist_urlpatterns, "wishlist"))),
     path("webhooks/", include((webhook_urlpatterns, "webhooks"))),
     path("accounts/", include((account_urlpatterns, "accounts"))),
 ]

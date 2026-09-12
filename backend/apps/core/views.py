@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.models import SiteSettings
+from apps.core.models import LegalPage, SiteSettings
 from apps.core.selectors import get_current_branch
 from apps.core.serializers import (
     BranchSerializer,
     HolidayOverrideSerializer,
+    LegalPageSerializer,
+    LegalPageSummarySerializer,
     OpeningHoursResponseSerializer,
     OpeningHoursSerializer,
     SiteSettingsSerializer,
@@ -64,3 +68,56 @@ class SiteSettingsView(APIView):
     @extend_schema(summary="Site settings", responses={200: SiteSettingsSerializer}, tags=["core"])
     def get(self, request: Request) -> Response:
         return Response(SiteSettingsSerializer(SiteSettings.load()).data)
+
+
+class LegalPageListView(APIView):
+    """Which policy pages exist.
+
+    Replaces a hardcoded array of footer links that could point at a page whose
+    wording had since changed or been withdrawn.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Legal pages",
+        responses={200: LegalPageSummarySerializer(many=True)},
+        tags=["core"],
+    )
+    def get(self, request: Request) -> Response:
+        today = timezone.localdate()
+        # `.order_by()` first: the model's default ordering is (slug, -version),
+        # and DISTINCT over an ordered queryset selects the ordering columns too,
+        # so every version of a page would survive the dedupe as its own row.
+        slugs = sorted(
+            set(
+                LegalPage.objects.filter(published=True, effective_from__lte=today)
+                .order_by()
+                .values_list("slug", flat=True)
+            )
+        )
+        current = [
+            page for slug in slugs if (page := LegalPage.current(slug, on=today)) is not None
+        ]
+        return Response(LegalPageSummarySerializer(current, many=True).data)
+
+
+class LegalPageDetailView(APIView):
+    """One policy page, at the version in force today.
+
+    A future-dated version is a scheduled change and is not served; an
+    unpublished one is a draft and is not served either.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="A legal page",
+        responses={200: LegalPageSerializer},
+        tags=["core"],
+    )
+    def get(self, request: Request, slug: str) -> Response:
+        page = LegalPage.current(slug)
+        if page is None:
+            raise NotFound("No such page.")
+        return Response(LegalPageSerializer(page).data)

@@ -41,6 +41,8 @@ THIRD_PARTY_APPS = [
     "allauth.account",
     "allauth.headless",
     "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.facebook",
 ]
 
 LOCAL_APPS = [
@@ -157,6 +159,50 @@ ACCOUNT_RATE_LIMITS = {
 }
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
 PASSWORD_RESET_TIMEOUT = 3600  # 1 hour — matches the copy already shown in the UI
+
+# ── Social login ──────────────────────────────────────────────────────────────
+# Wires up the two buttons that currently say
+# alert("Google login - Integration needed").
+SOCIALACCOUNT_ADAPTER = "apps.accounts.adapters.KuyashSocialAdapter"
+SOCIALACCOUNT_STORE_TOKENS = False  # we never act on the customer's behalf
+SOCIALACCOUNT_QUERY_EMAIL = True
+SOCIALACCOUNT_AUTO_SIGNUP = True
+
+# Sign in an existing account when the provider asserts a *verified* email.
+# Without this a customer who registered with a password and later clicks
+# "Continue with Google" gets a confusing duplicate-email error. With it, the
+# provider's verification is what links them — which is why it must only ever
+# apply to providers that actually verify.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"access_type": "online"},
+        # Google asserts email_verified; allauth honours it.
+        "EMAIL_AUTHENTICATION": True,
+        "APP": {
+            "client_id": env("GOOGLE_CLIENT_ID", default=""),
+            "secret": env("GOOGLE_CLIENT_SECRET", default=""),
+            "key": "",
+        },
+    },
+    "facebook": {
+        "METHOD": "oauth2",
+        "SCOPE": ["email", "public_profile"],
+        "FIELDS": ["id", "email", "name", "first_name", "last_name"],
+        "VERIFIED_EMAIL": False,
+        # Facebook's email assertion is less reliable, so it does NOT
+        # auto-link to an existing password account (AUTH.md §4.4).
+        "EMAIL_AUTHENTICATION": False,
+        "APP": {
+            "client_id": env("FACEBOOK_CLIENT_ID", default=""),
+            "secret": env("FACEBOOK_CLIENT_SECRET", default=""),
+            "key": "",
+        },
+    },
+}
 
 HEADLESS_ONLY = True
 HEADLESS_FRONTEND_URLS = {

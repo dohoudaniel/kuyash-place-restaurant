@@ -231,7 +231,14 @@ Also fix the blank-page bug:
 
 `app/orders/[id]/page.tsx` — delete `getOrderData()` entirely; fetch `GET /orders/{reference}/` and poll every 15s with `If-None-Match` while the order is active. The existing `OrderStatus.tsx` timeline component maps almost 1:1 onto the `timeline[]` array.
 
-`app/orders/page.tsx` — read `GET /orders/` instead of the never-written `orderHistoryStore`; route Reorder through `POST /orders/{ref}/reorder/` and surface `removed[]` / `repriced[]`.
+`app/orders/page.tsx` — read `GET /orders/` instead of the never-written `orderHistoryStore`; route Reorder through `POST /orders/{ref}/reorder/` and surface the `changes[]` and `unavailable[]` the response carries (same shape as the cart's, so one component renders both).
+
+Two behaviours to build for rather than around:
+
+- The endpoint answers `409 cart_not_empty` when the basket already has lines. Show the customer what reordering would replace and retry with `{"replace": true}` if they agree — do not send `replace` unconditionally.
+- A reorder can come back partial, or empty. `added` and `message` say which; do not send the customer to checkout without showing `changes[]` first, since the whole point is that the prices may have moved.
+
+"Download receipt" is `GET /orders/{ref}/receipt/`, which returns `application/pdf` and `409 order_not_paid` for an order that has not been paid for.
 
 **Delete `lib/store/orderHistoryStore.ts`.**
 
@@ -280,7 +287,11 @@ There is currently **no** `loading.tsx`, `error.tsx` or `not-found.tsx` anywhere
 
 ### 4.4 Server Components
 
-`/terms`, `/privacy`, `/cookies`, `/accessibility`, `/refunds`, `/help` and `/about` are marked `"use client"` for no reason. Convert to Server Components fetching from `GET /core/legal/{slug}/`.
+`/terms`, `/privacy`, `/cookies`, `/accessibility`, `/refunds`, `/help` and `/about` are marked `"use client"` for no reason. Convert to Server Components fetching from `GET /core/legal/{slug}/` — **live as of Phase 2.6**, along with `GET /core/legal/` for the footer link list.
+
+Delete the hardcoded copy in those route files rather than keeping it as a fallback. The point of serving them from the backend is that the published wording and what the cart charges are checked against each other at deploy (`kuyash.E002`); a stale copy in the bundle is outside that check and reintroduces exactly the contradiction it exists to prevent.
+
+Render `body` as markdown, and show `version` / `effective_from` — customers are entitled to know when the terms they are being held to last changed.
 
 ---
 

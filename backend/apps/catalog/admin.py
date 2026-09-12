@@ -18,6 +18,7 @@ from apps.catalog.models import (
     Modifier,
     ModifierGroup,
     Variant,
+    WishlistItem,
 )
 from apps.common.admin import money_column
 
@@ -196,3 +197,20 @@ class MenuItemAdmin(admin.ModelAdmin):
     def mark_available(self, request: HttpRequest, queryset: QuerySet[MenuItem]) -> None:
         updated = queryset.update(is_available_now=True)
         self.message_user(request, f"{updated} item(s) marked available.")
+
+
+@admin.register(WishlistItem)
+class WishlistItemAdmin(admin.ModelAdmin):
+    """Read-only. Useful for spotting what customers want but cannot get."""
+
+    list_display = ("user", "menu_item", "created_at")
+    list_filter = ("menu_item__category",)
+    search_fields = ("user__email", "menu_item__name")
+    date_hierarchy = "created_at"
+    readonly_fields = ("id", "user", "menu_item", "created_at", "updated_at")
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
+        return False

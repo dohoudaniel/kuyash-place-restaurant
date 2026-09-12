@@ -52,7 +52,9 @@ def build_reference(order: Order) -> str:
     return f"{order.reference}-{secrets.token_hex(4)}"
 
 
-def initialise_payment(*, order: Order, provider_name: str = "") -> PaymentTransaction:
+def initialise_payment(
+    *, order: Order, provider_name: str = "", save_method: bool = False
+) -> PaymentTransaction:
     """Start a payment and return the transaction holding the checkout URL.
 
     Deliberately **not** atomic. Each provider attempt writes its own record and
@@ -83,6 +85,7 @@ def initialise_payment(*, order: Order, provider_name: str = "") -> PaymentTrans
             currency=order.currency,
             status=TransactionStatus.INITIALISED,
             initialised_at=timezone.now(),
+            save_method=save_method,
         )
         result = provider.initialise(
             amount_kobo=order.grand_total,
@@ -134,7 +137,41 @@ def _settle(record: PaymentTransaction, result: VerifyResult, *, source: str) ->
     order = record.order
     if order.status == OrderStatus.PENDING_PAYMENT:
         transition(order, OrderStatus.PAID, source=source)
+
+    _remember_card(record)
     return record
+
+
+def _remember_card(record: PaymentTransaction) -> None:
+    """Store the provider token, if the customer asked for it.
+
+    Consent is required: a provider hands back a reusable token whether or not
+    the customer wanted their card kept, and storing one regardless would be
+    collecting a payment credential nobody agreed to.
+    """
+    user = record.order.user
+    if not (record.save_method and user and record.authorization_code):
+        return
+
+    from apps.payments.models import SavedPaymentMethod
+
+    method, created = SavedPaymentMethod.objects.get_or_create(
+        user=user,
+        authorization_code=record.authorization_code,
+        defaults={
+            "provider": record.provider,
+            "card_last4": record.card_last4,
+            "card_brand": record.card_brand,
+            "card_exp_month": record.card_exp_month,
+            "card_exp_year": record.card_exp_year,
+            "is_default": not SavedPaymentMethod.objects.filter(user=user, is_active=True).exists(),
+        },
+    )
+    method.last_used_at = timezone.now()
+    method.is_active = True
+    method.save(update_fields=["last_used_at", "is_active", "updated_at"])
+    if created:
+        logger.info("payment_method_saved", extra={"user": str(user.pk)})
 
 
 def verify_and_settle(record: PaymentTransaction, *, source: str = "system") -> PaymentTransaction:

@@ -77,6 +77,15 @@ class PaymentTransaction(TimeStampedModel):
     card_exp_month = models.CharField(max_length=2, blank=True)
     card_exp_year = models.CharField(max_length=4, blank=True)
 
+    save_method = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether the customer asked us to keep this card for next time. "
+            "A provider returns a reusable token either way; we only persist one "
+            "when this is set."
+        ),
+    )
+
     authorization_url = models.URLField(blank=True, max_length=500)
     raw_response = models.JSONField(default=dict, blank=True)
     failure_reason = models.CharField(max_length=255, blank=True)
@@ -151,3 +160,80 @@ class Refund(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"Refund {self.amount} on {self.order.reference}"
+
+
+class SavedPaymentMethod(TimeStampedModel):
+    """A card the customer chose to keep for next time.
+
+    **This is a provider token, not a card.** ``authorization_code`` is an
+    opaque string the provider will accept for a repeat charge; the last four
+    digits and brand exist only so the customer can tell one saved card from
+    another. There is no PAN, no expiry-as-secret and no CVV — storing a CVV is
+    prohibited outright by PCI-DSS Req. 3.2, and we could not store one if we
+    wanted to because we never receive it.
+
+    Replaces ``PaymentMethodsSection.tsx``, which hardcodes a Visa •4242 and a
+    Mastercard •5555 and shows them to every visitor.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="payment_methods"
+    )
+    provider = models.CharField(max_length=20, choices=Provider.choices)
+    authorization_code = models.CharField(
+        max_length=120, help_text="Provider token for a repeat charge. Not a card number."
+    )
+
+    card_last4 = models.CharField(max_length=4, blank=True)
+    card_brand = models.CharField(max_length=30, blank=True)
+    card_exp_month = models.CharField(max_length=2, blank=True)
+    card_exp_year = models.CharField(max_length=4, blank=True)
+
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-is_default", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "authorization_code"], name="unique_saved_method_per_user"
+            ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(is_default=True, is_active=True),
+                name="one_default_payment_method_per_user",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.card_brand or self.provider} ••••{self.card_last4}"
+
+    @property
+    def label(self) -> str:
+        return (
+            f"{self.card_brand or 'Card'} ending {self.card_last4}"
+            if self.card_last4
+            else (self.get_provider_display())
+        )
+
+    @property
+    def is_expired(self) -> bool:
+        """Whether the card's own expiry has passed.
+
+        Display only — the provider is the authority on whether a token still
+        works, and a token can stop working for reasons that have nothing to do
+        with the printed expiry.
+        """
+        if not (self.card_exp_month and self.card_exp_year):
+            return False
+        import datetime as dt
+
+        try:
+            month, year = int(self.card_exp_month), int(self.card_exp_year)
+        except ValueError:  # pragma: no cover - defensive
+            return False
+        if year < 100:
+            year += 2000
+        today = dt.date.today()
+        return (year, month) < (today.year, today.month)

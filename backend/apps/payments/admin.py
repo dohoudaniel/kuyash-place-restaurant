@@ -6,7 +6,7 @@ from django.contrib import admin
 from django.http import HttpRequest
 
 from apps.common.admin import money_column
-from apps.payments.models import PaymentTransaction, Refund, WebhookEvent
+from apps.payments.models import PaymentTransaction, Refund, SavedPaymentMethod, WebhookEvent
 
 
 @admin.register(PaymentTransaction)
@@ -82,4 +82,36 @@ class RefundAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
+        return False
+
+
+@admin.register(SavedPaymentMethod)
+class SavedPaymentMethodAdmin(admin.ModelAdmin):
+    """Provider tokens the customer chose to keep.
+
+    There is no card number here to show, and nothing on this page can be
+    edited — a token is either valid at the provider or it is not.
+    """
+
+    list_display = (
+        "user",
+        "label",
+        "provider",
+        "is_default",
+        "is_active",
+        "is_expired",
+        "last_used_at",
+    )
+    list_filter = ("provider", "is_active", "is_default")
+    search_fields = ("user__email", "card_last4")
+    readonly_fields = tuple(field.name for field in SavedPaymentMethod._meta.fields)
+
+    @admin.display(boolean=True, description="Expired")
+    def is_expired(self, obj: SavedPaymentMethod) -> bool:
+        return obj.is_expired
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         return False

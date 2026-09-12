@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.http import HttpRequest
+from django.utils import timezone
 
 from apps.common.admin import money_column
-from apps.core.models import Branch, HolidayOverride, OpeningHours, SiteSettings
+from apps.core.models import Branch, HolidayOverride, LegalPage, OpeningHours, SiteSettings
 
 
 class OpeningHoursInline(admin.TabularInline):
@@ -88,3 +89,83 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         return False
+
+
+@admin.register(LegalPage)
+class LegalPageAdmin(admin.ModelAdmin):
+    """Policy pages, with the version history intact.
+
+    A published version cannot be edited. Which wording a customer agreed to
+    matters if it is ever disputed, and an editable published page means that
+    record is whatever the last person to touch it decided it was. To change the
+    text you draft a new version; the old one stays readable.
+    """
+
+    list_display = ("slug", "version", "title", "effective_from", "published", "in_force")
+    list_filter = ("slug", "published")
+    search_fields = ("slug", "title", "body")
+    ordering = ("slug", "-version")
+    actions = ("draft_new_version",)
+
+    fieldsets = (
+        (None, {"fields": ("slug", "version", "title", "published", "effective_from")}),
+        (
+            "Content",
+            {
+                "fields": ("summary", "body"),
+                "description": (
+                    "Markdown. <strong>Do not contradict the branch VAT setting</strong> — "
+                    "<code>manage.py check --deploy</code> fails with kuyash.E002 if a "
+                    "published page promises tax-inclusive pricing while the cart adds VAT "
+                    "on top, or the reverse."
+                ),
+            },
+        ),
+        ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
+    )
+
+    @admin.display(boolean=True, description="In force")
+    def in_force(self, obj: LegalPage) -> bool:
+        current = LegalPage.current(obj.slug)
+        return current is not None and current.pk == obj.pk
+
+    def get_readonly_fields(self, request: HttpRequest, obj: LegalPage | None = None) -> tuple:
+        base = ("created_at", "updated_at")
+        if obj is None:
+            return base
+        if obj.published:
+            # `published` stays editable so a page can be withdrawn; everything
+            # a customer actually read is frozen.
+            return (*base, "slug", "version", "title", "body", "summary", "effective_from")
+        return (*base, "version")
+
+    def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
+        # Withdraw by unpublishing. Deleting a version deletes the evidence.
+        return not (isinstance(obj, LegalPage) and obj.published)
+
+    def save_model(self, request: HttpRequest, obj: LegalPage, form: object, change: bool) -> None:
+        if not change and LegalPage.objects.filter(slug=obj.slug, version=obj.version).exists():
+            # Someone left the version at its default while a version already
+            # exists. Bumping beats an IntegrityError page.
+            obj.version = LegalPage.next_version_for(obj.slug)
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description="Draft a new version of the selected pages")
+    def draft_new_version(self, request: HttpRequest, queryset: object) -> None:
+        drafted = 0
+        for page in queryset:  # type: ignore[attr-defined]
+            LegalPage.objects.create(
+                slug=page.slug,
+                version=LegalPage.next_version_for(page.slug),
+                title=page.title,
+                body=page.body,
+                summary="",
+                effective_from=timezone.localdate(),
+                published=False,
+            )
+            drafted += 1
+        self.message_user(
+            request,
+            f"Drafted {drafted} new version(s). They stay invisible to customers "
+            "until you publish them.",
+        )

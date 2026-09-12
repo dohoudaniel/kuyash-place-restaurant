@@ -345,3 +345,32 @@ class Modifier(UUIDModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class WishlistItem(TimeStampedModel):
+    """A dish a customer saved for later.
+
+    Lives in ``catalog`` rather than ``accounts`` to respect the dependency
+    direction (ARCHITECTURE §2.1): ``catalog`` may import ``accounts``, not the
+    reverse. It is a catalogue preference that happens to belong to a user.
+
+    Replaces ``lib/store/wishlistStore.ts``, which keeps the list in
+    ``localStorage`` — so it is lost on a new device, a cleared browser, or a
+    private window, and is invisible to the restaurant.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User", on_delete=models.CASCADE, related_name="wishlist_items"
+    )
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE, related_name="wishlisted_by")
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "menu_item"], name="unique_wishlist_item_per_user"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} ♥ {self.menu_item.name}"

@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.common.serializers import MoneyField
-from apps.core.models import Branch, HolidayOverride, OpeningHours, SiteSettings
+from apps.core.models import Branch, HolidayOverride, LegalPage, OpeningHours, SiteSettings
 from apps.core.selectors import next_opening
 
 
@@ -89,3 +89,21 @@ class OpeningHoursResponseSerializer(serializers.Serializer):
     timezone = serializers.CharField()
     hours = OpeningHoursSerializer(many=True)
     overrides = HolidayOverrideSerializer(many=True)
+
+
+class LegalPageSerializer(serializers.ModelSerializer):
+    """A policy page as customers read it."""
+
+    class Meta:
+        model = LegalPage
+        fields = ("slug", "title", "body", "version", "effective_from", "updated_at")
+        read_only_fields = fields
+
+
+class LegalPageSummarySerializer(serializers.ModelSerializer):
+    """The index: enough to build a footer, without shipping five documents."""
+
+    class Meta:
+        model = LegalPage
+        fields = ("slug", "title", "version", "effective_from")
+        read_only_fields = fields

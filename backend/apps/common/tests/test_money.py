@@ -22,6 +22,7 @@ from apps.common.money import (
     compute_total,
     extract_vat,
     format_money,
+    format_money_ascii,
     kobo_to_naira,
     naira_to_kobo,
     round_half_up,
@@ -241,6 +242,34 @@ def test_format_money(amount: int, expected: str) -> None:
 
 def test_format_money_unknown_currency_uses_code() -> None:
     assert format_money(125_000, "ZAR") == "ZAR 1,250.00"
+
+
+@pytest.mark.parametrize(
+    ("amount", "expected"),
+    [
+        (0, "NGN 0.00"),
+        (1, "NGN 0.01"),
+        (3_312_000, "NGN 33,120.00"),
+        (-50_000, "-NGN 500.00"),
+    ],
+)
+def test_format_money_ascii(amount: int, expected: str) -> None:
+    """The PDF-safe form. The naira sign is not in WinAnsiEncoding, and
+    reportlab substitutes it silently — ``₦33,120.00`` prints as ``n33,120.00``
+    on a receipt (see apps/orders/services/receipt.py)."""
+    assert format_money_ascii(amount) == expected
+
+
+def test_format_money_ascii_carries_no_symbol() -> None:
+    assert "₦" not in format_money_ascii(125_000)
+    assert format_money_ascii(125_000, "USD") == "USD 1,250.00"
+
+
+def test_format_money_ascii_validates_its_inputs() -> None:
+    with pytest.raises(MoneyError):
+        format_money_ascii(100, "NAIRA")
+    with pytest.raises(MoneyError):
+        format_money_ascii(1.5)  # type: ignore[arg-type]
 
 
 def test_format_money_validates_currency() -> None:

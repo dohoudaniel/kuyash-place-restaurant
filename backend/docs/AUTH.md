@@ -160,7 +160,7 @@ POST /auth/password/reset/confirm/ { uid, token, new_password }
     └─ 200
 ```
 
-### 4.4 Social login  *(Phase 2)*
+### 4.4 Social login  *(Phase 2 — implemented)*
 
 Wires up the two buttons that currently say `alert("Google login - Integration needed")`:
 
@@ -170,7 +170,17 @@ GET /api/v1/auth/social/google/  → 302 to Google
                 → session established → redirect to the frontend
 ```
 
-`SOCIALACCOUNT_EMAIL_AUTHENTICATION = True` only for providers that assert a **verified** email (Google does; Facebook is less reliable, so treat it as requiring verification).
+`SOCIALACCOUNT_EMAIL_AUTHENTICATION = True` only for providers that assert a **verified** email. Configured per provider in `SOCIALACCOUNT_PROVIDERS`: Google `EMAIL_AUTHENTICATION: True`, Facebook `False`.
+
+`KuyashSocialAdapter.pre_social_login` is the backstop: if a provider claims an
+address that already belongs to an account and has *not* verified it, the link
+is refused with `409 social_email_unverified`. Without that check, anyone able
+to create an account at a non-verifying provider could assert a victim's email
+and be signed in as them.
+
+Provider access tokens are not stored (`SOCIALACCOUNT_STORE_TOKENS = False`):
+we never act on the customer's behalf at the provider, so retaining one would
+be holding a credential with no purpose.
 
 ---
 

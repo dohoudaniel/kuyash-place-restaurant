@@ -137,6 +137,21 @@ def format_money(amount_kobo: int, currency: str = DEFAULT_CURRENCY) -> str:
     return f"{sign}{symbol}{whole:,}.{fraction:02d}"
 
 
+def format_money_ascii(amount_kobo: int, currency: str = DEFAULT_CURRENCY) -> str:
+    """Render kobo with the ISO code rather than the symbol: ``NGN 12,500.00``.
+
+    For PDFs, and anywhere else the naira sign cannot be trusted to survive.
+    The standard PDF fonts use WinAnsiEncoding, which has no U+20A6: reportlab
+    substitutes it silently, so ``₦3,312.00`` prints on a receipt as
+    ``n3,312.00``. An ISO code is unambiguous and always renders.
+    """
+    _ensure_int(amount_kobo, "amount_kobo")
+    currency = _ensure_currency(currency)
+    sign = "-" if amount_kobo < 0 else ""
+    whole, fraction = divmod(abs(amount_kobo), KOBO_PER_NAIRA)
+    return f"{sign}{currency} {whole:,}.{fraction:02d}"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Tax
 # ──────────────────────────────────────────────────────────────────────────────

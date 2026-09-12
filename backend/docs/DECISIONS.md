@@ -200,9 +200,21 @@ The cost is a dev/prod database divergence. It is bounded and managed:
 
 | # | Question | Needed by | Owner |
 |---|---|---|---|
-| **OD-1** | **VAT-inclusive or VAT-exclusive pricing?** (`PRD.md` §7) | Before Phase 1C | Product owner |
+| **OD-1** | **VAT-inclusive or VAT-exclusive pricing?** (`PRD.md` §7) | Before Gate 1 | Product owner |
 | OD-2 | Real naira prices for the 18 menu items | Before Gate 1 | Product owner |
 | OD-3 | Real delivery zones, fees and minimums | Before Gate 1 | Product owner |
 | OD-4 | Deployment target (`DEPLOYMENT.md`) | Before Gate 1 | Engineering |
 | OD-5 | Keep or remove the academy "installment" option (ACA-6) | Phase 3 | Product owner |
 | OD-6 | Tip presets — the current ₦2/₦5/₦10 are dollar figures | Before Gate 1 | Product owner |
+
+### OD-1 — still open, but no longer silent
+
+Phase 2.6 did not decide the VAT direction; it made the two halves of the
+decision impossible to leave inconsistent. `Branch.prices_include_vat` drives
+the pricing sentence in the seeded terms, and `manage.py check --deploy` fails
+with `kuyash.E002` if a published page claims the opposite of what the cart
+charges (see `apps/core/checks.py`).
+
+So the owner still has to choose. What has changed is that choosing wrongly, or
+choosing and then not updating the copy, is now caught before deploy rather than
+by a customer or a regulator.

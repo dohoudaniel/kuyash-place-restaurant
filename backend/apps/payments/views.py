@@ -58,7 +58,9 @@ class InitialisePaymentView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         record = payment_services.initialise_payment(
-            order=order, provider_name=serializer.validated_data.get("provider", "")
+            order=order,
+            provider_name=serializer.validated_data.get("provider", ""),
+            save_method=serializer.validated_data.get("save_card", False),
         )
         return Response(
             {

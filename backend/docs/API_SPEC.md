@@ -97,7 +97,15 @@ GET /catalog/items/?limit=20&page=2&sort=price_asc
 | GET | `/core/branch/` | — | Branch details, contact, coordinates, VAT policy, min order, free-delivery threshold |
 | GET | `/core/opening-hours/` | — | Week schedule + `is_open_now` + `next_opens_at` |
 | GET | `/core/settings/` | — | Social links, homepage stats, hero copy |
-| GET | `/core/legal/{slug}/` | — | 🟡 terms / privacy / cookies / refunds / accessibility |
+| GET | `/core/legal/` | — | ✅ index: slug, title, version, effective_from (no bodies) |
+| GET | `/core/legal/{slug}/` | — | ✅ terms / privacy / cookies / refunds / accessibility |
+
+`/core/legal/{slug}/` serves **the version in force today**: published, and with
+`effective_from` on or before today. A draft or a future-dated version returns `404`
+rather than leaking wording that does not yet apply. The response carries `version` and
+`effective_from` so a client can show "last updated" honestly.
+
+The index returns one row per slug, not one per version.
 
 **`GET /core/branch/`**
 
@@ -317,10 +325,72 @@ const total = subtotal - discount + deliveryFee + tax;                          
 | GET | `/orders/` | ✓ | Paginated history |
 | GET | `/orders/{reference}/` | optional* | Detail + status. **Polling target.** ETag-cached |
 | POST | `/orders/{reference}/cancel/` | optional* | Allowed while `paid` or `confirmed` |
-| POST | `/orders/{reference}/reorder/` | ✓ | 🟡 Rebuild a cart, revalidating price + availability |
-| GET | `/orders/{reference}/receipt/` | optional* | 🟡 PDF |
+| POST | `/orders/{reference}/reorder/` | ✓ | ✅ Rebuild a cart, revalidating price + availability |
+| GET | `/orders/{reference}/receipt/` | optional* | ✅ PDF |
 
 \* Guests authenticate by `reference` + the `guest_token` returned at creation.
+
+**`POST /orders/{reference}/reorder/`**
+
+Signed-in callers only, and only their own orders (404 otherwise — the existence
+of a reference is not disclosed). A guest has no durable basket to rebuild into.
+
+```json
+{ "replace": false }
+```
+
+Answers `409 cart_not_empty` when the basket already has lines and `replace` is
+false. Reorder discarding a basket the customer had already filled would be
+destroying their work to save them a tap, so it takes an explicit confirmation.
+
+```json
+{
+  "cart": { "…": "the full cart payload, repriced" },
+  "added": 2,
+  "replaced_lines": 0,
+  "changes": [
+    {
+      "item": "classic-smash-burger",
+      "name": "Classic Smash Burger",
+      "type": "price_increased",
+      "old": { "amount": 1090000, "display": "₦10,900.00" },
+      "new": { "amount": 1290000, "display": "₦12,900.00" }
+    }
+  ],
+  "unavailable": [
+    { "item": "jollof-rice", "name": "Jollof Rice", "reason": "This dish is no longer on the menu." }
+  ],
+  "message": "Some items could not be added. Check your basket before paying."
+}
+```
+
+A reorder is a **fresh quote**, not a copy. Lines come back at today's price and
+any difference is reported; a delisted dish, a withdrawn size or a required
+option with nothing left to choose is skipped and reported rather than
+substituted. `changes[]` and `unavailable[]` use the same shape as the cart's,
+so a client can render both with one component. `type` is one of
+`price_increased`, `price_reduced`, `options_removed`.
+
+Order lines hold the *name* of a variant and of each modifier, not a foreign
+key — the snapshot has to outlive the catalogue row — so both are re-resolved by
+name. A renamed option counts as a removed one, which is the safe direction: it
+is reported rather than assumed equivalent.
+
+**`GET /orders/{reference}/receipt/`**
+
+`application/pdf`, `Content-Disposition: inline`. Answers `409 order_not_paid`
+for an unpaid order: a document headed "Receipt" for money that was never
+received causes the dispute it is meant to settle. A cash order becomes
+receiptable when it is marked paid, not when it is placed.
+
+Amounts are printed as `NGN 33,120.00`, not `₦33,120.00`. The standard PDF fonts
+use WinAnsiEncoding, which has no U+20A6, and reportlab substitutes it silently
+— a receipt reading `n33,120.00` is worse than one naming the currency. The JSON
+API is unaffected and still returns `display` with the symbol.
+
+The receipt prints the VAT rate and direction **snapshotted on the order**, not
+today's branch settings: changing the branch must not rewrite a receipt that was
+already issued.
 
 **`POST /orders/`**
 

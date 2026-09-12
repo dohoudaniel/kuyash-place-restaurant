@@ -11,6 +11,11 @@ from apps.catalog.views import (
     MenuItemDetailView,
     MenuItemListView,
 )
+from apps.catalog.wishlist_views import (
+    WishlistItemView,
+    WishlistSyncView,
+    WishlistView,
+)
 
 app_name = "catalog"
 
@@ -20,4 +25,10 @@ urlpatterns = [
     path("featured/", FeaturedItemsView.as_view(), name="featured"),
     path("items/", MenuItemListView.as_view(), name="items"),
     path("items/<slug:slug>/", MenuItemDetailView.as_view(), name="item-detail"),
+]
+
+wishlist_urlpatterns = [
+    path("", WishlistView.as_view(), name="wishlist"),
+    path("sync/", WishlistSyncView.as_view(), name="wishlist-sync"),
+    path("<slug:slug>/", WishlistItemView.as_view(), name="wishlist-item"),
 ]

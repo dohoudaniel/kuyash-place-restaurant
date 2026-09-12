@@ -165,3 +165,37 @@ def test_nullable_money_field_has_no_zero_default(branch: Branch) -> None:
     fresh = Branch.objects.create(name="No Threshold", slug="no-threshold")
     assert fresh.free_delivery_threshold is None
     assert fresh.min_order_value == 0  # non-nullable money still defaults to zero
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Admin display columns
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_admin_states_the_vat_direction_in_the_list(branch: Branch) -> None:
+    """Whether VAT is inclusive is the one setting staff must not misread."""
+    from django.contrib.admin.sites import AdminSite
+
+    from apps.core.admin import BranchAdmin
+
+    admin_instance = BranchAdmin(Branch, AdminSite())
+    assert admin_instance.vat_display(branch) == "7.5% (inclusive)"
+    assert admin_instance.is_open_now(branch) is True
+
+    branch.prices_include_vat = False
+    assert admin_instance.vat_display(branch) == "7.5% (added at checkout)"
+
+
+def test_site_settings_admin_keeps_the_singleton_single(db) -> None:  # type: ignore[no-untyped-def]
+    from django.contrib.admin.sites import AdminSite
+    from django.test import RequestFactory
+
+    from apps.core.admin import SiteSettingsAdmin
+
+    admin_instance = SiteSettingsAdmin(SiteSettings, AdminSite())
+    request = RequestFactory().get("/admin/core/sitesettings/")
+
+    assert admin_instance.has_add_permission(request) is True
+    SiteSettings.load()
+    assert admin_instance.has_add_permission(request) is False
+    assert admin_instance.has_delete_permission(request) is False

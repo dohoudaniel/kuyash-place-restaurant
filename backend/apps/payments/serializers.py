@@ -21,6 +21,10 @@ class InitialiseSerializer(serializers.Serializer):
     )
 
 
+class InitialiseSerializerMixin:
+    """Marker for the shared docstring below."""
+
+
 class RefundSerializer(serializers.Serializer):
     amount = serializers.IntegerField(
         required=False,
