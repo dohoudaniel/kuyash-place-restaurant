@@ -109,14 +109,17 @@ jobs:
           DATABASE_URL: postgres://kuyash:kuyash@localhost:5432/kuyash_test
         run: pytest -q --no-header
 
-      - name: Confirm the Postgres-only tests actually ran
+      - name: Confirm no test was skipped for lack of Postgres
+        # Generic on purpose: any test gated behind `requires_postgres` must run
+        # here. Checking specific files would let a newly added one slip through
+        # silently, which is how a skip becomes a hole.
         env:
           DATABASE_URL: postgres://kuyash:kuyash@localhost:5432/kuyash_test
         run: |
-          output=$(pytest apps/orders/tests/test_concurrency.py -q --no-header -rs)
+          output=$(pytest -q --no-header -rs)
           echo "$output"
-          if echo "$output" | grep -q "skipped"; then
-            echo "::error::Concurrency tests were skipped on the Postgres job."
+          if echo "$output" | grep -q "SQLite locks the whole table"; then
+            echo "::error::Postgres-gated tests were skipped on the Postgres job."
             exit 1
           fi
 

@@ -274,3 +274,72 @@ def ready_cart(db, branch, category, user_cart, address):  # type: ignore[no-unt
     user_cart.delivery_address = address
     user_cart.save()
     return user_cart
+
+
+@pytest.fixture
+def dining_room(db, branch):  # type: ignore[no-untyped-def]
+    """One area, two small tables, dinner service every day.
+
+    Deliberately tiny so "fully booked" is reachable in a test.
+    """
+    import datetime as dt
+
+    from apps.core.models import Weekday
+    from apps.reservations.models import RestaurantTable, ServicePeriod, TableArea
+
+    area = TableArea.objects.create(
+        branch=branch, name="Indoor Seating", slug="indoor", display_order=1
+    )
+    for number in ("1", "2"):
+        RestaurantTable.objects.create(
+            branch=branch, area=area, number=number, seats_min=1, seats_max=4
+        )
+    for weekday in Weekday.values:
+        ServicePeriod.objects.create(
+            branch=branch,
+            weekday=weekday,
+            name="Dinner",
+            starts_at=dt.time(18, 0),
+            ends_at=dt.time(21, 30),
+            slot_interval_minutes=30,
+            turn_time_minutes=120,
+        )
+    return area
+
+
+@pytest.fixture
+def booking_time(branch):  # type: ignore[no-untyped-def]
+    """A bookable dinner slot comfortably in the future.
+
+    Fixed to a weekday date rather than "tomorrow" so the test does not depend
+    on which day it runs.
+    """
+    import datetime as dt
+
+    from django.utils import timezone
+
+    candidate = timezone.localtime(timezone.now(), branch.tzinfo()) + dt.timedelta(days=14)
+    return dt.datetime.combine(candidate.date(), dt.time(19, 0), tzinfo=branch.tzinfo())
+
+
+@pytest.fixture(autouse=True)
+def _block_real_http(monkeypatch):  # type: ignore[no-untyped-def]
+    """Fail loudly if a test tries to make a real HTTP request.
+
+    A test that reaches a payment provider's live API is slow, flaky, dependent
+    on someone else's uptime, and may do something real. One such test was
+    taking 5.8 seconds and quietly calling api.flutterwave.com.
+
+    `responses` patches HTTPAdapter.send itself, so mocked tests are unaffected;
+    only unmocked calls land here. Database connections are untouched — this
+    guards `requests`, not sockets.
+    """
+    import requests.adapters
+
+    def _refuse(self, request, *args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError(
+            f"Unmocked HTTP request in a test: {request.method} {request.url}\n"
+            "Wrap the test with @responses.activate and register the response."
+        )
+
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", _refuse)

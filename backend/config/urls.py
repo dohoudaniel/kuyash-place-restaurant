@@ -34,6 +34,9 @@ api_v1 = [
     path("orders/", include("apps.orders.urls")),
     path("kds/", include("apps.orders.kds_urls")),
     path("payments/", include("apps.payments.urls")),
+    path("reservations/", include("apps.reservations.urls")),
+    path("catering/", include("apps.catering.urls")),
+    path("support/", include("apps.support.urls")),
     path("webhooks/", include((webhook_urlpatterns, "webhooks"))),
     path("accounts/", include((account_urlpatterns, "accounts"))),
 ]

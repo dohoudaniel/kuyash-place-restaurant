@@ -121,6 +121,146 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
         ),
         "available_context": ["name", "reference", "refund_line"],
     },
+    "contact_received": {
+        "description": "Acknowledgement sent when the contact form is used.",
+        "subject": "We have your message — {reference}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Thank you for getting in touch. We have your message and will reply "
+            "as soon as we can.\n\n"
+            "Reference: {reference}\n"
+            "Subject:   {subject}" + SIGN_OFF
+        ),
+        "available_context": ["name", "reference", "subject"],
+    },
+    "contact_internal": {
+        "description": "Alert to the team when the contact form is used.",
+        "subject": "[Support] {reference} — {reason}: {subject}",
+        "text_body": (
+            "Reference: {reference}\n"
+            "From:      {name} <{email}>\n"
+            "Reason:    {reason}\n"
+            "Subject:   {subject}\n\n"
+            "{message}\n"
+        ),
+        "available_context": ["reference", "name", "email", "reason", "subject", "message"],
+    },
+    "ticket_reply": {
+        "description": "Sent when staff reply to a support ticket.",
+        "subject": "Re: {subject} ({reference})",
+        "text_body": ("Hello {name},\n\n{body}\n\nReference: {reference}" + SIGN_OFF),
+        "available_context": ["name", "reference", "subject", "body"],
+    },
+    "catering_enquiry_received": {
+        "description": "Acknowledgement sent to a catering enquirer.",
+        "subject": "We have your catering enquiry — {reference}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Thank you for your catering enquiry. A member of our team will be in "
+            "touch by {respond_by}.\n\n"
+            "Reference: {reference}\n"
+            "Guests:    {guest_count}\n"
+            "{indicative_line}" + SIGN_OFF
+        ),
+        "available_context": [
+            "name",
+            "reference",
+            "guest_count",
+            "indicative_line",
+            "respond_by",
+        ],
+    },
+    "catering_enquiry_internal": {
+        "description": "Alert to the team when a catering enquiry arrives.",
+        "subject": "[Catering] {reference} — {guest_count} guests, respond by {respond_by}",
+        "text_body": (
+            "A catering enquiry needs a response by {respond_by}.\n\n"
+            "Reference:  {reference}\n"
+            "Name:       {name}\n"
+            "Email:      {email}\n"
+            "Phone:      {phone}\n"
+            "Guests:     {guest_count}\n"
+            "Event type: {event_type}\n"
+            "Date:       {event_date}\n"
+            "Venue:      {venue}\n\n"
+            "Message:\n{message}\n"
+        ),
+        "available_context": [
+            "reference",
+            "name",
+            "email",
+            "phone",
+            "guest_count",
+            "event_type",
+            "event_date",
+            "venue",
+            "message",
+            "respond_by",
+        ],
+    },
+    "reservation_confirmed": {
+        "description": "Sent when a table is booked.",
+        "subject": "Table booked — {date} at {time}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Your table is booked. We look forward to seeing you.\n\n"
+            "Reference: {reference}\n"
+            "When:      {date} at {time}\n"
+            "Guests:    {party_size}\n"
+            "Area:      {area}\n\n"
+            "View or cancel your booking: {manage_url}" + SIGN_OFF
+        ),
+        "available_context": [
+            "name",
+            "reference",
+            "date",
+            "time",
+            "party_size",
+            "area",
+            "manage_url",
+        ],
+    },
+    "reservation_rescheduled": {
+        "description": "Sent when a booking is moved.",
+        "subject": "Booking moved — {date} at {time}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Your booking has been moved.\n\n"
+            "Reference: {reference}\n"
+            "New time:  {date} at {time}\n"
+            "Guests:    {party_size}\n"
+            "Area:      {area}\n\n"
+            "View or cancel your booking: {manage_url}" + SIGN_OFF
+        ),
+        "available_context": [
+            "name",
+            "reference",
+            "date",
+            "time",
+            "party_size",
+            "area",
+            "manage_url",
+        ],
+    },
+    "reservation_cancelled": {
+        "description": "Sent when a booking is cancelled.",
+        "subject": "Booking cancelled — {reference}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Your booking for {date} at {time} has been cancelled.\n"
+            "We hope to see you another time.\n\n"
+            "Reference: {reference}" + SIGN_OFF
+        ),
+        "available_context": [
+            "name",
+            "reference",
+            "date",
+            "time",
+            "party_size",
+            "area",
+            "manage_url",
+        ],
+    },
     "refund_issued": {
         "description": "Sent when a refund is processed.",
         "subject": "Refund for order {reference}",

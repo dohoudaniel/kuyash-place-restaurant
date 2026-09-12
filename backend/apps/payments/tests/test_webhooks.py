@@ -277,9 +277,25 @@ def test_flutterwave_rejects_a_wrong_shared_secret(flutterwave_keys) -> None:  #
     assert outcome.accepted is False
 
 
+@responses.activate
 def test_flutterwave_accepts_the_configured_hash(flutterwave_keys, order) -> None:  # type: ignore[no-untyped-def]
     from django.utils import timezone
 
+    responses.add(
+        responses.GET,
+        "https://api.flutterwave.com/v3/transactions/verify_by_reference",
+        json={
+            "status": "success",
+            "data": {
+                "status": "successful",
+                "amount": 21800.00,
+                "currency": "NGN",
+                "payment_type": "card",
+                "card": {},
+            },
+        },
+        status=200,
+    )
     record = PaymentTransaction.objects.create(
         order=order,
         provider="flutterwave",

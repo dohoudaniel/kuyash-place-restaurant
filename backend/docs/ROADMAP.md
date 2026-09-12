@@ -194,17 +194,72 @@ Notes:
 
 ## Phase 2 — Service operations (~3–4 weeks)
 
-| # | Feature | Est. |
-|---|---|---|
-| 2.1 | Reservations: tables, areas, service periods, **exclusion-constraint availability**, confirmation emails, admin book view | 1.5 wk |
-| 2.2 | Catering: packages, enquiries, staff workflow, indicative totals, overdue-response view | 0.5 wk |
-| 2.3 | Support: contact → tickets, replies, FAQ admin, spam protection | 0.5 wk |
-| 2.4 | Wishlist sync + saved payment methods (provider tokens) | 0.5 wk |
-| 2.5 | Social login (Google, Facebook) | 0.3 wk |
-| 2.6 | CMS: legal pages with versioning, opening-hours editing, site settings | 0.5 wk |
-| 2.7 | Reorder with revalidation; PDF receipts | 0.3 wk |
+| # | Feature | Est. | Status |
+|---|---|---|---|
+| 2.1 | Reservations: tables, areas, service periods, **exclusion-constraint availability**, confirmation emails, admin book view | 1.5 wk | ✅ |
+| 2.2 | Catering: packages, enquiries, staff workflow, indicative totals, overdue-response view | 0.5 wk | ✅ |
+| 2.3 | Support: contact → tickets, replies, FAQ admin, spam protection | 0.5 wk | ✅ |
+| 2.4 | Wishlist sync + saved payment methods (provider tokens) | 0.5 wk | |
+| 2.5 | Social login (Google, Facebook) | 0.3 wk | |
+| 2.6 | CMS: legal pages with versioning, opening-hours editing, site settings | 0.5 wk | |
+| 2.7 | Reorder with revalidation; PDF receipts | 0.3 wk | |
+
+#### 2.1 delivered
+
+`reservations` app: TableArea, RestaurantTable, ServicePeriod, BlackoutDate and
+Reservation; a computed availability engine; booking, rescheduling and
+cancellation with guest emails; a staff day-book endpoint. 70 tests.
+
+The double-booking guarantee has two layers: a row lock during table allocation,
+and — on Postgres — an `ExclusionConstraint` over `(table, [start, end))` added
+by migration `0002_no_double_booking`. SQLite has no equivalent (ADR-015), so
+the concurrency proof is skipped there and **CI now fails if any
+Postgres-gated test is still skipped on the Postgres job**.
+
+Demonstrated end to end: two private-room tables book, the third party is
+refused, a 120-minute turn at 19:00 correctly blocks 20:00, cancelling frees
+the table, every guest is emailed, and the database holds zero double-booked
+tables.
+
+#### 2.2 delivered
+
+`catering` app: packages, enquiries, an indicative total computed server-side,
+and an **SLA clock** measured against the 24-hour callback the website already
+promises. 27 tests.
+
+Three things happen on submission, where the current form does none of them:
+the enquiry is persisted with a reference, the customer is acknowledged with a
+concrete deadline, and the team is emailed. Overdue enquiries surface both in
+the admin changelist (as a red banner) and at
+`GET /catering/enquiries/overdue/` for managers.
+
+Demonstrated: a 300-guest wedding enquiry worth an indicative ₦3.6M is
+recorded, both parties are emailed, it goes 12 hours overdue and appears in the
+manager's queue, then answering it clears the queue. Internal notes and the
+real quote are never exposed to the customer.
+
+#### 2.3 delivered
+
+`support` app: contact messages, tickets with threaded replies, an editable
+FAQ, and spam protection. 30 tests.
+
+A contact submission now persists, opens a ticket, acknowledges the customer
+and alerts the team. Spam is **quarantined, not rejected** — a bot gets exactly
+the same response shape and status code as a real customer, so it learns
+nothing. Internal notes are never emailed or returned by the API.
+
+The seeded FAQ corrects the tax contradiction: `app/help/page.tsx` claims
+prices include tax while the cart adds 7.5% on top. The seeded answer is
+generated from `Branch.prices_include_vat`, so it cannot disagree with what the
+system actually charges. That said, **OD-1 is still open** — the decision itself
+has not been made, only made consistent.
 
 **Gate 2:** a reservation cannot be double-booked (proven by a concurrency test); every catering enquiry reaches a human with an SLA timer; no form anywhere in the app still `alert()`s.
+
+Status: the first two are **met and demonstrated**. The third is met on the
+backend for every Phase 2 form (contact, catering, reservations) — reviews and
+academy enrolment are Phase 3, and the frontend still has to be wired to these
+endpoints (`docs/FRONTEND_INTEGRATION.md`).
 
 ---
 

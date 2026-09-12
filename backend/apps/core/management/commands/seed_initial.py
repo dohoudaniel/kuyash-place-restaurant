@@ -15,10 +15,13 @@ from django.db import transaction
 
 from apps.catalog.models import MenuItem
 from apps.catalog.seed import seed_catalogue
+from apps.catering.seed import seed_catering
 from apps.common.permissions import ALL_GROUPS
 from apps.core.models import Branch, OpeningHours, Service, SiteSettings, Weekday
 from apps.delivery.models import DeliveryZone
 from apps.promotions.models import DiscountType, PromoCode
+from apps.reservations.seed import seed_reservations
+from apps.support.seed import seed_faq
 
 BRANCH_DEFAULTS: dict[str, Any] = {
     "name": "Kuyash Place — Victoria Island",
@@ -194,6 +197,15 @@ class Command(BaseCommand):
             )
             if made:
                 self.stdout.write(f"  + email template {key}")
+
+        self.stdout.write("Support:")
+        seed_faq(branch, stdout=self.stdout)
+
+        self.stdout.write("Catering:")
+        seed_catering(branch, stdout=self.stdout)
+
+        self.stdout.write("Reservations:")
+        seed_reservations(branch, stdout=self.stdout)
 
         self.stdout.write("Catalogue:")
         seed_catalogue(branch, stdout=self.stdout)
