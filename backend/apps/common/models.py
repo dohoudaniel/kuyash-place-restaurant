@@ -8,6 +8,20 @@ from typing import Self
 from django.db import models
 
 
+class UUIDModel(models.Model):
+    """A UUID primary key and nothing else.
+
+    For records whose id reaches a client — variants, modifier groups, modifiers —
+    but which need no audit timestamps. Sequential integers are never exposed:
+    they leak volume and invite enumeration (ARCHITECTURE.md §7).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    class Meta:
+        abstract = True
+
+
 class TimeStampedModel(models.Model):
     """UUID primary key plus creation/update timestamps.
 

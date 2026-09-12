@@ -36,7 +36,8 @@ jobs:
         run: ruff format --check .
 
       - name: Type-check
-        run: mypy apps/common
+        # Paths come from pyproject.toml; naming them here would bypass `exclude`.
+        run: mypy
 
       - name: Migrations are committed
         run: python manage.py makemigrations --check --dry-run
@@ -48,6 +49,16 @@ jobs:
         # Any code path that can change what a customer is charged is fully
         # covered, or it does not merge. See docs/TESTING.md §1.
         run: pytest apps/common/tests/test_money.py --cov=apps.common.money --cov-fail-under=100
+
+      - name: Pricing and order coverage gate (100%)
+        # The pricing engine, promo rules and order services decide what is
+        # charged and what is refunded, so they carry the same requirement as
+        # the money primitives.
+        run: |
+          pytest apps/carts apps/promotions apps/orders \
+            --cov=apps.carts.services --cov=apps.promotions.services \
+            --cov=apps.orders.services \
+            --cov-fail-under=100
 
       - name: Deployment check
         env:

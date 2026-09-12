@@ -2,7 +2,9 @@
 
 Django backend for Kuyash Place Restaurant: ordering, payments, reservations, catering, academy and loyalty for a single-location Nigerian restaurant.
 
-**Status:** Phase 0 (foundations) implemented. Phase 1 not started.
+**Status:** Phase 0 (foundations), 1A (catalogue), 1B (accounts),
+1C (cart & pricing) and 1D (orders & KDS) implemented.
+Next: Phase 1E (payments) — see `docs/ROADMAP.md`.
 **Stack:** Django 5.x · DRF · PostgreSQL 16 · Redis 7 · Celery · django-allauth · Supabase Storage
 
 ---
@@ -55,6 +57,27 @@ These are not style preferences. Violating any of them is a production incident 
 6. **Staff change content and prices, not developers.** Menu items, prices, courses, packages and hours live in the database.
 
 7. **Every order state change is an append-only event.** `Order.status` is mutated only through `orders.services.state.transition()`.
+
+---
+
+## The repricing gate
+
+`make seed` creates 18 menu items carrying the frontend's prices — ₦14.90 for a
+grill plate, which is a dollar figure wearing a naira sign. Every one is flagged
+`needs_repricing=True`, and that flag has teeth:
+
+- the items are **excluded from the public API** entirely (`/catalog/items/`
+  returns them nowhere, and their detail URLs 404);
+- `manage.py check --deploy` **fails** with `kuyash.E001` while any active item
+  still carries the flag;
+- the admin changelist shows a warning on every visit.
+
+To clear it: set a real naira price **in kobo** (₦10,900.00 is `1090000`), then
+use the "Mark selected as repriced" action. That action confirms the base price
+*and* the item's variant and modifier prices — options have no separate flag.
+
+This is deliberate. Launching with placeholder prices should be impossible, not
+merely discouraged.
 
 ---
 

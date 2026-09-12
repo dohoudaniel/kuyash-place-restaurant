@@ -28,8 +28,15 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 
-# Throttling off by default; individual tests re-enable it.
-REST_FRAMEWORK = {**REST_FRAMEWORK, "DEFAULT_THROTTLE_CLASSES": []}
+# Throttling off by default. Views declare explicit throttle_classes, so simply
+# emptying DEFAULT_THROTTLE_CLASSES is not enough — the rates themselves must be
+# None, which makes SimpleRateThrottle a no-op. Tests that exercise throttling
+# re-enable a specific scope with override_settings.
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    "DEFAULT_THROTTLE_CLASSES": [],
+    "DEFAULT_THROTTLE_RATES": dict.fromkeys(REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]),
+}
 
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 

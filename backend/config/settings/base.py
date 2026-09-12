@@ -47,6 +47,12 @@ LOCAL_APPS = [
     "apps.common",
     "apps.accounts",
     "apps.core",
+    "apps.catalog",
+    "apps.delivery",
+    "apps.promotions",
+    "apps.carts",
+    "apps.orders",
+    "apps.notifications",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -175,8 +181,11 @@ REST_FRAMEWORK = {
         "anon": "100/min",
         "user": "300/min",
         "login": "5/min",
+        "login_email": "10/hour",
         "register": "3/hour",
         "password_reset": "3/hour",
+        "password_reset_email": "3/hour",
+        "resend_verification": "3/hour",
         "order_create": "10/hour",
         "promo_apply": "10/min",
         "contact": "3/hour",
@@ -256,7 +265,9 @@ else:
 # development to a single process; see DEPLOYMENT.md §2.
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=not REDIS_URL)
 CELERY_TASK_EAGER_PROPAGATES = True
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL or "memory://")
+# "memory://localhost//" rather than "memory://": kombu warns about a missing
+# hostname on the bare form even when tasks run eagerly and never connect.
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL or "memory://localhost//")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL or "cache+memory://")
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

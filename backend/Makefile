@@ -25,9 +25,13 @@ run: ## Start the development server
 test: ## Run the test suite
 	$(PY) -m pytest
 
-coverage: ## Enforce the coverage gates (85% overall, 100% on money)
+coverage: ## Enforce the coverage gates (85% overall, 100% on every money path)
 	$(PY) -m pytest --cov=apps --cov-report=term-missing --cov-fail-under=85
 	$(PY) -m pytest apps/common/tests/test_money.py --cov=apps.common.money --cov-fail-under=100
+	$(PY) -m pytest apps/carts apps/promotions apps/orders \
+		--cov=apps.carts.services --cov=apps.promotions.services \
+		--cov=apps.orders.services \
+		--cov-report=term-missing --cov-fail-under=100
 
 lint: ## Lint
 	.venv/bin/ruff check .
@@ -35,8 +39,8 @@ lint: ## Lint
 fmt: ## Format
 	.venv/bin/ruff format .
 
-typecheck: ## Type-check the money and service layers
-	.venv/bin/mypy apps/common
+typecheck: ## Type-check application code (paths come from pyproject)
+	.venv/bin/mypy
 
 gate: ## PCI card-field gate
 	./scripts/check-no-card-fields.sh

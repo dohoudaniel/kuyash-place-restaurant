@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.utils.crypto import constant_time_compare
-from rest_framework import permissions
+from rest_framework import exceptions, permissions
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
@@ -83,3 +83,16 @@ class IsOwnerOrStaff(permissions.BasePermission):
         expected = getattr(obj, "guest_token", "")
         supplied = request.headers.get("X-Guest-Token", "")
         return bool(expected) and bool(supplied) and constant_time_compare(expected, supplied)
+
+
+def current_user(request: Request) -> Any:
+    """``request.user`` narrowed to a real user.
+
+    Views calling this are guarded by ``IsAuthenticated``, so ``AnonymousUser``
+    cannot reach them. The explicit check documents that invariant for the type
+    checker and fails loudly rather than silently if the guard is ever removed.
+    """
+    user = request.user
+    if not (user and user.is_authenticated):
+        raise exceptions.NotAuthenticated
+    return user

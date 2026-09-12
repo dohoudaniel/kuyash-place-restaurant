@@ -12,6 +12,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from apps.accounts.urls import account_urlpatterns, auth_urlpatterns
 from apps.common.views import (
     api_bad_request,
     api_not_found,
@@ -26,7 +27,12 @@ admin.site.index_title = settings.ADMIN_INDEX_TITLE
 
 api_v1 = [
     path("core/", include("apps.core.urls")),
-    path("auth/", include("apps.accounts.urls")),
+    path("auth/", include((auth_urlpatterns, "auth"))),
+    path("catalog/", include("apps.catalog.urls")),
+    path("cart/", include("apps.carts.urls")),
+    path("orders/", include("apps.orders.urls")),
+    path("kds/", include("apps.orders.kds_urls")),
+    path("accounts/", include((account_urlpatterns, "accounts"))),
 ]
 
 urlpatterns = [

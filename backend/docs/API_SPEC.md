@@ -58,11 +58,27 @@ Field-level validation errors add `errors`:
 
 ### 0.3 Pagination
 
-Cursor-based. `?limit=20&cursor=<opaque>`.
+Two styles, chosen by what the collection is.
 
-```json
-{ "results": [...], "next": "cD0yMDI2LTA5...", "previous": null, "count": 47 }
+**Append-only feeds** (orders, ledger entries) use **cursor** pagination — a new
+row arriving mid-listing cannot shift page boundaries:
+
 ```
+GET /orders/?limit=20&cursor=<opaque>
+{ "results": [...], "next": "cD0yMDI2LTA5...", "previous": null }
+```
+
+**Finite, user-sortable collections** (the menu) use **page** pagination:
+
+```
+GET /catalog/items/?limit=20&page=2&sort=price_asc
+{ "results": [...], "next": "...?page=3", "previous": "...?page=1", "count": 47 }
+```
+
+> Cursor pagination cannot serve a sortable collection: it imposes its own
+> `ordering` so the cursor stays monotonic, which silently overrides the
+> caller's `sort`. Using it for the menu made every descending sort return
+> ascending results.
 
 ### 0.4 Idempotency
 

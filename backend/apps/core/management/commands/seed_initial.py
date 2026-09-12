@@ -13,8 +13,12 @@ from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from apps.catalog.models import MenuItem
+from apps.catalog.seed import seed_catalogue
 from apps.common.permissions import ALL_GROUPS
 from apps.core.models import Branch, OpeningHours, Service, SiteSettings, Weekday
+from apps.delivery.models import DeliveryZone
+from apps.promotions.models import DiscountType, PromoCode
 
 BRANCH_DEFAULTS: dict[str, Any] = {
     "name": "Kuyash Place — Victoria Island",
@@ -34,6 +38,85 @@ BRANCH_DEFAULTS: dict[str, Any] = {
     "free_delivery_threshold": 1_500_000,  # ₦15,000.00
     "default_prep_minutes": 25,
 }
+
+# PLACEHOLDER fees and minimums. Real values are a Gate 1 prerequisite (OD-3).
+# Fees are in KOBO: ₦1,500.00 is 150_000.
+DELIVERY_ZONES: list[dict[str, Any]] = [
+    {
+        "slug": "victoria-island",
+        "name": "Victoria Island",
+        "fee": 150_000,
+        "min_order_value": 200_000,
+        "estimated_minutes": 35,
+        "areas": ["Victoria Island", "VI", "Eko Atlantic", "Adeola Odeku"],
+        "display_order": 1,
+    },
+    {
+        "slug": "ikoyi",
+        "name": "Ikoyi",
+        "fee": 180_000,
+        "min_order_value": 200_000,
+        "estimated_minutes": 40,
+        "areas": ["Ikoyi", "Banana Island", "Parkview"],
+        "display_order": 2,
+    },
+    {
+        "slug": "lekki-phase-1",
+        "name": "Lekki Phase 1",
+        "fee": 250_000,
+        "min_order_value": 300_000,
+        "estimated_minutes": 50,
+        "areas": ["Lekki", "Lekki Phase 1", "Admiralty Way"],
+        "display_order": 3,
+    },
+]
+
+# Carried over from frontend/lib/store/promoStore.ts, where every code and its
+# rules ship in the JS bundle. The frontend values are dollar figures wearing a
+# naira sign ("₦5 off orders over ₦30"), and SAVE500 has value: 5 — its own name
+# and value already disagree. Converted to plausible naira here and seeded
+# INACTIVE: nobody can redeem one until a human has reviewed it.
+PROMO_CODES: list[dict[str, Any]] = [
+    {
+        "code": "WELCOME10",
+        "discount_type": DiscountType.PERCENTAGE,
+        "value": 1000,
+        "max_discount": 100_000,
+        "min_order_value": 200_000,
+        "first_order_only": True,
+        "usage_limit_per_user": 1,
+        "description": "10% off your first order, up to ₦1,000",
+    },
+    {
+        "code": "SAVE500",
+        "discount_type": DiscountType.FIXED,
+        "value": 50_000,
+        "min_order_value": 300_000,
+        "description": "₦500 off orders over ₦3,000",
+    },
+    {
+        "code": "FREEDEL",
+        "discount_type": DiscountType.FREE_DELIVERY,
+        "value": 0,
+        "min_order_value": 250_000,
+        "description": "Free delivery on orders over ₦2,500",
+    },
+    {
+        "code": "MEGA20",
+        "discount_type": DiscountType.PERCENTAGE,
+        "value": 2000,
+        "max_discount": 200_000,
+        "min_order_value": 500_000,
+        "description": "20% off orders over ₦5,000, up to ₦2,000",
+    },
+    {
+        "code": "FLAT15",
+        "discount_type": DiscountType.FIXED,
+        "value": 150_000,
+        "min_order_value": 1_000_000,
+        "description": "₦1,500 off orders over ₦10,000",
+    },
+]
 
 WEEKLY_HOURS = [
     (Weekday.MONDAY, dt.time(11, 0), dt.time(22, 0)),
@@ -76,6 +159,29 @@ class Command(BaseCommand):
             if made:
                 self.stdout.write(f"  + hours {Weekday(weekday).label}")
 
+        for payload in DELIVERY_ZONES:
+            _, made = DeliveryZone.objects.get_or_create(
+                branch=branch,
+                slug=payload["slug"],
+                defaults={k: v for k, v in payload.items() if k != "slug"},
+            )
+            self._report("DeliveryZone", payload["name"], made)
+
+        for payload in PROMO_CODES:
+            _, made = PromoCode.objects.get_or_create(
+                branch=branch,
+                code=payload["code"],
+                defaults={
+                    **{k: v for k, v in payload.items() if k != "code"},
+                    # Inactive until reviewed — see the note on PROMO_CODES.
+                    "is_active": False,
+                },
+            )
+            self._report("PromoCode", payload["code"], made)
+
+        self.stdout.write("Catalogue:")
+        seed_catalogue(branch, stdout=self.stdout)
+
         settings_obj = SiteSettings.load()
         if not settings_obj.tagline:
             settings_obj.tagline = "Tastefully Classy"
@@ -90,12 +196,32 @@ class Command(BaseCommand):
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("Seed complete."))
+        pending = MenuItem.objects.filter(is_active=True, needs_repricing=True).count()
         self.stdout.write(
             self.style.WARNING(
                 "Reminder: min_order_value and free_delivery_threshold are PLACEHOLDERS. "
                 "Set real values in the admin before launch (docs/ROADMAP.md Gate 1)."
             )
         )
+        inactive_promos = PromoCode.objects.filter(branch=branch, is_active=False).count()
+        if inactive_promos:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"{inactive_promos} promo code(s) seeded INACTIVE. Their values were "
+                    "converted from the frontend's dollar figures; review each one in the "
+                    "admin before enabling it."
+                )
+            )
+
+        if pending:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"{pending} menu item(s) carry PLACEHOLDER prices carried over from the "
+                    "frontend (₦14.90 for a grill plate — a dollar figure with a naira sign). "
+                    "They are hidden from the public API and `check --deploy` will FAIL until "
+                    "real prices are set and 'needs repricing' is cleared."
+                )
+            )
 
     def _report(self, kind: str, label: str, created: bool) -> None:
         verb = self.style.SUCCESS("created") if created else self.style.NOTICE("exists")

@@ -13,18 +13,38 @@ from apps.core.selectors import get_current_branch, next_opening
 pytestmark = pytest.mark.django_db
 
 
+def _restrict_hours(branch: Branch, opens: dt.time, closes: dt.time) -> None:
+    """Replace the fixture's all-day schedule with a narrow window.
+
+    The shared fixture is open 00:00–23:59 so that order tests do not pass or
+    fail depending on the time of day. Tests about opening hours set their own.
+    """
+    branch.opening_hours.all().delete()
+    for weekday in Weekday.values:
+        OpeningHours.objects.create(
+            branch=branch,
+            weekday=weekday,
+            service=Service.ALL_DAY,
+            opens_at=opens,
+            closes_at=closes,
+        )
+
+
 def test_branch_is_open_within_published_hours(branch: Branch) -> None:
+    _restrict_hours(branch, dt.time(11, 0), dt.time(22, 0))
     monday_lunch = dt.datetime(2026, 9, 14, 13, 0, tzinfo=branch.tzinfo())  # a Monday
     assert branch.is_open_at(monday_lunch) is True
 
 
 def test_branch_is_closed_outside_published_hours(branch: Branch) -> None:
+    _restrict_hours(branch, dt.time(11, 0), dt.time(22, 0))
     monday_dawn = dt.datetime(2026, 9, 14, 3, 0, tzinfo=branch.tzinfo())
     assert branch.is_open_at(monday_dawn) is False
 
 
 def test_holiday_override_closes_the_branch(branch: Branch) -> None:
     """An override wins over the weekly schedule."""
+    _restrict_hours(branch, dt.time(11, 0), dt.time(22, 0))
     christmas = dt.date(2026, 12, 25)
     HolidayOverride.objects.create(branch=branch, date=christmas, is_closed=True, note="Christmas")
     midday = dt.datetime(2026, 12, 25, 13, 0, tzinfo=branch.tzinfo())
@@ -32,6 +52,7 @@ def test_holiday_override_closes_the_branch(branch: Branch) -> None:
 
 
 def test_holiday_override_can_set_special_hours(branch: Branch) -> None:
+    _restrict_hours(branch, dt.time(11, 0), dt.time(22, 0))
     day = dt.date(2026, 12, 26)
     HolidayOverride.objects.create(
         branch=branch,

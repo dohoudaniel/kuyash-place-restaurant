@@ -61,20 +61,20 @@ def test_invalid_phone_is_rejected() -> None:
 
 def test_session_endpoint_is_anonymous_friendly(api_client, db) -> None:  # type: ignore[no-untyped-def]
     """An anonymous visitor gets `{"user": null}`, not a 401."""
-    response = api_client.get(reverse("v1:accounts:session"))
+    response = api_client.get(reverse("v1:auth:session"))
     assert response.status_code == 200
     assert response.json() == {"user": None}
 
 
 def test_session_endpoint_returns_the_current_user(api_client, user: User) -> None:  # type: ignore[no-untyped-def]
     api_client.force_authenticate(user=user)
-    body = api_client.get(reverse("v1:accounts:session")).json()
+    body = api_client.get(reverse("v1:auth:session")).json()
     assert body["user"]["email"] == "ada@example.com"
     assert body["user"]["full_name"] == "Ada Obi"
     assert body["user"]["groups"] == []
 
 
 def test_csrf_endpoint_sets_the_cookie(api_client, db) -> None:  # type: ignore[no-untyped-def]
-    response = api_client.get(reverse("v1:accounts:csrf"))
+    response = api_client.get(reverse("v1:auth:csrf"))
     assert response.status_code == 200
     assert "kuyash_csrftoken" in response.cookies

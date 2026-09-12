@@ -65,7 +65,13 @@ known-first-party = ["apps", "config"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py"]
-addopts = "--strict-markers --tb=short"
+# `--ds` outranks the DJANGO_SETTINGS_MODULE environment variable, which
+# otherwise wins over the ini setting above. Without it, anyone with
+# `export DJANGO_SETTINGS_MODULE=config.settings.dev` in their shell silently
+# runs the whole suite against dev settings: real throttle rates, real password
+# hashing, the dev database. Tests then fail for reasons that have nothing to
+# do with the code.
+addopts = "--strict-markers --tb=short --ds=config.settings.test"
 testpaths = ["apps"]
 
 [tool.coverage.run]
@@ -79,13 +85,33 @@ exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedE
 [tool.mypy]
 python_version = "3.12"
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+# Paths are declared here rather than passed on the command line: mypy ignores
+# `exclude` for files named explicitly on the CLI. Run bare `mypy`.
+files = ["apps", "config"]
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 disallow_untyped_defs = true
-# Tests are scaffolding: they deliberately pass None for unused view arguments
-# and build duck-typed stand-ins. Strict typing there costs more than it catches.
-exclude = ["migrations", ".venv", "/tests/", "conftest.py"]
+# Excluded, with reasons:
+#   migrations  - generated code
+#   tests       - scaffolding; they deliberately pass None for unused view
+#                 arguments and build duck-typed stand-ins
+#   settings    - built on `from .base import *`, so every imported name is
+#                 `object` to mypy. Correctness there is covered by
+#                 `manage.py check --deploy` and the suite itself.
+exclude = [
+    "migrations",
+    ".venv",
+    "/tests/",
+    "conftest.py",
+]
+
+[[tool.mypy.overrides]]
+# Settings are built on `from .base import *`, so every imported name is
+# `object` to mypy and nothing useful can be inferred. Correctness there is
+# covered by `manage.py check --deploy` and the test suite.
+module = "config.settings.*"
+ignore_errors = true
 
 [tool.django-stubs]
 django_settings_module = "config.settings.test"

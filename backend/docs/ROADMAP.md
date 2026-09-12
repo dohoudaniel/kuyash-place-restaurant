@@ -29,19 +29,91 @@ Estimates assume **one full-time backend developer**. Adjust proportionally.
 
 The phase that makes the product real.
 
-### 1A — Catalogue (1 week)
+### 1A — Catalogue (1 week) — ✅ IMPLEMENTED
 Categories, MenuItem, Variant, ModifierGroup, Modifier, DietaryTag, images, availability windows · admin with the **repricing banner** · public read API with server-side search/filter/sort · seed the 18 items with `needs_repricing=True`.
 
-### 1B — Accounts (1 week)
+Delivered: 8 models, 5 public endpoints, the `kuyash.E001` deploy gate, 41 tests.
+All five sort options work server-side (the frontend's `rating` and `newest` are
+`return 0`). Breakfast items carry real availability windows. Modifier groups are
+per item, so pancakes are no longer offered extra cheese.
+
+> Note: the menu list uses **page** pagination, not cursor. Cursor pagination
+> imposes its own ordering to keep the cursor monotonic, which silently
+> overrode every `sort` parameter. See `docs/API_SPEC.md` §0.3.
+
+### 1B — Accounts (1 week) — ✅ IMPLEMENTED
 Registration with mandatory verification · login/logout/session · password reset · profile · address book with zone resolution · guest-order claiming · rate limits · Argon2.
 
-### 1C — Cart & pricing (1 week)
+Delivered: 14 auth/account endpoints, `Address` with automatic zone resolution,
+a `delivery.DeliveryZone` model (riders remain in 1D), a recorded notifications
+outbox, per-IP **and** per-account throttling, and NDPR erasure by anonymisation.
+101 tests.
+
+Deviations, all deliberate:
+
+- **`delivery` landed early.** The address book needs zones to resolve a fee, so
+  `DeliveryZone` was built here. `RiderProfile` / `DeliveryAssignment` stay in 1D.
+- **A minimal `notifications` outbox landed early** (scheduled for 1F). Auth
+  sends two emails and NOT-3 requires every send to be recorded; retrofitting
+  that later would have meant rewriting the send path.
+- **Guest-order claiming is a signal, not an implementation.** `Order` does not
+  exist yet. `accounts.signals.email_verified` fires on confirmation; `orders`
+  connects to it in 1D, so `orders` is never imported by `accounts` (ADR-014).
+- **Email change is refused, not implemented.** AS-5 requires re-verifying a new
+  address and notifying the old one. Until that flow exists, `email` is
+  read-only on the profile endpoint — you cannot bypass verification for a change
+  that cannot be made. A dedicated flow lands in Phase 2.
+
+### 1C — Cart & pricing (1 week) — ✅ IMPLEMENTED
 Server cart, guest tokens, merge-on-login · **the pricing engine** (per-line VAT by tax class, promo application, delivery fee, tip) · repricing on read with `changes[]`/`unavailable[]` · promo codes with the redemption ledger.
 
 > This is the highest-risk sub-phase. Budget the full week for tests.
 
-### 1D — Orders & KDS (1.5 weeks)
+Delivered: `carts` and `promotions` apps, 9 cart endpoints, **100% coverage on
+every module that can change what a customer is charged** (`carts.services`,
+`promotions.services`) — now enforced as its own CI gate alongside the money
+module. 116 tests across the two apps.
+
+The pricing engine reproduces the worked example in `PAYMENTS.md` §7.1 exactly,
+asserted as a test: if the engine and the documentation ever disagree, the build
+fails.
+
+Deviations:
+
+- **`PromoRedemption` has no `order` foreign key yet.** `Order` does not exist
+  until 1D, so the ledger references an order by its opaque `order_reference`
+  string. 1D replaces that with a proper FK. Usage limits are already enforced
+  and reversible against the ledger.
+- **Seeded promo codes are INACTIVE.** The five codes in
+  `frontend/lib/store/promoStore.ts` are dollar figures ("₦5 off orders over
+  ₦30"), and `SAVE500` has `value: 5` — its name and value already disagree.
+  They are seeded converted to plausible naira but disabled, so none can be
+  redeemed before a human reviews it. This is the promo equivalent of the
+  `needs_repricing` gate.
+- **Menu list pagination is page-based, not cursor.** Recorded in §0.3 of
+  `API_SPEC.md` when it was found.
+
+### 1D — Orders & KDS (1.5 weeks) — ✅ IMPLEMENTED
 Order + OrderItem snapshots · reference generation · idempotency middleware · the state machine and event log · ETA calculation · order APIs with ETag polling · KDS endpoints · "86 this item" · delivery zones and rider assignment.
+
+Delivered: the `orders` app (Order, OrderItem, OrderItemModifier,
+OrderStatusEvent), 4 customer endpoints and 5 KDS endpoints, rider profiles and
+delivery assignments. **100% coverage on `orders.services`**, now part of the
+same CI gate as money and pricing — the state machine governs refunds.
+
+Verified end to end: a double-tapped submit with one `Idempotency-Key` produces
+one order and replays the first response; the cart is cleared only when payment
+is verified, not at submit; `If-None-Match` returns 304 on an unchanged order.
+
+Notes:
+
+- **Cash orders skip `accept`.** They are created `confirmed`, so the kitchen's
+  accept step does not apply — attempting it correctly returns 409.
+- **The customer cancel window is enforced at the endpoint, not the state
+  table.** The table lets staff cancel a preparing order; a customer may not
+  (ORD-10). The transition table alone cannot express "who is asking".
+- **Payment is still simulated.** `transition(order, PAID)` stands in for the
+  verified webhook that Phase 1E adds. No money moves yet.
 
 ### 1E — Payments (1 week)
 Provider interface · Paystack · Flutterwave · initialise/verify · **webhook handlers with signature verification and idempotency** · reconciliation beat task · refunds · cash and transfer flows.

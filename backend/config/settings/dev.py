@@ -15,7 +15,12 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 
-# Verification emails are printed to the console in development.
-ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="optional")
+# Verification stays MANDATORY in development, matching test and production.
+# An earlier revision defaulted this to "optional" as a convenience, which meant
+# local testing never exercised the real sign-in path — exactly the dev/prod
+# divergence that ships "works on my machine" bugs. The confirmation link is
+# printed to the console and recorded in the notifications outbox, so there is
+# no friction to justify diverging.
+ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 
 INTERNAL_IPS = ["127.0.0.1"]
