@@ -176,3 +176,84 @@ def kds_ticket(order: Order) -> dict[str, Any]:
         "customer": {"name": order.contact_name, "phone": order.recipient_phone},
         "grand_total": money(order.grand_total, order.currency),
     }
+
+
+class OrderDetailResponseSerializer(serializers.Serializer):
+    """Response shape for order detail and the polling endpoint."""
+
+    reference = serializers.CharField()
+    status = serializers.CharField()
+    status_display = serializers.CharField()
+    payment_status = serializers.CharField()
+    payment_method = serializers.CharField()
+    fulfilment_type = serializers.CharField()
+    placed_at = serializers.DateTimeField(allow_null=True)
+    estimated_ready_at = serializers.DateTimeField(allow_null=True)
+    estimated_delivery_at = serializers.DateTimeField(allow_null=True)
+    timeline = serializers.ListField(child=serializers.DictField())
+    items = serializers.ListField(child=serializers.DictField())
+    delivery_address = serializers.DictField(allow_null=True)
+    totals = serializers.DictField()
+    promo_code = serializers.CharField(allow_blank=True)
+    customer_note = serializers.CharField(allow_blank=True)
+    can_cancel = serializers.BooleanField()
+    rider = serializers.DictField(allow_null=True)
+    guest_token = serializers.CharField(required=False)
+
+    class Meta:
+        ref_name = "OrderDetail"
+
+
+class KDSTicketSerializer(serializers.Serializer):
+    """One kitchen ticket."""
+
+    reference = serializers.CharField()
+    status = serializers.CharField()
+    placed_at = serializers.DateTimeField()
+    elapsed_seconds = serializers.IntegerField()
+    is_late = serializers.BooleanField()
+    fulfilment_type = serializers.CharField()
+    zone = serializers.CharField(allow_blank=True)
+    payment_status = serializers.CharField()
+    payment_method = serializers.CharField()
+    requires_cash_collection = serializers.BooleanField()
+    items = serializers.ListField(child=serializers.DictField())
+    customer_note = serializers.CharField(allow_blank=True)
+    customer = serializers.DictField()
+    grand_total = serializers.DictField()
+
+    class Meta:
+        ref_name = "KDSTicket"
+
+
+class KDSQueueSerializer(serializers.Serializer):
+    orders = KDSTicketSerializer(many=True)
+
+    class Meta:
+        ref_name = "KDSQueue"
+
+
+class KDSSummarySerializer(serializers.Serializer):
+    counts = serializers.DictField(child=serializers.IntegerField())
+    todays_revenue = serializers.DictField()
+    open_tickets = serializers.IntegerField()
+
+    class Meta:
+        ref_name = "KDSSummary"
+
+
+class RiderAssignmentSerializer(serializers.Serializer):
+    order = serializers.CharField()
+    rider = serializers.DictField()
+    assigned_at = serializers.DateTimeField()
+
+    class Meta:
+        ref_name = "RiderAssignment"
+
+
+class ItemAvailabilitySerializer(serializers.Serializer):
+    slug = serializers.CharField()
+    is_available_now = serializers.BooleanField()
+
+    class Meta:
+        ref_name = "ItemAvailability"

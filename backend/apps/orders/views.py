@@ -25,8 +25,14 @@ from apps.core.selectors import get_current_branch
 from apps.orders.models import EventSource, Order, OrderStatus
 from apps.orders.serializers import (
     CancelSerializer,
+    ItemAvailabilitySerializer,
+    KDSQueueSerializer,
+    KDSSummarySerializer,
+    KDSTicketSerializer,
+    OrderDetailResponseSerializer,
     OrderListSerializer,
     PlaceOrderSerializer,
+    RiderAssignmentSerializer,
     kds_ticket,
     serialise_order,
 )
@@ -77,6 +83,7 @@ class OrderCreateListView(APIView):
     @extend_schema(
         summary="Place an order",
         request=PlaceOrderSerializer,
+        responses={201: OrderDetailResponseSerializer},
         parameters=[
             OpenApiParameter(
                 "Idempotency-Key",
@@ -152,6 +159,7 @@ class OrderDetailView(APIView):
 
     @extend_schema(
         summary="Retrieve an order",
+        responses={200: OrderDetailResponseSerializer},
         parameters=[
             OpenApiParameter(
                 GUEST_TOKEN_HEADER,
@@ -190,7 +198,12 @@ class OrderCancelView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(summary="Cancel an order", request=CancelSerializer, tags=["orders"])
+    @extend_schema(
+        summary="Cancel an order",
+        request=CancelSerializer,
+        responses={200: OrderDetailResponseSerializer},
+        tags=["orders"],
+    )
     def post(self, request: Request, reference: str) -> Response:
         order = get_object_or_404(Order, reference=reference)
         if not _may_read(request, order):
@@ -231,6 +244,7 @@ class KDSQueueView(APIView):
 
     @extend_schema(
         summary="Kitchen queue",
+        responses={200: KDSQueueSerializer},
         parameters=[OpenApiParameter("status", str, description="Comma-separated statuses.")],
         tags=["kds"],
     )
@@ -257,7 +271,9 @@ class KDSTransitionView(APIView):
         "reject": OrderStatus.REJECTED,
     }
 
-    @extend_schema(summary="Advance a ticket", request=None, tags=["kds"])
+    @extend_schema(
+        summary="Advance a ticket", request=None, responses={200: KDSTicketSerializer}, tags=["kds"]
+    )
     def post(self, request: Request, reference: str, action: str) -> Response:
         order = get_object_or_404(Order, reference=reference, branch=get_current_branch())
 
@@ -292,7 +308,12 @@ class KDSAvailabilityView(APIView):
 
     permission_classes = [IsKitchenStaff]
 
-    @extend_schema(summary="Set item availability", request=None, tags=["kds"])
+    @extend_schema(
+        summary="Set item availability",
+        request=None,
+        responses={200: ItemAvailabilitySerializer},
+        tags=["kds"],
+    )
     def post(self, request: Request, slug: str) -> Response:
         from apps.catalog.models import MenuItem
 
@@ -307,7 +328,12 @@ class KDSAssignRiderView(APIView):
 
     permission_classes = [IsKitchenStaff]
 
-    @extend_schema(summary="Assign a rider", request=None, tags=["kds"])
+    @extend_schema(
+        summary="Assign a rider",
+        request=None,
+        responses={200: RiderAssignmentSerializer},
+        tags=["kds"],
+    )
     def post(self, request: Request, reference: str) -> Response:
         from apps.delivery.models import DeliveryAssignment, RiderProfile
 
@@ -331,7 +357,7 @@ class KDSSummaryView(APIView):
 
     permission_classes = [IsKitchenStaff]
 
-    @extend_schema(summary="Kitchen summary", tags=["kds"])
+    @extend_schema(summary="Kitchen summary", responses={200: KDSSummarySerializer}, tags=["kds"])
     def get(self, request: Request) -> Response:
         from django.db.models import Count, Sum
         from django.utils import timezone

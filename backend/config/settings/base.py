@@ -52,6 +52,7 @@ LOCAL_APPS = [
     "apps.promotions",
     "apps.carts",
     "apps.orders",
+    "apps.payments",
     "apps.notifications",
 ]
 
@@ -277,6 +278,19 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300
 CELERY_TASK_SOFT_TIME_LIMIT = 240
 
+# Scheduled work. `verify_pending` is the safety net for a webhook that never
+# arrived; see apps/payments/tasks.py.
+CELERY_BEAT_SCHEDULE = {
+    "verify-pending-payments": {
+        "task": "payments.verify_pending",
+        "schedule": 600.0,  # every 10 minutes
+    },
+    "expire-stale-orders": {
+        "task": "payments.expire_stale_orders",
+        "schedule": 3600.0,  # hourly
+    },
+}
+
 # ── Sessions & CSRF ───────────────────────────────────────────────────────────
 SESSION_COOKIE_NAME = "kuyash_session"
 SESSION_COOKIE_HTTPONLY = True
@@ -313,6 +327,17 @@ ADMIN_URL = env("ADMIN_URL", default="admin/")
 ADMIN_SITE_HEADER = "Kuyash Place"
 ADMIN_SITE_TITLE = "Kuyash Place admin"
 ADMIN_INDEX_TITLE = "Restaurant administration"
+
+# ── Payments ──────────────────────────────────────────────────────────────────
+# Secret keys are server-side only and must never appear in a NEXT_PUBLIC_*
+# variable. Only the PUBLIC keys are safe to hand to a browser.
+PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="")
+PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default="")
+FLUTTERWAVE_SECRET_KEY = env("FLUTTERWAVE_SECRET_KEY", default="")
+FLUTTERWAVE_PUBLIC_KEY = env("FLUTTERWAVE_PUBLIC_KEY", default="")
+FLUTTERWAVE_WEBHOOK_SECRET_HASH = env("FLUTTERWAVE_WEBHOOK_SECRET_HASH", default="")
+DEFAULT_PAYMENT_PROVIDER = env("DEFAULT_PAYMENT_PROVIDER", default="paystack")
+PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default=f"{FRONTEND_URL}/checkout/complete")
 
 # ── Domain defaults ───────────────────────────────────────────────────────────
 DEFAULT_CURRENCY = "NGN"

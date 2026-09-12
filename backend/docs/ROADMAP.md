@@ -115,13 +115,69 @@ Notes:
 - **Payment is still simulated.** `transition(order, PAID)` stands in for the
   verified webhook that Phase 1E adds. No money moves yet.
 
-### 1E — Payments (1 week)
+### 1E — Payments (1 week) — ✅ IMPLEMENTED
 Provider interface · Paystack · Flutterwave · initialise/verify · **webhook handlers with signature verification and idempotency** · reconciliation beat task · refunds · cash and transfer flows.
 
-### 1F — Notifications & hardening (0.5 week)
+Delivered: the `payments` app with a provider protocol and three
+implementations (Paystack, Flutterwave, plus a simulator usable only under
+DEBUG), signature-verified webhooks, the amount-mismatch guard, reconciliation
+and expiry beat tasks, full and partial refunds, and bank-transfer and cash
+flows. **100% coverage on `payments.services` and `payments.tasks`**, now in
+the same CI gate as money, pricing and orders.
+
+Verified end to end: a forged signature is rejected with the order left unpaid;
+an underpayment of ₦10 against a ₦21,800 order is refused and logged CRITICAL
+with the order still unpaid; the correct amount settles; a replay is recognised
+and ignored. No PAN or CVV column exists on any model.
+
+Notes:
+
+- **Two functions are deliberately not atomic.** `initialise_payment` and
+  `verify_and_settle` each write a failure record and then raise. Wrapping
+  either in a transaction rolled that record back with the exception,
+  destroying the evidence of an outage, a bad key or a suspicious payment.
+  Only `_settle` is atomic, because the transaction and the order status must
+  move together.
+- **Provider JSON is parsed with `parse_float=Decimal`.** Flutterwave reports
+  major units (`25500.55`), and `json.loads` would make that a binary float
+  before we ever saw it.
+- **A missing provider key is an error in production, not a downgrade.**
+  `prod.py` refuses to start without one, and the simulator is reachable only
+  under DEBUG — a provider that approves everything must never be a fallback.
+- **The PCI gate is now split.** Backend coverage is an AST check in the test
+  suite; the shell script covers the frontend only. A text scan could not tell
+  a real field from a docstring saying "there is no CVV field here".
+
+### 1F — Notifications & hardening (0.5 week) — ✅ IMPLEMENTED
 Email templates and outbox · order lifecycle emails · security checklist · load test at 200 concurrent orders.
 
+Delivered: ten admin-editable `EmailTemplate` rows with built-in fallbacks,
+multipart (text + HTML) sending, the full order lifecycle wired to templates,
+six `kuyash.*` deployment checks derived from `SECURITY.md` §8, a Locust load
+profile, and concurrency-correctness tests.
+
+**The fallback rule:** a missing, inactive or malformed template degrades the
+*wording*, never the delivery. A customer who paid and hears nothing is a
+support call; slightly off-brand prose is not.
+
+Notes:
+
+- **Throughput was not measured here.** The load profile is written and ready,
+  but running it against the SQLite development database would measure
+  SQLite's write lock rather than the application. It needs a Postgres staging
+  environment; the targets remain as stated in `TESTING.md` §10.
+- **Correctness under concurrency *is* asserted**, in
+  `apps/orders/tests/test_concurrency.py`. Two of those tests need real row
+  locking and are skipped on SQLite — so CI now runs the whole suite a second
+  time against Postgres and **fails if they are still skipped there**, because
+  a skip nobody checks is just a hole.
+- `manage.py check --deploy` now passes cleanly on a well-formed production
+  configuration and reports specifically on a malformed one.
+
 ### Gate 1 — go-live checklist
+
+> **All Phase 1 code is implemented.** Everything outstanding below is a
+> decision, a data entry task, or a frontend deletion — not backend work.
 
 - [ ] All eleven success criteria in `PRD.md` §9 demonstrated end-to-end
 - [ ] **Zero menu items with `needs_repricing=True`** — the owner has set real naira prices

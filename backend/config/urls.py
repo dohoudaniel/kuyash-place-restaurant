@@ -20,6 +20,7 @@ from apps.common.views import (
     api_server_error,
     health_check,
 )
+from apps.payments.urls import webhook_urlpatterns
 
 admin.site.site_header = settings.ADMIN_SITE_HEADER
 admin.site.site_title = settings.ADMIN_SITE_TITLE
@@ -32,6 +33,8 @@ api_v1 = [
     path("cart/", include("apps.carts.urls")),
     path("orders/", include("apps.orders.urls")),
     path("kds/", include("apps.orders.kds_urls")),
+    path("payments/", include("apps.payments.urls")),
+    path("webhooks/", include((webhook_urlpatterns, "webhooks"))),
     path("accounts/", include((account_urlpatterns, "accounts"))),
 ]
 

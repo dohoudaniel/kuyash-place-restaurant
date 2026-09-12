@@ -19,6 +19,7 @@ dependencies = [
     "python-json-logger==3.3.0",
     "whitenoise==6.9.0",
     "Pillow==11.3.0",
+    "requests==2.34.2",
     "gunicorn==23.0.0",
 ]
 

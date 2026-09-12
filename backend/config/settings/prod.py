@@ -49,6 +49,12 @@ EMAIL_USE_TLS = True
 
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 
+# At least one payment provider must be configured, or the site can take orders
+# it cannot charge for. A missing key is an error, never a quiet downgrade to
+# the simulated provider.
+if not (PAYSTACK_SECRET_KEY or FLUTTERWAVE_SECRET_KEY):
+    raise RuntimeError("Configure PAYSTACK_SECRET_KEY or FLUTTERWAVE_SECRET_KEY before deploying.")
+
 LOG_FORMAT = "json"
 LOGGING["handlers"]["console"]["formatter"] = "json"  # type: ignore[index]
 

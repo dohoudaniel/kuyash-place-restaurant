@@ -5,13 +5,19 @@ from .base import *
 DEBUG = False
 SECRET_KEY = "test-only-key-not-secret"  # noqa: S105
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+# SQLite in memory by default for speed. CI also runs this suite with
+# DATABASE_URL pointing at Postgres, which is where the concurrency tests and
+# Postgres-only query paths actually execute (ADR-015).
+if env("DATABASE_URL", default=""):
+    DATABASES = {"default": env.db_url("DATABASE_URL")}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
     }
-}
-USING_POSTGRES = False
+USING_POSTGRES = "postgresql" in DATABASES["default"]["ENGINE"]
 
 # Fast hashing — tests create a lot of users.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

@@ -31,16 +31,25 @@ Today this is a dark pattern: the data is collected and thrown away. **The dange
 
 ### 1.1 Enforcement
 
-Implemented at `backend/scripts/check-no-card-fields.sh` and wired into CI.
+Two complementary checks, split by what each can actually see.
 
-Behaviour: a hit anywhere in `backend/` is a **hard failure** — there is no
-legitimate server-side card field, ever. A hit in `frontend/` is also a hard
-failure *except* for an explicit allowlist of the five pre-existing files
-scheduled for Phase 1 deletion; that list can only shrink. The Sentry scrubber
-is exempt, since naming a key in order to redact it is the opposite of handling
-card data.
+**Backend — AST analysis**, in `apps/payments/tests/test_no_card_data.py`:
 
-Sketch:
+- no model field on any payments model may be named for a PAN, CVV or expiry;
+- no serializer may declare such a field, so no request body can carry one in;
+- no source file in the package may *reference* such an identifier.
+
+It walks the syntax tree rather than the text, which is what lets it tell a real
+field from a docstring saying "there is no CVV field here", or from a test whose
+whole purpose is to post card fields and assert they are discarded. A text scan
+flagged all three, and the fix would have been an ever-growing exclusion list.
+
+**Frontend — text scan**, in `backend/scripts/check-no-card-fields.sh`, because
+no AST tooling is readily at hand for the TypeScript side. A hit is a hard
+failure except for an explicit allowlist of the five pre-existing files
+scheduled for Phase 1 deletion; that list may only shrink.
+
+Sketch of the frontend scan:
 
 ```bash
 # scripts/check-no-card-fields.sh

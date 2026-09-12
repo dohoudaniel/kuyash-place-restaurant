@@ -28,9 +28,10 @@ test: ## Run the test suite
 coverage: ## Enforce the coverage gates (85% overall, 100% on every money path)
 	$(PY) -m pytest --cov=apps --cov-report=term-missing --cov-fail-under=85
 	$(PY) -m pytest apps/common/tests/test_money.py --cov=apps.common.money --cov-fail-under=100
-	$(PY) -m pytest apps/carts apps/promotions apps/orders \
+	$(PY) -m pytest apps/carts apps/promotions apps/orders apps/payments \
 		--cov=apps.carts.services --cov=apps.promotions.services \
-		--cov=apps.orders.services \
+		--cov=apps.orders.services --cov=apps.payments.services \
+		--cov=apps.payments.tasks \
 		--cov-report=term-missing --cov-fail-under=100
 
 lint: ## Lint

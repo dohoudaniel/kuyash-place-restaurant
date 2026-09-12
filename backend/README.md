@@ -2,9 +2,13 @@
 
 Django backend for Kuyash Place Restaurant: ordering, payments, reservations, catering, academy and loyalty for a single-location Nigerian restaurant.
 
-**Status:** Phase 0 (foundations), 1A (catalogue), 1B (accounts),
-1C (cart & pricing) and 1D (orders & KDS) implemented.
-Next: Phase 1E (payments) — see `docs/ROADMAP.md`.
+**Status:** **Phase 1 complete** — 0 (foundations), 1A (catalogue),
+1B (accounts), 1C (cart & pricing), 1D (orders & KDS), 1E (payments) and
+1F (notifications & hardening).
+
+Remaining before Gate 1 is **not code**: real naira prices, the VAT decision,
+delivery zones and tip presets (see Open questions below), plus deleting the
+card fields from `frontend/`. See `docs/ROADMAP.md` for the Gate 1 checklist.
 **Stack:** Django 5.x · DRF · PostgreSQL 16 · Redis 7 · Celery · django-allauth · Supabase Storage
 
 ---

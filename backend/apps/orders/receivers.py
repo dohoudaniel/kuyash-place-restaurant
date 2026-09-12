@@ -82,44 +82,96 @@ def count_delivered_items(
 def notify_customer(
     sender: type[Order], order: Order, from_status: str, to_status: str, **kwargs: Any
 ) -> None:
-    """Email the customer on the transitions they care about."""
-    from apps.notifications.services import queue_email
+    """Email the customer on the transitions they care about.
 
-    templates: dict[str, tuple[str, str, str]] = {
-        OrderStatus.PAID: (
-            "order_confirmation",
-            f"Order {order.reference} confirmed",
-            "Thank you — we have your payment and the kitchen has your order.",
-        ),
-        OrderStatus.OUT_FOR_DELIVERY: (
-            "order_out_for_delivery",
-            f"Order {order.reference} is on the way",
-            "Your order has left the restaurant.",
-        ),
-        OrderStatus.DELIVERED: (
-            "order_delivered",
-            f"Order {order.reference} delivered",
-            "Enjoy your meal. We would love to hear how it was.",
-        ),
-        OrderStatus.REJECTED: (
-            "order_rejected",
-            f"Order {order.reference} could not be fulfilled",
-            "We are sorry — the kitchen could not take this order. Any payment will be refunded.",
-        ),
-    }
-    entry = templates.get(to_status)
+    Wording lives in editable templates; this decides only *when* to write.
+    """
+    from django.conf import settings
+
+    from apps.carts.serializers import money
+    from apps.notifications.services import queue_templated_email
+
     recipient = order.contact_email
-    if entry is None or not recipient:
+    if not recipient:
         return
 
-    key, subject, body = entry
-    queue_email(
-        template_key=key,
-        recipient=recipient,
-        subject=subject,
-        body=f"Hello {order.contact_name},\n\n{body}\n\nReference: {order.reference}\n",
-        context={"order": order.reference},
-    )
+    tracking_url = f"{settings.FRONTEND_URL}/orders/{order.reference}"
+    is_delivery = order.fulfilment_type == "delivery"
+    assignment = getattr(order, "delivery_assignment", None)
+
+    base = {
+        "name": order.contact_name,
+        "reference": order.reference,
+        "tracking_url": tracking_url,
+        "total": money(order.grand_total, order.currency)["display"],
+    }
+
+    if to_status == OrderStatus.PAID:
+        key, extra = (
+            "order_confirmation",
+            {
+                "fulfilment_line": (
+                    f"Delivery to {order.street}, {order.city}."
+                    if is_delivery
+                    else "For collection from the restaurant."
+                ),
+            },
+        )
+    elif to_status == OrderStatus.PREPARING:
+        eta = order.estimated_delivery_at if is_delivery else order.estimated_ready_at
+        key, extra = (
+            "order_accepted",
+            {
+                "eta_line": (
+                    f"Estimated {'delivery' if is_delivery else 'ready'} time: {eta:%H:%M}."
+                    if eta
+                    else ""
+                ),
+            },
+        )
+    elif to_status == OrderStatus.READY and not is_delivery:
+        key, extra = "order_ready", {}
+    elif to_status == OrderStatus.OUT_FOR_DELIVERY:
+        key, extra = (
+            "order_out_for_delivery",
+            {
+                "rider_line": (
+                    f"Your rider is {assignment.rider.user.get_short_name()} "
+                    f"({assignment.rider.user.phone})."
+                    if assignment
+                    else ""
+                ),
+            },
+        )
+    elif to_status == OrderStatus.DELIVERED:
+        key, extra = "order_delivered", {}
+    elif to_status == OrderStatus.REJECTED:
+        key, extra = (
+            "order_rejected",
+            {
+                "refund_line": (
+                    "Any payment will be refunded in full."
+                    if order.is_paid
+                    else "You have not been charged."
+                ),
+                "reason_line": "",
+            },
+        )
+    elif to_status == OrderStatus.CANCELLED:
+        key, extra = (
+            "order_cancelled",
+            {
+                "refund_line": (
+                    "Any payment will be refunded in full."
+                    if order.is_paid
+                    else "You have not been charged."
+                ),
+            },
+        )
+    else:
+        return
+
+    queue_templated_email(template_key=key, recipient=recipient, context={**base, **extra})
 
 
 @receiver(order_paid, dispatch_uid="orders.mark_payment_status")

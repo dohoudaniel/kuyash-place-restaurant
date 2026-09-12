@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 import pytest
+from django.conf import settings
+
+#: Skip marker for tests that need real row locking. SQLite serialises
+#: writers with a table lock, so a threaded write test measures SQLite, not
+#: the application (ADR-015). CI runs these against Postgres.
+requires_postgres = pytest.mark.skipif(
+    not settings.USING_POSTGRES,
+    reason="needs row-level locking; SQLite locks the whole table (ADR-015)",
+)
 
 
 @pytest.fixture

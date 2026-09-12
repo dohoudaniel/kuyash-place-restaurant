@@ -22,7 +22,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from apps.accounts.models import Profile, User
 from apps.accounts.signals import email_verified, user_anonymised
-from apps.notifications.services import queue_email
+from apps.notifications.services import queue_templated_email
 
 logger = logging.getLogger(__name__)
 
@@ -73,17 +73,10 @@ def send_verification_email(user: User) -> None:
 
     key = EmailConfirmationHMAC(address).key
     link = f"{settings.FRONTEND_URL}/verify-email?key={key}"
-    queue_email(
+    queue_templated_email(
         template_key="verify_email",
         recipient=user.email,
-        subject="Confirm your email — Kuyash Place",
-        body=(
-            f"Hello {user.get_short_name()},\n\n"
-            "Confirm your email address to finish setting up your Kuyash Place account:\n\n"
-            f"{link}\n\n"
-            "If you did not create an account, you can ignore this message.\n"
-        ),
-        context={"user_id": str(user.pk)},
+        context={"name": user.get_short_name(), "link": link, "user_id": str(user.pk)},
     )
 
 
@@ -147,18 +140,10 @@ def request_password_reset(email: str) -> None:
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
-    queue_email(
+    queue_templated_email(
         template_key="password_reset",
         recipient=user.email,
-        subject="Reset your password — Kuyash Place",
-        body=(
-            f"Hello {user.get_short_name()},\n\n"
-            "Use the link below to choose a new password. It expires in one hour.\n\n"
-            f"{link}\n\n"
-            "If you did not request this, you can ignore this message and your "
-            "password will stay unchanged.\n"
-        ),
-        context={"user_id": str(user.pk)},
+        context={"name": user.get_short_name(), "link": link, "user_id": str(user.pk)},
     )
 
 

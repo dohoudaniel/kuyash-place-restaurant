@@ -32,7 +32,8 @@ class Notification(TimeStampedModel):
     )
     recipient = models.CharField(max_length=254, db_index=True)
     subject = models.CharField(max_length=255, blank=True)
-    body = models.TextField(blank=True)
+    body = models.TextField(blank=True, help_text="Plain-text body as sent.")
+    html_body = models.TextField(blank=True, help_text="HTML alternative, if any.")
     context = models.JSONField(default=dict, blank=True)
 
     status = models.CharField(
@@ -51,3 +52,40 @@ class Notification(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.template_key} → {self.recipient} ({self.status})"
+
+
+class EmailTemplate(TimeStampedModel):
+    """An editable email body.
+
+    Staff change wording without a deploy. Every template has a built-in
+    fallback in ``apps/notifications/templates_data.py``, so a missing or
+    deleted row can never stop an order confirmation from going out — the
+    message degrades to the default rather than disappearing.
+    """
+
+    key = models.CharField(
+        max_length=80,
+        unique=True,
+        help_text="Identifier used in code, e.g. order_confirmation. Do not change.",
+    )
+    description = models.CharField(max_length=255, blank=True, help_text="When this email is sent.")
+    subject = models.CharField(max_length=255)
+    text_body = models.TextField(help_text="Plain-text version. Always sent.")
+    html_body = models.TextField(
+        blank=True, help_text="Optional HTML version, sent as an alternative part."
+    )
+    available_context = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Placeholder names available to this template, for reference.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Turning this off falls back to the built-in wording, not to silence.",
+    )
+
+    class Meta:
+        ordering = ["key"]
+
+    def __str__(self) -> str:
+        return self.key

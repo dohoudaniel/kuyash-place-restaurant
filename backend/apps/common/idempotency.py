@@ -17,7 +17,14 @@ from apps.common.exceptions import IdempotencyConflict
 
 HEADER = "Idempotency-Key"
 TTL_SECONDS = 60 * 60 * 24  # 24 hours
-_IN_FLIGHT = "__in_flight__"
+#: Marker for a claimed-but-unfinished request.
+#:
+#: Compared by **value**, never by identity: a cache round-trip pickles and
+#: unpickles the value, so the object that comes back is never the object that
+#: went in. An identity check here silently never matched, which meant two
+#: genuinely concurrent submissions could both proceed — the exact failure
+#: Idempotency-Key exists to prevent.
+_IN_FLIGHT = "__kuyash_idempotency_in_flight__"
 
 
 def _key(scope: str, value: str, body: Any) -> str:
@@ -35,7 +42,7 @@ def begin(scope: str, value: str, body: Any) -> tuple[str, Any | None]:
     """
     cache_key = _key(scope, value, body)
     existing = cache.get(cache_key)
-    if existing is _IN_FLIGHT:
+    if existing == _IN_FLIGHT:
         raise IdempotencyConflict(
             "An identical request is still being processed. Please wait a moment."
         )

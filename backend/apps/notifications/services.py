@@ -1,7 +1,9 @@
 """Notification dispatch.
 
-Phase 1F replaces the inline bodies here with editable ``EmailTemplate`` rows.
-The outbox record and the send path are already in their final shape.
+Bodies come from editable :class:`EmailTemplate` rows, falling back to the
+built-in wording in ``templates_data.py``. The fallback is deliberate: a
+missing or malformed template must degrade the wording, never suppress an
+order confirmation.
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ import logging
 from typing import Any
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db.models import F
 from django.utils import timezone
 
@@ -19,12 +21,79 @@ from apps.notifications.models import Channel, Notification, NotificationStatus
 logger = logging.getLogger(__name__)
 
 
+class TemplateRenderError(Exception):
+    """Raised only when even the built-in fallback cannot be rendered."""
+
+
+def render_template(template_key: str, context: dict[str, Any]) -> tuple[str, str, str]:
+    """Render a template to ``(subject, text_body, html_body)``.
+
+    Resolution order: an active database row, then the built-in default. A row
+    whose placeholders do not match the context falls back rather than raising —
+    an admin typo must not stop a customer hearing that their order was taken.
+    """
+    from apps.notifications.models import EmailTemplate
+    from apps.notifications.templates_data import DEFAULT_TEMPLATES
+
+    default = DEFAULT_TEMPLATES.get(template_key)
+    row = EmailTemplate.objects.filter(key=template_key, is_active=True).first()
+
+    # Normalise both sources to the same shape before trying them, rather than
+    # branching on type inside the loop.
+    candidates: list[tuple[str, str, str, str]] = []
+    if row is not None:
+        candidates.append(("database", row.subject, row.text_body, row.html_body))
+    if default is not None:
+        candidates.append(
+            ("builtin", default["subject"], default["text_body"], default.get("html_body", ""))
+        )
+
+    for origin, subject, text, html in candidates:
+        try:
+            return (
+                subject.format(**context),
+                text.format(**context),
+                html.format(**context) if html else "",
+            )
+        except (KeyError, IndexError, ValueError):
+            logger.warning(
+                "email_template_render_failed",
+                extra={"template": template_key, "origin": origin},
+            )
+            continue
+
+    raise TemplateRenderError(f"No usable template for “{template_key}”.")
+
+
+def queue_templated_email(
+    *, template_key: str, recipient: str, context: dict[str, Any] | None = None
+) -> Notification | None:
+    """Render and queue an email. Returns ``None`` when there is no recipient."""
+    if not recipient:
+        return None
+    context = context or {}
+    try:
+        subject, text, html = render_template(template_key, context)
+    except TemplateRenderError:
+        logger.exception("email_template_missing", extra={"template": template_key})
+        return None
+    return queue_email(
+        template_key=template_key,
+        recipient=recipient,
+        subject=subject,
+        body=text,
+        html_body=html,
+        context=context,
+    )
+
+
 def queue_email(
     *,
     template_key: str,
     recipient: str,
     subject: str,
     body: str,
+    html_body: str = "",
     context: dict[str, Any] | None = None,
 ) -> Notification:
     """Record an email and hand it to the worker.
@@ -39,6 +108,7 @@ def queue_email(
         recipient=recipient,
         subject=subject,
         body=body,
+        html_body=html_body,
         context=context or {},
     )
     from apps.notifications.tasks import deliver_notification
@@ -70,13 +140,15 @@ def deliver(notification: Notification) -> Notification:
         return notification
 
     try:
-        send_mail(
+        message = EmailMultiAlternatives(
             subject=notification.subject,
-            message=notification.body,
+            body=notification.body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[notification.recipient],
-            fail_silently=False,
+            to=[notification.recipient],
         )
+        if notification.html_body:
+            message.attach_alternative(notification.html_body, "text/html")
+        message.send(fail_silently=False)
     except Exception as exc:
         notification.status = NotificationStatus.FAILED
         notification.error = f"{exc.__class__.__name__}: {exc}"

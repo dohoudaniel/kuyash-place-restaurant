@@ -36,7 +36,8 @@ def test_a_failed_send_is_recorded_not_swallowed() -> None:
     """A message we failed to send is a different problem from one we never
     attempted, and the difference matters when a customer is on the phone."""
     with mock.patch(
-        "apps.notifications.services.send_mail", side_effect=OSError("SMTP unreachable")
+        "apps.notifications.services.EmailMultiAlternatives.send",
+        side_effect=OSError("SMTP unreachable"),
     ):
         notification = queue_email(
             template_key="verify_email",
@@ -53,7 +54,10 @@ def test_a_failed_send_is_recorded_not_swallowed() -> None:
 
 
 def test_a_failed_send_can_be_retried() -> None:
-    with mock.patch("apps.notifications.services.send_mail", side_effect=OSError("down")):
+    with mock.patch(
+        "apps.notifications.services.EmailMultiAlternatives.send",
+        side_effect=OSError("down"),
+    ):
         notification = queue_email(
             template_key="verify_email",
             recipient="ada@example.com",

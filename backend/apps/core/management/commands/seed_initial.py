@@ -179,6 +179,22 @@ class Command(BaseCommand):
             )
             self._report("PromoCode", payload["code"], made)
 
+        from apps.notifications.models import EmailTemplate
+        from apps.notifications.templates_data import DEFAULT_TEMPLATES
+
+        for key, payload in DEFAULT_TEMPLATES.items():
+            _, made = EmailTemplate.objects.get_or_create(
+                key=key,
+                defaults={
+                    "description": payload["description"],
+                    "subject": payload["subject"],
+                    "text_body": payload["text_body"],
+                    "available_context": payload["available_context"],
+                },
+            )
+            if made:
+                self.stdout.write(f"  + email template {key}")
+
         self.stdout.write("Catalogue:")
         seed_catalogue(branch, stdout=self.stdout)
 

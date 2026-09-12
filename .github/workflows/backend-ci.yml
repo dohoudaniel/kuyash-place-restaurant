@@ -50,14 +50,15 @@ jobs:
         # covered, or it does not merge. See docs/TESTING.md §1.
         run: pytest apps/common/tests/test_money.py --cov=apps.common.money --cov-fail-under=100
 
-      - name: Pricing and order coverage gate (100%)
-        # The pricing engine, promo rules and order services decide what is
-        # charged and what is refunded, so they carry the same requirement as
+      - name: Money-path coverage gate (100%)
+        # Pricing, promo rules, order services and payment services decide what
+        # is charged and what is refunded, so they carry the same requirement as
         # the money primitives.
         run: |
-          pytest apps/carts apps/promotions apps/orders \
+          pytest apps/carts apps/promotions apps/orders apps/payments \
             --cov=apps.carts.services --cov=apps.promotions.services \
-            --cov=apps.orders.services \
+            --cov=apps.orders.services --cov=apps.payments.services \
+            --cov=apps.payments.tasks \
             --cov-fail-under=100
 
       - name: Deployment check
@@ -67,6 +68,57 @@ jobs:
           DATABASE_URL: postgres://user:pass@localhost:5432/db
           REDIS_URL: redis://localhost:6379/0
         run: python manage.py check --deploy --fail-level WARNING --settings=config.settings.prod
+
+  postgres:
+    name: Tests against Postgres
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kuyash
+          POSTGRES_PASSWORD: kuyash
+          POSTGRES_DB: kuyash_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run the suite against Postgres
+        # Local development runs on SQLite (ADR-015), which has no row-level
+        # locking and no full-text search. The concurrency tests and the
+        # Postgres-only query paths are skipped there and must run here, or the
+        # skip is just a hole in the suite.
+        env:
+          DATABASE_URL: postgres://kuyash:kuyash@localhost:5432/kuyash_test
+        run: pytest -q --no-header
+
+      - name: Confirm the Postgres-only tests actually ran
+        env:
+          DATABASE_URL: postgres://kuyash:kuyash@localhost:5432/kuyash_test
+        run: |
+          output=$(pytest apps/orders/tests/test_concurrency.py -q --no-header -rs)
+          echo "$output"
+          if echo "$output" | grep -q "skipped"; then
+            echo "::error::Concurrency tests were skipped on the Postgres job."
+            exit 1
+          fi
 
   security:
     name: Security gates
@@ -81,9 +133,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: PCI card-field gate
-        # Raw cardholder data must never reach our infrastructure.
-        # See backend/docs/PAYMENTS.md §1.1.
+      - name: PCI card-field gate (frontend)
+        # Raw cardholder data must never reach our infrastructure. The backend
+        # half of this gate is an AST check in the test suite
+        # (apps/payments/tests/test_no_card_data.py), which runs in the quality
+        # job. See backend/docs/PAYMENTS.md §1.1.
         run: ./scripts/check-no-card-fields.sh
 
       - name: Dependency audit
