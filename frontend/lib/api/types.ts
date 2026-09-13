@@ -59,6 +59,11 @@ export type Review = Schemas["Review"];
 export type OwnReview = Schemas["OwnReview"];
 export type PaginatedReviews = Schemas["PaginatedReviewList"];
 export type ReviewHelpful = Schemas["ReviewHelpful"];
+
+// Gallery
+export type GalleryImage = Schemas["GalleryImage"];
+export type GalleryImageDetail = Schemas["GalleryImageDetail"];
+export type GalleryCategory = Schemas["GalleryCategoryEnum"];
 export type PaymentVerification = Schemas["PaymentVerification"];
 export type Address = Schemas["Address"];
 

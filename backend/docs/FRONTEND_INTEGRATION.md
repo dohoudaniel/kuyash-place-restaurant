@@ -266,7 +266,7 @@ Replace the 18 hardcoded slots with `GET /reservations/availability/?date=&party
 | `app/academy/page.tsx:28` | inline `COURSES` array → `GET /academy/courses/` |
 | `components/features/academy/EnrollmentModal.tsx:24` | `alert(...)` → `POST /academy/enrolments/` with cohort selection. **Remove the "installment" option** unless a payment-plan model is built (ACA-6) |
 | `app/rewards/page.tsx:22` | `useState(false)` → `GET /loyalty/account/` |
-| `app/gallery/page.tsx:20` | 20 items with broken image keys → `GET /gallery/` |
+| `app/gallery/page.tsx:20` | ✅ 20 items with broken image keys → `GET /gallery/` (Phase 3.4, see §5.6) |
 | `components/features/chat/*` | local echo → `/support/chat/…` |
 
 ---
@@ -627,6 +627,32 @@ schema synced with `--fail-on-warn`; `tsc` clean; `next build` passes; ESLint
 verified purchase, duplicate refusal, moderation, public visibility, rating
 rebuild, helpful de-duplication, edit-to-pending, deletion, and the contact
 throttle now returning 429.
+
+### 5.6 Phase 3.4 gallery delivered
+
+**Backend.** New `apps/gallery` (API_SPEC §14, DATA_MODEL §16): photos with a
+category, tags, order, featured and visibility flags, uploaded in the admin.
+Raster formats only, 10 MB cap. Nothing is seeded — the old keys had no files.
+
+**Frontend.**
+- `lib/api/gallery.ts`, and `lib/share.ts` (native share sheet, else clipboard).
+- `app/gallery/page.tsx` loads the photos once and filters by category locally,
+  with loading, error and empty states. `?image={id}` opens a shared photo
+  straight into the lightbox.
+- `GalleryGrid` and `ImageLightbox` render real photos through `next/image`.
+  Share works in both; download is a link to the file. The Save/heart buttons
+  are removed: they were component state that vanished on reload, and there is
+  no gallery favourites feature to back them.
+- `GalleryHero` counts real photos and shows years, rating and guests from site
+  settings only when the restaurant has entered them. "12+ awards" and
+  "500+ events" were invented and are gone.
+- Grid tiles are keyboard-operable; the lightbox is labelled as a dialog.
+
+Verified: backend 979 passed, gallery app at 100% coverage, ruff/mypy clean,
+schema synced; `tsc` clean; `next build` passes; ESLint 26 → 25 errors and
+2 → 1 warnings, no new findings; a live run (16 checks) uploads photos through
+the admin, confirms SVG is refused, and checks the list, filters, neighbours,
+served files and CORS.
 
 ---
 

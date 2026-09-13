@@ -63,6 +63,7 @@ LOCAL_APPS = [
     "apps.support",
     "apps.notifications",
     "apps.reviews",
+    "apps.gallery",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -290,6 +291,7 @@ SPECTACULAR_SETTINGS = {
         "RedemptionStatusEnum": "apps.promotions.models.RedemptionStatus",
         "NotificationStatusEnum": "apps.notifications.models.NotificationStatus",
         "ReviewStatusEnum": "apps.reviews.models.ReviewStatus",
+        "GalleryCategoryEnum": "apps.gallery.models.GalleryCategory",
     },
 }
 

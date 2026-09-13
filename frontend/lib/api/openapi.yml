@@ -1936,6 +1936,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/OwnReview'
           description: ''
+  /api/v1/gallery/:
+    get:
+      operationId: gallery_list
+      description: |-
+        Every published photo, in display order.
+
+        Not paginated: a restaurant gallery is tens of photos, and the page shows a
+        count per category.
+      summary: List gallery photos
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+          enum:
+          - ambiance
+          - events
+          - food
+          - interior
+          - team
+      - in: query
+        name: featured
+        schema:
+          type: boolean
+      - in: query
+        name: tag
+        schema:
+          type: string
+        description: Tag slug.
+      tags:
+      - gallery
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GalleryImage'
+          description: ''
+  /api/v1/gallery/{image_id}/:
+    get:
+      operationId: gallery_retrieve
+      description: Neighbours follow the same filters as the list.
+      summary: Retrieve a photo with its neighbours
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+          enum:
+          - ambiance
+          - events
+          - food
+          - interior
+          - team
+      - in: query
+        name: featured
+        schema:
+          type: boolean
+      - in: path
+        name: image_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: tag
+        schema:
+          type: string
+        description: Tag slug.
+      tags:
+      - gallery
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GalleryImageDetail'
+          description: ''
   /api/v1/wishlist/:
     get:
       operationId: wishlist_retrieve
@@ -3543,6 +3629,137 @@ components:
       description: |-
         * `delivery` - delivery
         * `pickup` - pickup
+    GalleryCategoryEnum:
+      enum:
+      - food
+      - interior
+      - events
+      - team
+      - ambiance
+      type: string
+      description: |-
+        * `food` - Food
+        * `interior` - Interior
+        * `events` - Events
+        * `team` - Team
+        * `ambiance` - Ambiance
+    GalleryImage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/GalleryCategoryEnum'
+          readOnly: true
+        category_display:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
+        alt_text:
+          type: string
+          readOnly: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/GalleryTag'
+          readOnly: true
+        is_featured:
+          type: boolean
+          readOnly: true
+      required:
+      - alt_text
+      - category
+      - category_display
+      - description
+      - id
+      - image_url
+      - is_featured
+      - tags
+      - title
+    GalleryImageDetail:
+      type: object
+      description: One photo plus its neighbours, so a shared link opens a working
+        lightbox.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/GalleryCategoryEnum'
+          readOnly: true
+        category_display:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          readOnly: true
+        alt_text:
+          type: string
+          readOnly: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/GalleryTag'
+          readOnly: true
+        is_featured:
+          type: boolean
+          readOnly: true
+        previous_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        next_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+      required:
+      - alt_text
+      - category
+      - category_display
+      - description
+      - id
+      - image_url
+      - is_featured
+      - next_id
+      - previous_id
+      - tags
+      - title
+    GalleryTag:
+      type: object
+      properties:
+        slug:
+          type: string
+          maxLength: 70
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 60
+      required:
+      - name
+      - slug
     HolidayOverride:
       type: object
       properties:

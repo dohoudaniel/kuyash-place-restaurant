@@ -653,8 +653,10 @@ The bot answers **only** from `FaqEntry` and an order-status lookup. Unmatched i
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/gallery/` | — | `?category=food&tag=signature` |
-| GET | `/gallery/{id}/` | — | Full-size + neighbours for the lightbox |
+| GET | `/gallery/` | — | ✅ Every published photo for the branch, in `display_order`. Not paginated (tens of photos; the page counts per category). `?category=food\|interior\|events\|team\|ambiance` (anything else → 400), `?tag={slug}`, `?featured=true` |
+| GET | `/gallery/{id}/` | — | ✅ One photo + `previous_id` / `next_id`, following the same filters as the list; a photo outside the filter is 404 |
+
+Photos are uploaded in the Django admin (branch preselected, thumbnails in the list, order/featured/visible editable inline). Uploads accept JPEG, PNG and WebP up to 10 MB; **SVG is refused** because files are served from a public bucket and SVG can carry script. `alt_text` falls back to the title.
 
 ---
 

@@ -577,10 +577,15 @@ Capacity is decremented inside `select_for_update()` on the cohort.
 
 ---
 
-## 16. `gallery`  *(Phase 3)*
+## 16. `gallery`  *(Phase 3 — ✅ delivered in 3.4)*
 
 ### GalleryImage
-`branch` FK · `category` (`food`/`interior`/`events`/`team`/`ambiance`) · `title` · `description` · `image` (Supabase) · `tags` M2M · `display_order` · `is_featured` · `is_active`.
+`branch` FK · `category` (`food`/`interior`/`events`/`team`/`ambiance`) · `title` · `description` · `image` (Supabase; jpg/jpeg/png/webp, ≤ 10 MB) · `alt_text` · `tags` M2M · `display_order` · `is_featured` · `is_active`. UUID key, timestamps.
+
+### GalleryTag
+`name` (unique) · `slug` (unique).
+
+No photos are seeded: the 20 frontend entries pointed at files that never existed, so the gallery starts empty and the restaurant uploads real photos in the admin (like menu photos, this is owner content).
 
 > The frontend currently defines 20 gallery items whose `imageKey`s have **no corresponding entry** in `lib/assets/images.ts`, so every one renders a placeholder icon.
 

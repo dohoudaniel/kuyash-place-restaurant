@@ -1377,6 +1377,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gallery/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List gallery photos
+         * @description Every published photo, in display order.
+         *
+         *     Not paginated: a restaurant gallery is tens of photos, and the page shows a
+         *     count per category.
+         */
+        get: operations["gallery_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gallery/{image_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve a photo with its neighbours
+         * @description Neighbours follow the same filters as the list.
+         */
+        get: operations["gallery_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wishlist/": {
         parameters: {
             query?: never;
@@ -2049,6 +2092,50 @@ export interface components {
          * @enum {string}
          */
         FulfilmentTypeEnum: "delivery" | "pickup";
+        /**
+         * @description * `food` - Food
+         *     * `interior` - Interior
+         *     * `events` - Events
+         *     * `team` - Team
+         *     * `ambiance` - Ambiance
+         * @enum {string}
+         */
+        GalleryCategoryEnum: "food" | "interior" | "events" | "team" | "ambiance";
+        GalleryImage: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly category: components["schemas"]["GalleryCategoryEnum"];
+            readonly category_display: string;
+            readonly title: string;
+            readonly description: string;
+            /** Format: uri */
+            readonly image_url: string;
+            readonly alt_text: string;
+            readonly tags: components["schemas"]["GalleryTag"][];
+            readonly is_featured: boolean;
+        };
+        /** @description One photo plus its neighbours, so a shared link opens a working lightbox. */
+        GalleryImageDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly category: components["schemas"]["GalleryCategoryEnum"];
+            readonly category_display: string;
+            readonly title: string;
+            readonly description: string;
+            /** Format: uri */
+            readonly image_url: string;
+            readonly alt_text: string;
+            readonly tags: components["schemas"]["GalleryTag"][];
+            readonly is_featured: boolean;
+            /** Format: uuid */
+            readonly previous_id: string | null;
+            /** Format: uuid */
+            readonly next_id: string | null;
+        };
+        GalleryTag: {
+            slug: string;
+            name: string;
+        };
         HolidayOverride: {
             /** Format: date */
             date: string;
@@ -4744,6 +4831,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnReview"];
+                };
+            };
+        };
+    };
+    gallery_list: {
+        parameters: {
+            query?: {
+                category?: "ambiance" | "events" | "food" | "interior" | "team";
+                featured?: boolean;
+                /** @description Tag slug. */
+                tag?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryImage"][];
+                };
+            };
+        };
+    };
+    gallery_retrieve: {
+        parameters: {
+            query?: {
+                category?: "ambiance" | "events" | "food" | "interior" | "team";
+                featured?: boolean;
+                /** @description Tag slug. */
+                tag?: string;
+            };
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryImageDetail"];
                 };
             };
         };

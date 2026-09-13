@@ -1,18 +1,25 @@
 "use client";
 
-import { Image, Award, Camera, Sparkles } from "lucide-react";
+import { Image, Award, Star, Sparkles, type LucideIcon } from "lucide-react";
+import { useSiteInfo } from "@/lib/site/useSiteInfo";
 
 interface GalleryHeroProps {
   totalImages: number;
 }
 
+/**
+ * The photo count is counted; the other figures come from site settings, so
+ * they are only shown once the restaurant has entered them. "12+ awards" and
+ * "500+ events" were hardcoded with nothing behind them.
+ */
 export default function GalleryHero({ totalImages }: GalleryHeroProps) {
-  const stats = [
+  const { settings } = useSiteInfo();
+  const stats: { icon: LucideIcon; label: string; value: string; color: string }[] = [
     { icon: Image, label: "Photos", value: totalImages.toString(), color: "var(--red)" },
-    { icon: Award, label: "Awards Won", value: "12+", color: "#f59e0b" },
-    { icon: Camera, label: "Events Hosted", value: "500+", color: "#10b981" },
-    { icon: Sparkles, label: "Happy Guests", value: "10k+", color: "#8b5cf6" },
-  ];
+    { icon: Award, label: "Years Serving", value: settings?.stat_years ?? "", color: "#f59e0b" },
+    { icon: Star, label: "Average Rating", value: settings?.stat_rating ?? "", color: "#10b981" },
+    { icon: Sparkles, label: "Happy Guests", value: settings?.stat_customers ?? "", color: "#8b5cf6" },
+  ].filter((stat) => stat.value);
 
   return (
     <div className="relative overflow-hidden">
@@ -32,11 +39,11 @@ export default function GalleryHero({ totalImages }: GalleryHeroProps) {
           </div>
 
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto pb-2 lg:pb-0">
-            {stats.map((stat, idx) => {
+            {stats.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
-                  key={idx}
+                  key={stat.label}
                   className="bg-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3 min-w-fit transition-all hover:shadow-md"
                   style={{ border: "1px solid var(--gray-mid)" }}
                 >

@@ -1,16 +1,18 @@
 "use client";
 
-import { Utensils, Home, PartyPopper, Users, Sparkles, Grid } from "lucide-react";
-import type { GalleryCategory } from "@/app/gallery/page";
+import { Utensils, Home, PartyPopper, Users, Sparkles, Grid, type LucideIcon } from "lucide-react";
+import type { GalleryCategory } from "@/lib/api/types";
+
+export type GalleryFilter = "all" | GalleryCategory;
 
 interface GalleryFiltersProps {
-  selectedCategory: GalleryCategory;
-  onSelectCategory: (category: GalleryCategory) => void;
-  counts: Record<GalleryCategory, number>;
+  selectedCategory: GalleryFilter;
+  onSelectCategory: (category: GalleryFilter) => void;
+  counts: Record<GalleryFilter, number>;
 }
 
 export default function GalleryFilters({ selectedCategory, onSelectCategory, counts }: GalleryFiltersProps) {
-  const categories: { id: GalleryCategory; label: string; icon: any; color: string }[] = [
+  const categories: { id: GalleryFilter; label: string; icon: LucideIcon; color: string }[] = [
     { id: "all", label: "All Photos", icon: Grid, color: "var(--red)" },
     { id: "food", label: "Food", icon: Utensils, color: "#f59e0b" },
     { id: "interior", label: "Interior", icon: Home, color: "#3b82f6" },
@@ -29,6 +31,7 @@ export default function GalleryFilters({ selectedCategory, onSelectCategory, cou
             <button
               key={cat.id}
               onClick={() => onSelectCategory(cat.id)}
+              aria-pressed={isActive}
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm whitespace-nowrap transition-all hover:shadow-md min-w-fit"
               style={{
                 background: isActive ? cat.color : "white",
