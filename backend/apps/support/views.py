@@ -22,6 +22,7 @@ from apps.support.serializers import (
     ContactSerializer,
     CreateReplySerializer,
     FaqSerializer,
+    OpenTicketsSerializer,
     TicketSerializer,
 )
 from apps.support.services import reply_to_ticket, submit_contact_message
@@ -162,7 +163,11 @@ class OpenTicketsView(APIView):
 
     permission_classes = [IsStaffMember]
 
-    @extend_schema(summary="Open support tickets", tags=["support"])
+    @extend_schema(
+        summary="Open support tickets",
+        responses={200: OpenTicketsSerializer},
+        tags=["support"],
+    )
     def get(self, request: Request) -> Response:
         from apps.support.models import TicketStatus
 

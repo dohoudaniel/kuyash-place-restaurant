@@ -11,6 +11,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.common.money import format_money
+from apps.common.serializers import TotalsSerializer
 
 
 def money(amount: int, currency: str = "NGN") -> dict[str, Any]:
@@ -50,7 +51,7 @@ class CartResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     fulfilment_type = serializers.CharField()
     items = serializers.ListField(child=serializers.DictField())
-    totals = serializers.DictField(child=serializers.DictField(**{}))
+    totals = TotalsSerializer()
     promo_code = serializers.CharField(allow_blank=True)
     vat_note = serializers.CharField(allow_blank=True)
     delivery_note = serializers.CharField(allow_blank=True)

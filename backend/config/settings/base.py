@@ -9,6 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import environ
+from corsheaders.defaults import default_headers as default_cors_headers
+
+from apps.common.storage import supabase_public_domain
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -182,11 +185,6 @@ SOCIALACCOUNT_PROVIDERS = {
         "AUTH_PARAMS": {"access_type": "online"},
         # Google asserts email_verified; allauth honours it.
         "EMAIL_AUTHENTICATION": True,
-        "APP": {
-            "client_id": env("GOOGLE_CLIENT_ID", default=""),
-            "secret": env("GOOGLE_CLIENT_SECRET", default=""),
-            "key": "",
-        },
     },
     "facebook": {
         "METHOD": "oauth2",
@@ -196,13 +194,22 @@ SOCIALACCOUNT_PROVIDERS = {
         # Facebook's email assertion is less reliable, so it does NOT
         # auto-link to an existing password account (AUTH.md §4.4).
         "EMAIL_AUTHENTICATION": False,
-        "APP": {
-            "client_id": env("FACEBOOK_CLIENT_ID", default=""),
-            "secret": env("FACEBOOK_CLIENT_SECRET", default=""),
-            "key": "",
-        },
     },
 }
+
+# Credentials are attached only when they exist. allauth lists every provider
+# that has an APP entry — even one with a blank client_id — so an unconfigured
+# provider would still appear in /_allauth/browser/v1/config, the frontend would
+# render its button, and the customer would land on an error page. With no
+# credentials the provider is simply absent and its button is never shown.
+for _provider, _prefix in (("google", "GOOGLE"), ("facebook", "FACEBOOK")):
+    _client_id = env(f"{_prefix}_CLIENT_ID", default="")
+    if _client_id:
+        SOCIALACCOUNT_PROVIDERS[_provider]["APP"] = {
+            "client_id": _client_id,
+            "secret": env(f"{_prefix}_CLIENT_SECRET", default=""),
+            "key": "",
+        }
 
 HEADLESS_ONLY = True
 HEADLESS_FRONTEND_URLS = {
@@ -210,6 +217,11 @@ HEADLESS_FRONTEND_URLS = {
     "account_reset_password": FRONTEND_URL + "/reset-password",
     "account_reset_password_from_key": FRONTEND_URL + "/reset-password?key={key}",
     "account_signup": FRONTEND_URL + "/signup",
+    # Where allauth sends the browser when social sign-in fails: the customer
+    # cancelled at Google, the provider errored, or the takeover backstop refused
+    # an unverified email. allauth appends ?error=…. Without this entry every one
+    # of those failures raised ImproperlyConfigured and the customer saw a 500.
+    "socialaccount_login_error": FRONTEND_URL + "/auth/callback",
 }
 
 # ── DRF ───────────────────────────────────────────────────────────────────────
@@ -256,6 +268,22 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX": "/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": False,
+    # Every app has a `status` field with its own choices. Without explicit names
+    # drf-spectacular emits hash-suffixed enums (`Status889Enum`) whose names
+    # change whenever a choice set does — and the frontend's generated types
+    # would churn with them.
+    "ENUM_NAME_OVERRIDES": {
+        "OrderStatusEnum": "apps.orders.models.OrderStatus",
+        "PaymentStatusEnum": "apps.orders.models.PaymentStatus",
+        "CartStatusEnum": "apps.carts.models.CartStatus",
+        "ReservationStatusEnum": "apps.reservations.models.ReservationStatus",
+        "EnquiryStatusEnum": "apps.catering.models.EnquiryStatus",
+        "TicketStatusEnum": "apps.support.models.TicketStatus",
+        "TransactionStatusEnum": "apps.payments.models.TransactionStatus",
+        "RefundStatusEnum": "apps.payments.models.RefundStatus",
+        "RedemptionStatusEnum": "apps.promotions.models.RedemptionStatus",
+        "NotificationStatusEnum": "apps.notifications.models.NotificationStatus",
+    },
 }
 
 # ── Internationalisation ──────────────────────────────────────────────────────
@@ -284,6 +312,11 @@ if _SUPABASE_ENDPOINT:
     AWS_ACCESS_KEY_ID = env("SUPABASE_S3_ACCESS_KEY")
     AWS_SECRET_ACCESS_KEY = env("SUPABASE_S3_SECRET_KEY")
     AWS_S3_ADDRESSING_STYLE = "path"  # Supabase requires path-style addressing
+    # Reads must use the public object URL, not the S3 endpoint the writes go
+    # through — see apps/common/storage.py for why the difference matters.
+    AWS_S3_CUSTOM_DOMAIN = supabase_public_domain(
+        _SUPABASE_ENDPOINT, AWS_STORAGE_BUCKET_NAME, env("SUPABASE_PUBLIC_URL", default="")
+    )
     AWS_QUERYSTRING_AUTH = False  # menu and gallery images are public
     AWS_S3_FILE_OVERWRITE = False
 else:
@@ -355,6 +388,11 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localho
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000"])
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ["X-Cart-Token", "X-Request-ID", "Idempotency-Replayed"]
+# The frontend *sends* these on cross-origin requests, so the preflight must allow
+# them. Without this the browser blocks every request once a cart token exists,
+# and every order placement (Idempotency-Key) — found by the first live run of the
+# frontend client, not by any unit test.
+CORS_ALLOW_HEADERS = (*default_cors_headers, "x-cart-token", "x-guest-token", "idempotency-key")
 
 _SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", default="")
 if _SESSION_COOKIE_DOMAIN:

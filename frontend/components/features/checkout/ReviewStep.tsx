@@ -31,7 +31,7 @@ export default function ReviewStep({ deliveryData, paymentData, onBack, onConfir
   const getPaymentMethodLabel = () => {
     switch (paymentData.method) {
       case "card":
-        return "Credit/Debit Card";
+        return "Pay Online";
       case "transfer":
         return "Bank Transfer";
       case "cash":
@@ -154,9 +154,9 @@ export default function ReviewStep({ deliveryData, paymentData, onBack, onConfir
                 <p className="font-semibold text-sm" style={{ color: "var(--black)" }}>
                   {getPaymentMethodLabel()}
                 </p>
-                {paymentData.method === "card" && paymentData.cardNumber && (
+                {paymentData.method === "card" && (
                   <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-                    •••• {paymentData.cardNumber.slice(-4)}
+                    You&apos;ll pay on our payment partner&apos;s secure page next.
                   </p>
                 )}
               </div>

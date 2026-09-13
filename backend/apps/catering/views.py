@@ -20,6 +20,7 @@ from apps.catering.serializers import (
     CreateEnquirySerializer,
     EnquiryCreatedSerializer,
     EnquirySerializer,
+    OverdueEnquiriesSerializer,
 )
 from apps.catering.services import submit_enquiry
 from apps.common.permissions import IsManager
@@ -128,7 +129,11 @@ class OverdueEnquiriesView(APIView):
 
     permission_classes = [IsManager]
 
-    @extend_schema(summary="Overdue catering enquiries", tags=["catering"])
+    @extend_schema(
+        summary="Overdue catering enquiries",
+        responses={200: OverdueEnquiriesSerializer},
+        tags=["catering"],
+    )
     def get(self, request: Request) -> Response:
         from apps.catering.services import overdue_enquiries
 

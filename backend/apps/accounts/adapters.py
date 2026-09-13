@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 
 from apps.accounts.signals import email_verified
 
@@ -122,6 +123,24 @@ class KuyashSocialAdapter(DefaultSocialAccountAdapter):
             "social_login_unverified_email_collision",
             extra={"provider": sociallogin.account.provider},
         )
+
+        # Browser sign-in arrives here on the provider's callback URL, on the API's
+        # own origin. Answering with JSON would strand the customer on a raw error
+        # document there, so send them back to the frontend with an error code it
+        # can explain. Token-based flows (an app posting a provider token) have no
+        # browser to redirect, and keep the JSON problem document.
+        callback = self._frontend_callback(request, sociallogin)
+        if callback:
+            raise ImmediateHttpResponse(
+                HttpResponseRedirect(
+                    _with_query(
+                        callback,
+                        error="social_email_unverified",
+                        error_process=sociallogin.state.get("process") or "login",
+                    )
+                )
+            )
+
         raise ImmediateHttpResponse(
             JsonResponse(
                 {
@@ -137,6 +156,22 @@ class KuyashSocialAdapter(DefaultSocialAccountAdapter):
                 status=409,
             )
         )
+
+    @staticmethod
+    def _frontend_callback(request: HttpRequest, sociallogin: Any) -> str:
+        """The frontend URL a browser sign-in should return to, if there is one.
+
+        allauth keeps the `callback_url` the frontend posted in the login state.
+        It was validated when the flow started; it is checked again here because
+        this value decides where a browser is sent.
+        """
+        from allauth.account.adapter import get_adapter as get_account_adapter
+
+        state = getattr(sociallogin, "state", None) or {}
+        target = state.get("next") or ""
+        if not target:
+            return ""
+        return target if get_account_adapter(request).is_safe_url(target) else ""
 
     def save_user(self, request: HttpRequest, sociallogin: Any, form: Any = None) -> Any:
         """Give a social signup the same shape as a password signup."""
@@ -157,3 +192,11 @@ class KuyashSocialAdapter(DefaultSocialAccountAdapter):
             email_verified.send(sender=type(user), user=user)
 
         return user
+
+
+def _with_query(url: str, **params: str) -> str:
+    """Append query parameters, keeping any the URL already has (e.g. ``next``)."""
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k not in params]
+    query.extend(params.items())
+    return urlunsplit(parts._replace(query=urlencode(query)))

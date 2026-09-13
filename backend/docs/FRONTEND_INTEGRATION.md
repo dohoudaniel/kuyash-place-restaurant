@@ -51,10 +51,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 ### 1.2 `lib/api/types.ts` — generated, not handwritten
 
 ```bash
-npx openapi-typescript https://api.kuyashplace.com/api/v1/schema/ -o lib/api/types.ts
+npm run api:sync   # backend schema → lib/api/openapi.yml → lib/api/schema.d.ts
 ```
 
-Wire this into CI so drift between frontend and backend fails the build rather than production.
+`schema.d.ts` is generated and never edited by hand; `lib/api/types.ts` gives the
+types readable names. The schema step runs with `--validate --fail-on-warn`, so a
+view whose response the generator cannot describe fails the sync instead of
+silently disappearing from the types. Wire this into CI so drift between frontend
+and backend fails the build rather than production.
 
 ### 1.3 `lib/api/money.ts`
 
@@ -83,8 +87,10 @@ Call `bootstrap()` once from a provider in `app/layout.tsx`. **This is the conce
 ```bash
 # frontend/.env.local
 NEXT_PUBLIC_API_URL=https://api.kuyashplace.com/api/v1
-NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_live_xxx     # public key only — never the secret
 ```
+
+No payment provider key is needed: checkout redirects to the `authorization_url`
+the backend issues. `frontend/.env.example` is committed; `.env.local` is not.
 
 The frontend currently uses **zero** environment variables; nothing is configurable per environment.
 
@@ -283,7 +289,23 @@ There is currently **no** `loading.tsx`, `error.tsx` or `not-found.tsx` anywhere
 
 ### 4.3 Auth gating
 
-`/account`, `/orders`, `/wishlist` and `/checkout` are fully public today. Gate them in middleware or a layout guard.
+Gated in step 3: **`/account` and `/orders`** (the history list). `proxy.ts` (Next 16's
+renamed middleware) redirects visitors with no `kuyash_session` cookie to
+`/?auth=login&next=…`; `RequireAuth` then confirms the session itself, because a
+cookie can outlive the session behind it. Neither is the security boundary — the API
+refuses the data regardless.
+
+Deliberately **not** gated, correcting the earlier version of this section:
+
+- `/checkout` — guest checkout is a supported flow (`place_order(guest=…)`); gating it
+  would remove a feature the backend was built for.
+- `/orders/[id]` — guests track their order with the `guest_token` issued at
+  checkout, and the API returns 404 to anyone else.
+- `/wishlist` — still the local store until step 10; it is gated when it moves to
+  `/api/v1/wishlist/`, which requires sign-in.
+
+For the proxy to see the session cookie in production it must be scoped to the shared
+parent domain (`SESSION_COOKIE_DOMAIN`; the backend's `kuyash.E012` check enforces it).
 
 ### 4.4 Server Components
 
@@ -299,9 +321,9 @@ Render `body` as markdown, and show `version` / `effective_from` — customers a
 
 Follow this sequence; each step is independently shippable.
 
-1. API client, generated types, `authStore`, env vars, `next.config.ts` images
-2. **Delete** the dead trees and the card fields (before writing integration code, not after)
-3. Auth: login, signup, reset, verify, session bootstrap, route gating
+1. ✅ API client, generated types, `authStore`, env vars, `next.config.ts` images
+2. ✅ **Delete** the dead trees and the card fields (before writing integration code, not after)
+3. ✅ Auth: login, signup, reset, verify, session bootstrap, route gating
 4. Catalogue: menu list, detail, real modifiers, server-side filtering
 5. Cart: server cart, server totals, promo application
 6. Checkout + payments: order creation, hosted checkout, completion page
@@ -310,6 +332,111 @@ Follow this sequence; each step is independently shippable.
 9. — **Phase 1 ships here** —
 10. Reservations, catering, contact, wishlist sync
 11. Academy, rewards, reviews, gallery, chat
+
+---
+
+### 5.1 Steps 1–2 delivered
+
+**Built on the existing design system, not beside it.** No change to
+`app/globals.css`, `components/ui/`, the brand tokens or the fonts. Rewritten
+screens keep their original markup, classes and `var(--…)` colours; only what they
+do changed.
+
+Added:
+
+- `lib/api/client.ts` — `api()`, `ApiError` (branch on `.code`; `.fieldErrors` for
+  validation), lazy CSRF priming before the first unsafe request, cart-token echo,
+  network failure as status `0`. `credentials: "include"` on every call.
+- `lib/api/schema.d.ts` (generated), `lib/api/types.ts` (aliases),
+  `lib/api/money.ts` (`Money` aliased from the schema), `lib/api/media.ts`
+  (resolves `/media/…` against the API origin in development).
+- `lib/store/authStore.ts` — **not persisted**; the session cookie is the truth.
+  `bootstrap()` runs once from `components/providers/AuthProvider.tsx` in the root
+  layout. `register()` does not sign in, because email verification is mandatory.
+- `next.config.ts` — Supabase public-object `remotePatterns`, the API's `/media/`
+  in development, and `dangerouslyAllowLocalIP` **in development only** (Next 16
+  otherwise refuses to optimise images from `localhost`).
+
+Deleted — 20 files, 2,878 lines: the six legacy trees, `MenuItemDetailModal.old`,
+and every duplicate nothing imported (`CheckoutSidebar`, `CheckoutProgressCompact`,
+`DeliveryStepCompact`, `PaymentStepCompact`, `ReviewStepCompact`, `CartItem`,
+`CartSummary`). Note the checkout route used the **non**-Compact steps; the Compact
+ones were dead.
+
+Card fields: `PaymentStep` keeps its three-option selector and loses every input —
+"Pay Online" explains the hosted page. `ReviewStep` no longer prints a fragment of
+a typed card number. `PaymentMethodsSection` reads `GET /payments/methods/` with
+loading, empty, error and per-card busy states; forget and set-default are real.
+`KNOWN_FRONTEND_DEBT` is empty and the gate passes.
+
+**Deliberately not deleted yet:** `lib/store/promoStore.ts`, `lib/data/menu.ts`
+and `lib/assets/images.ts` from the §2 table. Live screens still import them, and
+deleting them before their replacements land (steps 4 and 5) would break the
+build rather than remove debt. They go in the step that replaces them.
+
+Backend contract fixes this pass forced — each would have surfaced as a broken or
+untyped screen:
+
+- Five views had no describable response and were **omitted** from the schema
+  (reorder, forget-card, today's book, overdue enquiries, open tickets).
+- Cart/order `totals`, payment `amount`s and the KDS `grand_total` were untyped
+  dictionaries; now `Totals` / `Money`.
+- `status` enums had hash-suffixed names (`Status889Enum`) that would churn.
+- `save_card` was never declared, so saved-card consent was unreachable.
+- Supabase image URLs pointed at the private S3 endpoint (DEPLOYMENT.md §5.1).
+
+Verified: `tsc` clean; `next build` passes; ESLint 48 → 40 errors and 13 → 12
+warnings with **no new findings** (the remainder is pre-existing, mostly unescaped
+apostrophes in legal copy that step 4.4 replaces); backend 872 passed.
+
+---
+
+### 5.2 Step 3 delivered
+
+Sign-in is real. Same design as before — the forms keep their markup, classes and
+colours; the dialog keeps its look but is now built on the `Dialog` primitives, so it
+traps focus, closes on Escape and is announced as a dialog.
+
+- `LoginForm` — real sign-in; `email_not_verified` offers to resend the link in place.
+- `SignupForm` — real registration with field-level errors; the password minimum is
+  now 10, matching the backend (the form said 8, which the API rejected); the terms and
+  marketing checkboxes are real `<input type="checkbox">`s instead of clickable `<div>`s.
+- `ForgotPasswordForm` — real request; the copy no longer confirms whether an account
+  exists.
+- New routes `/verify-email` (signs the customer in), `/reset-password` (uid + token
+  from the emailed link) and `/auth/callback` (social sign-in return, with a message
+  for each allauth error code).
+- `authModalStore` lets any screen ask for sign-in; `AuthProvider` mounts the dialog
+  once and opens it from `?auth=login&next=…`. `next` is restricted to same-site paths.
+- Google/Facebook buttons appear only for providers the backend has credentials for
+  (read from `/_allauth/browser/v1/config`), and start a real form post to allauth.
+- Gating: `proxy.ts` + `RequireAuth` on `/account` and `/orders` (see §4.3).
+- `next` upgraded 16.2.6 → **16.3.5**, clearing two critical RCE advisories.
+
+**Running the client against a live server found seven backend defects that no unit
+test or type check had caught.** All fixed and covered by tests:
+
+| # | Defect | Effect |
+|---|---|---|
+| 1 | CORS preflight did not allow `X-Cart-Token`, `X-Guest-Token`, `Idempotency-Key` | The browser would block every request once a cart existed, and every order placement |
+| 2 | Sign-in endpoints were CSRF-exempt (DRF exempts unauthenticated views) and accept form posts | Login CSRF: a foreign page could sign a visitor into an attacker's account |
+| 3 | Password reset deleted the requester's own session mid-request | A signed-in reset changed the password, then showed an HTML 400 |
+| 4 | `allauth.urls` not mounted | Every social sign-in raised `NoReverseMatch` — it could never have worked |
+| 5 | `HEADLESS_FRONTEND_URLS["socialaccount_login_error"]` missing | Every social failure, including a customer pressing Cancel at Google, was a 500 |
+| 6 | Takeover backstop answered with JSON on the provider callback | A refused Facebook sign-in stranded the customer on a raw JSON page on the API domain |
+| 7 | OpenAPI schema claimed login/verify returned a bare user; they return `{user}` | The generated client read the wrong shape |
+
+Also: providers with blank credentials are no longer registered, so the config endpoint
+never offers a button that leads to an error; broad `except Exception` handlers in the
+password views were narrowed to validation errors.
+
+Verified: backend 898 passed; `tsc` clean; `next build` passes; ESLint 40 → 36 errors,
+12 warnings, no new findings; a scripted cross-origin run of register → unverified
+login → verify → session → signed-in reset → reused link → new-password login →
+social failure → logout passes end to end with zero server errors.
+
+Not yet done, and not part of step 3: `ProfileSection` and `PreferencesSection` still
+`alert()` on save (step 8, Account).
 
 ---
 

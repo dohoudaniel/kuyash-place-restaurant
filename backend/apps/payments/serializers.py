@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.common.serializers import MoneySerializer
 from apps.payments.models import Provider
 
 
@@ -18,6 +19,13 @@ class InitialiseSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default="",
+    )
+    save_card = serializers.BooleanField(
+        default=False,
+        help_text=(
+            "The customer's consent to keep this card for next time. Without it no "
+            "provider token is stored, even though the provider returns one."
+        ),
     )
 
 
@@ -41,7 +49,7 @@ class InitialiseResponseSerializer(serializers.Serializer):
     reference = serializers.CharField()
     provider = serializers.CharField()
     authorization_url = serializers.URLField()
-    amount = serializers.DictField()
+    amount = MoneySerializer()
     order = serializers.CharField()
 
     class Meta:
@@ -53,7 +61,7 @@ class VerifyResponseSerializer(serializers.Serializer):
     order_reference = serializers.CharField()
     order_status = serializers.CharField()
     payment_status = serializers.CharField()
-    amount = serializers.DictField()
+    amount = MoneySerializer()
 
     class Meta:
         ref_name = "PaymentVerification"
@@ -61,7 +69,7 @@ class VerifyResponseSerializer(serializers.Serializer):
 
 class RefundResponseSerializer(serializers.Serializer):
     order = serializers.CharField()
-    amount = serializers.DictField()
+    amount = MoneySerializer()
     status = serializers.CharField()
     order_status = serializers.CharField()
     payment_status = serializers.CharField()

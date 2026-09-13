@@ -4,19 +4,22 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Heart, User } from "lucide-react";
+import { Heart, LogOut, User } from "lucide-react";
 import { IMAGES } from "@/lib/assets/images";
 import { useCartStore } from "@/lib/store/cartStore";
 import { useWishlistStore } from "@/lib/store/wishlistStore";
-import { AuthModal } from "@/components/features/auth";
+import { useAuthStore } from "@/lib/store/authStore";
+import { useAuthModalStore } from "@/lib/store/authModalStore";
 import NavLinks from "./NavLinks";
 import MobileMenu from "./MobileMenu";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled]     = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authView, setAuthView] = useState<"login" | "signup">("login");
+  const authStatus = useAuthStore((state) => state.status);
+  const logout = useAuthStore((state) => state.logout);
+  const openAuth = useAuthModalStore((state) => state.open);
+  const isSignedIn = authStatus === "authenticated";
   const { getTotalItems } = useCartStore();
   const { getTotalItems: getWishlistCount } = useWishlistStore();
   const cartCount = getTotalItems();
@@ -102,27 +105,43 @@ export default function Navbar() {
             </span>
           )}
         </Link>
-        <button
-          onClick={() => {
-            setAuthView("login");
-            setShowAuthModal(true);
-          }}
-          className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
-          style={{ border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff" }}
-          aria-label="Account"
-        >
-          <User className="w-4 h-4 xl:w-5 xl:h-5" />
-        </button>
-        <button
-          onClick={() => {
-            setAuthView("signup");
-            setShowAuthModal(true);
-          }}
-          className="px-4 xl:px-6 py-2 xl:py-2.5 rounded-full text-xs xl:text-sm font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 whitespace-nowrap"
-          style={{ background: "var(--red)" }}
-        >
-          Sign Up
-        </button>
+        {isSignedIn ? (
+          <Link
+            href="/account"
+            className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
+            style={{ border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff" }}
+            aria-label="My account"
+          >
+            <User className="w-4 h-4 xl:w-5 xl:h-5" />
+          </Link>
+        ) : (
+          <button
+            onClick={() => openAuth("login")}
+            className="relative w-9 h-9 xl:w-10 xl:h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
+            style={{ border: "1.5px solid rgba(255,255,255,0.25)", color: "#fff" }}
+            aria-label="Sign in"
+          >
+            <User className="w-4 h-4 xl:w-5 xl:h-5" />
+          </button>
+        )}
+        {isSignedIn ? (
+          <button
+            onClick={() => void logout()}
+            className="px-4 xl:px-6 py-2 xl:py-2.5 rounded-full text-xs xl:text-sm font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 whitespace-nowrap flex items-center gap-1.5"
+            style={{ background: "var(--red)" }}
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign Out
+          </button>
+        ) : (
+          <button
+            onClick={() => openAuth("signup")}
+            className="px-4 xl:px-6 py-2 xl:py-2.5 rounded-full text-xs xl:text-sm font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 whitespace-nowrap"
+            style={{ background: "var(--red)" }}
+          >
+            Sign Up
+          </button>
+        )}
       </div>
 
       {/* ── Mobile hamburger ── */}
@@ -143,12 +162,6 @@ export default function Navbar() {
       {/* ── Mobile menu ── */}
       <MobileMenu isOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
 
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        defaultView={authView}
-      />
     </motion.nav>
   );
 }

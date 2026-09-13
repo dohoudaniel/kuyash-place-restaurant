@@ -65,7 +65,11 @@ class PaymentMethodDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Forget a saved card", tags=["payments"])
+    @extend_schema(
+        summary="Forget a saved card",
+        responses={200: SavedPaymentMethodSerializer(many=True)},
+        tags=["payments"],
+    )
     def delete(self, request: Request, pk: str) -> Response:
         user = current_user(request)
         method = get_object_or_404(SavedPaymentMethod, pk=pk, user=user, is_active=True)

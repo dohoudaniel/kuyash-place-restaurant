@@ -75,7 +75,7 @@ class ReservationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reservation
-        fields = (
+        fields: tuple[str, ...] = (
             "reference",
             "status",
             "status_display",
@@ -103,3 +103,24 @@ def serialise_with_token(reservation: Reservation) -> dict[str, Any]:
     data = dict(ReservationSerializer(reservation).data)
     data["confirmation_token"] = reservation.confirmation_token
     return data
+
+
+class BookedReservationSerializer(ReservationSerializer):
+    """A reservation as it appears in the day's book, with local time added."""
+
+    time = serializers.CharField(read_only=True, help_text="Local HH:MM.")
+
+    class Meta(ReservationSerializer.Meta):
+        fields = (*ReservationSerializer.Meta.fields, "time")
+
+
+class TodaysBookSerializer(serializers.Serializer):
+    """Response envelope for ``GET /reservations/book/``.
+
+    Declared explicitly so the generated OpenAPI schema — and the frontend types
+    generated from it — describe this endpoint instead of omitting it.
+    """
+
+    date = serializers.DateField()
+    covers = serializers.IntegerField()
+    reservations = BookedReservationSerializer(many=True)

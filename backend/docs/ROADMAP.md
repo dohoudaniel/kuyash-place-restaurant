@@ -182,7 +182,7 @@ Notes:
 - [ ] All eleven success criteria in `PRD.md` §9 demonstrated end-to-end
 - [ ] **Zero menu items with `needs_repricing=True`** — the owner has set real naira prices
 - [ ] Tax policy (`PRD.md` §7) decided; `/help` and `/terms` copy corrected
-- [ ] Card fields deleted from the frontend; CI gate passing
+- [x] Card fields deleted from the frontend; CI gate passing — allowlist now empty
 - [ ] Security checklist (`SECURITY.md` §8) fully ticked
 - [ ] 100% coverage on money, tax, discount, payment and state-machine logic
 - [ ] Webhook forgery, amount-mismatch and replay tests passing
@@ -393,8 +393,8 @@ backend work:
 
 1. The frontend has to actually call these endpoints. Nothing in `frontend/`
    makes a network request yet — that is `docs/FRONTEND_INTEGRATION.md`.
-2. The card fields have to be **deleted** from the five files listed in
-   `scripts/check-no-card-fields.sh`, not connected to anything.
+2. ~~The card fields have to be deleted~~ — **done** in frontend integration
+   step 2. `KNOWN_FRONTEND_DEBT` in `scripts/check-no-card-fields.sh` is empty.
 3. The owner decisions in `DECISIONS.md` (OD-1 through OD-6) still block Gate 1,
    and Gate 1 comes first. `manage.py check --deploy` fails today with
    `kuyash.E001` for 18 unpriced items, by design.

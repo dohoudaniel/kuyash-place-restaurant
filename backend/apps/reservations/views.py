@@ -27,6 +27,7 @@ from apps.reservations.serializers import (
     RescheduleSerializer,
     ReservationSerializer,
     TableAreaSerializer,
+    TodaysBookSerializer,
     serialise_with_token,
 )
 from apps.reservations.services import booking
@@ -284,7 +285,11 @@ class TodaysBookView(APIView):
 
     permission_classes = [IsStaffMember]
 
-    @extend_schema(summary="Today's book", tags=["reservations"])
+    @extend_schema(
+        summary="Today's book",
+        responses={200: TodaysBookSerializer},
+        tags=["reservations"],
+    )
     def get(self, request: Request) -> Response:
         branch = get_current_branch()
         raw_date = request.query_params.get("date", "")

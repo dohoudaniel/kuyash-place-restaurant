@@ -1,5 +1,6 @@
 "use client";
 
+import { RequireAuth } from "@/components/features/auth";
 import { useRouter } from "next/navigation";
 import { Package, Clock, CheckCircle, XCircle, ShoppingCart, Eye } from "lucide-react";
 import { useOrderHistoryStore } from "@/lib/store/orderHistoryStore";
@@ -15,7 +16,7 @@ const STATUS_CONFIG = {
   cancelled: { icon: XCircle, label: "Cancelled", color: "#6b7280" },
 };
 
-export default function OrdersPage() {
+function OrdersPage() {
   const router = useRouter();
   const { getAllOrders } = useOrderHistoryStore();
   const { addItem, clearCart } = useCartStore();
@@ -226,5 +227,13 @@ export default function OrdersPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function GuardedOrdersPage() {
+  return (
+    <RequireAuth>
+      <OrdersPage />
+    </RequireAuth>
   );
 }

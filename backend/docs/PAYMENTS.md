@@ -216,9 +216,16 @@ def verify_pending_payments():
 ### 5.1 Card — Paystack / Flutterwave
 
 ```
-POST /payments/initialise/  { "order": "KYS-7Q2XF9", "provider": "paystack" }
-  → { "authorization_url": "https://checkout.paystack.com/…", "reference": "KYS-7Q2XF9-1" }
+POST /payments/initialise/  { "order": "KYS-7Q2XF9", "provider": "paystack", "save_card": false }
+  → { "authorization_url": "https://checkout.paystack.com/…", "reference": "KYS-7Q2XF9-1", "amount": { … } }
 ```
+
+`save_card` is the customer's consent to keep the card for next time. It defaults
+to `false`, and without it no provider token is stored — even though the provider
+returns one on every successful card payment. Until the frontend integration pass
+the serializer did not declare this field, so the view read a key validation had
+already dropped and consent could never be given; the saved-card tests had set the
+model flag directly and did not notice. It is now covered through the endpoint.
 
 Amount sent in kobo. `callback_url` returns the browser to `/checkout/complete?reference=…`, which triggers verification.
 
@@ -237,7 +244,7 @@ Adding a third provider is a new class, not a new branch in the order service.
 
 ### 5.2 Bank transfer
 
-Order created `pending_payment`; API returns the account details currently hardcoded in `PaymentStepCompact.tsx` — **now served from `Branch`, so they can be changed without a deploy.** Staff confirm receipt in admin, which transitions the order and writes a `PaymentTransaction(provider="bank_transfer")`.
+Order created `pending_payment`; API returns the account details that were hardcoded in the frontend's `PaymentStepCompact.tsx` (since deleted) — **now served from `Branch`, so they can be changed without a deploy.** Staff confirm receipt in admin, which transitions the order and writes a `PaymentTransaction(provider="bank_transfer")`.
 
 > Phase 3 upgrade: a dedicated virtual account per order (both providers support this) for automatic reconciliation.
 

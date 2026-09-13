@@ -202,3 +202,52 @@ def test_a_manager_can_refund(api_client, transaction, paystack_keys, manager_us
     )
     assert response.status_code == 200
     assert response.json()["order_status"] == OrderStatus.REFUNDED
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Card-saving consent, driven through the endpoint
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# The saved-card tests set `save_method` on the model directly, so none of them
+# noticed the serializer never declared `save_card`: the view read a key that
+# validation always dropped, and consent could not be given at all.
+
+
+@responses.activate
+def test_initialise_does_not_keep_a_card_without_consent(  # type: ignore[no-untyped-def]
+    api_client, verified_user, order, paystack_keys
+) -> None:
+    from apps.payments.models import PaymentTransaction
+
+    mock_init()
+    api_client.force_authenticate(user=verified_user)
+    response = api_client.post(
+        reverse("v1:payments:initialise"), {"order": order.reference}, format="json"
+    )
+
+    assert response.status_code == 201
+    assert (
+        PaymentTransaction.objects.get(our_reference=response.json()["reference"]).save_method
+        is False
+    )
+
+
+@responses.activate
+def test_initialise_records_consent_to_keep_the_card(  # type: ignore[no-untyped-def]
+    api_client, verified_user, order, paystack_keys
+) -> None:
+    from apps.payments.models import PaymentTransaction
+
+    mock_init()
+    api_client.force_authenticate(user=verified_user)
+    response = api_client.post(
+        reverse("v1:payments:initialise"),
+        {"order": order.reference, "save_card": True},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert (
+        PaymentTransaction.objects.get(our_reference=response.json()["reference"]).save_method
+        is True
+    )

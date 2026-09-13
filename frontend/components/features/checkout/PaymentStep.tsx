@@ -1,40 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Wallet, Banknote } from "lucide-react";
+import { CreditCard, Wallet, Banknote, ShieldCheck } from "lucide-react";
 
 interface PaymentStepProps {
   onNext: (data: PaymentData) => void;
   onBack: () => void;
 }
 
+/**
+ * The customer's choice of how to pay — and nothing else.
+ *
+ * Card details are never collected here. Paying online sends the customer to
+ * the payment provider's hosted page after the order is placed, so card data
+ * never touches this app or the Kuyash Place servers (PCI-DSS SAQ A; see
+ * backend/docs/PAYMENTS.md §1).
+ */
 export interface PaymentData {
   method: "card" | "transfer" | "cash";
-  cardNumber?: string;
-  cardName?: string;
-  cardExpiry?: string;
-  cardCvv?: string;
 }
 
 export default function PaymentStep({ onNext, onBack }: PaymentStepProps) {
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "transfer" | "cash">("card");
-  const [cardData, setCardData] = useState({
-    cardNumber: "",
-    cardName: "",
-    cardExpiry: "",
-    cardCvv: "",
-  });
+  const [paymentMethod, setPaymentMethod] = useState<PaymentData["method"]>("card");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onNext({
-      method: paymentMethod,
-      ...cardData,
-    });
+    onNext({ method: paymentMethod });
   };
 
   const paymentMethods = [
-    { id: "card", label: "Credit/Debit Card", icon: CreditCard },
+    { id: "card", label: "Pay Online", icon: CreditCard },
     { id: "transfer", label: "Bank Transfer", icon: Wallet },
     { id: "cash", label: "Cash on Delivery", icon: Banknote },
   ];
@@ -56,7 +51,8 @@ export default function PaymentStep({ onNext, onBack }: PaymentStepProps) {
               <button
                 key={method.id}
                 type="button"
-                onClick={() => setPaymentMethod(method.id as typeof paymentMethod)}
+                onClick={() => setPaymentMethod(method.id as PaymentData["method"])}
+                aria-pressed={isSelected}
                 className="p-4 rounded-lg border-2 transition-all hover:scale-105 active:scale-95"
                 style={{
                   borderColor: isSelected ? "var(--red)" : "var(--gray-mid)",
@@ -72,72 +68,18 @@ export default function PaymentStep({ onNext, onBack }: PaymentStepProps) {
           })}
         </div>
 
-        {/* Card Details Form */}
+        {/* Online Payment Info */}
         {paymentMethod === "card" && (
-          <div className="space-y-4">
+          <div className="p-4 rounded-lg flex gap-3" style={{ background: "var(--off-white)" }}>
+            <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" style={{ color: "var(--red)" }} />
             <div>
-              <label className="text-sm font-semibold mb-2 block" style={{ color: "var(--black)" }}>
-                Card Number
-              </label>
-              <input
-                type="text"
-                required
-                value={cardData.cardNumber}
-                onChange={(e) => setCardData({ ...cardData, cardNumber: e.target.value })}
-                placeholder="1234 5678 9012 3456"
-                maxLength={19}
-                className="w-full px-4 py-3 rounded-lg border outline-none transition-colors focus:border-red-500"
-                style={{ borderColor: "var(--gray-mid)" }}
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold mb-2 block" style={{ color: "var(--black)" }}>
-                Cardholder Name
-              </label>
-              <input
-                type="text"
-                required
-                value={cardData.cardName}
-                onChange={(e) => setCardData({ ...cardData, cardName: e.target.value })}
-                placeholder="John Doe"
-                className="w-full px-4 py-3 rounded-lg border outline-none transition-colors focus:border-red-500"
-                style={{ borderColor: "var(--gray-mid)" }}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-semibold mb-2 block" style={{ color: "var(--black)" }}>
-                  Expiry Date
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cardData.cardExpiry}
-                  onChange={(e) => setCardData({ ...cardData, cardExpiry: e.target.value })}
-                  placeholder="MM/YY"
-                  maxLength={5}
-                  className="w-full px-4 py-3 rounded-lg border outline-none transition-colors focus:border-red-500"
-                  style={{ borderColor: "var(--gray-mid)" }}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-semibold mb-2 block" style={{ color: "var(--black)" }}>
-                  CVV
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cardData.cardCvv}
-                  onChange={(e) => setCardData({ ...cardData, cardCvv: e.target.value })}
-                  placeholder="123"
-                  maxLength={4}
-                  className="w-full px-4 py-3 rounded-lg border outline-none transition-colors focus:border-red-500"
-                  style={{ borderColor: "var(--gray-mid)" }}
-                />
-              </div>
+              <p className="text-sm mb-2" style={{ color: "var(--text-muted)" }}>
+                After you place your order, you&apos;ll pay by card, bank or USSD on our payment
+                partner&apos;s secure page, then come straight back here.
+              </p>
+              <p className="text-xs font-semibold" style={{ color: "var(--black)" }}>
+                Kuyash Place never sees or stores your card details.
+              </p>
             </div>
           </div>
         )}

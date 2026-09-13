@@ -189,3 +189,38 @@ __all__ = [
     "SessionSerializer",
     "VerifyEmailSerializer",
 ]
+
+
+# ── Response envelopes ────────────────────────────────────────────────────────
+# Declared so the OpenAPI schema describes what these endpoints actually return.
+# The schema previously claimed login returned a bare user while the view wraps
+# it in {"user": …}; a client generated from that schema read the wrong shape.
+
+
+class AuthUserResponseSerializer(serializers.Serializer):
+    """``{"user": …}`` — returned by login and email verification."""
+
+    user = CurrentUserSerializer()
+
+    class Meta:
+        ref_name = "AuthUserResponse"
+
+
+class RegisterResponseSerializer(serializers.Serializer):
+    """Registration does not sign the customer in; verification is mandatory."""
+
+    user = CurrentUserSerializer()
+    email_verification_required = serializers.BooleanField()
+    detail = serializers.CharField()
+
+    class Meta:
+        ref_name = "RegisterResponse"
+
+
+class DetailResponseSerializer(serializers.Serializer):
+    """A human-readable acknowledgement, for endpoints with nothing else to say."""
+
+    detail = serializers.CharField()
+
+    class Meta:
+        ref_name = "DetailResponse"

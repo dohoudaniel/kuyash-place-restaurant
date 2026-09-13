@@ -1,0 +1,5059 @@
+openapi: 3.0.3
+info:
+  title: Kuyash Place Restaurant API
+  version: 1.0.0
+  description: |-
+    Backend API for Kuyash Place Restaurant.
+
+    **All money values are integer kobo** wrapped in a `{amount, currency, display}` object. Clients render `display` and never perform arithmetic on `amount`.
+paths:
+  /api/v1/core/branch/:
+    get:
+      operationId: core_branch_retrieve
+      description: Branch details, VAT policy and whether ordering is currently possible.
+      summary: Branch details
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+          description: ''
+  /api/v1/core/opening-hours/:
+    get:
+      operationId: core_opening_hours_retrieve
+      description: The weekly schedule plus any upcoming holiday overrides.
+      summary: Opening hours
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpeningHoursResponse'
+          description: ''
+  /api/v1/core/settings/:
+    get:
+      operationId: core_settings_retrieve
+      description: Social links, homepage statistics and site copy.
+      summary: Site settings
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSettings'
+          description: ''
+  /api/v1/core/legal/:
+    get:
+      operationId: core_legal_list
+      description: |-
+        Which policy pages exist.
+
+        Replaces a hardcoded array of footer links that could point at a page whose
+        wording had since changed or been withdrawn.
+      summary: Legal pages
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LegalPageSummary'
+          description: ''
+  /api/v1/core/legal/{slug}/:
+    get:
+      operationId: core_legal_retrieve
+      description: |-
+        One policy page, at the version in force today.
+
+        A future-dated version is a scheduled change and is not served; an
+        unpublished one is a draft and is not served either.
+      summary: A legal page
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalPage'
+          description: ''
+  /api/v1/auth/csrf/:
+    get:
+      operationId: auth_csrf_retrieve
+      description: |-
+        Seeds the CSRF cookie.
+
+        The frontend calls this once on load, then echoes the cookie value in an
+        ``X-CSRFToken`` header on every unsafe request.
+      summary: Seed the CSRF cookie
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/session/:
+    get:
+      operationId: auth_session_retrieve
+      description: 'Returns the current user, or ``{"user": null}`` when anonymous.'
+      summary: Current session
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: auth_register_create
+      description: Create an account and send a verification email.
+      summary: Register
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+  /api/v1/auth/login/:
+    post:
+      operationId: auth_login_create
+      description: Establish a session.
+      summary: Log in
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserResponse'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      description: Destroy the session.
+      summary: Log out
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/verify-email/:
+    post:
+      operationId: auth_verify_email_create
+      description: Confirm an email address and sign the user in.
+      summary: Verify email
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserResponse'
+          description: ''
+  /api/v1/auth/resend-verification/:
+    post:
+      operationId: auth_resend_verification_create
+      description: |-
+        Re-send the verification email.
+
+        Responds identically whether or not the account exists (AS-3).
+      summary: Resend verification email
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailOnlyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailOnlyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailOnlyRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/password/reset/:
+    post:
+      operationId: auth_password_reset_create
+      description: Start a password reset. Always reports success (AS-3).
+      summary: Request a password reset
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailOnlyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailOnlyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailOnlyRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/password/reset/confirm/:
+    post:
+      operationId: auth_password_reset_confirm_create
+      description: Complete a password reset.
+      summary: Confirm a password reset
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/auth/password/change/:
+    post:
+      operationId: auth_password_change_create
+      description: Change a password while signed in.
+      summary: Change password
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+          description: ''
+  /api/v1/catalog/categories/:
+    get:
+      operationId: catalog_categories_list
+      description: Menu categories with orderable-item counts.
+      summary: List menu categories
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/catalog/dietary-tags/:
+    get:
+      operationId: catalog_dietary_tags_list
+      description: The dietary filter vocabulary.
+      summary: List dietary tags
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DietaryTag'
+          description: ''
+  /api/v1/catalog/featured/:
+    get:
+      operationId: catalog_featured_list
+      description: What's Hot.
+      summary: Featured items
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MenuItemList'
+          description: ''
+  /api/v1/catalog/items/:
+    get:
+      operationId: catalog_items_list
+      description: |-
+        The menu, filtered and sorted server-side.
+
+        Items with unconfirmed placeholder prices are excluded entirely.
+      summary: List menu items
+      parameters:
+      - in: query
+        name: available_only
+        schema:
+          type: boolean
+        description: Honour 86'd items and windows.
+      - in: query
+        name: category
+        schema:
+          type: string
+        description: Category slug.
+      - in: query
+        name: dietary
+        schema:
+          type: string
+        description: Comma-separated tag slugs. AND semantics.
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: max_price
+        schema:
+          type: integer
+        description: Maximum price in kobo.
+      - in: query
+        name: min_price
+        schema:
+          type: integer
+        description: Minimum price in kobo.
+      - in: query
+        name: min_rating
+        schema:
+          type: string
+        description: Minimum average rating, 0–5.
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Matches name and description.
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: popular | price_asc | price_desc | rating | newest
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMenuItemListList'
+          description: ''
+  /api/v1/catalog/items/{slug}/:
+    get:
+      operationId: catalog_items_retrieve
+      description: One dish, with its variants and per-item modifier groups.
+      summary: Retrieve a menu item
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - catalog
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemDetail'
+          description: ''
+  /api/v1/cart/:
+    get:
+      operationId: cart_retrieve
+      description: The current cart, repriced on every read.
+      summary: Get the current cart
+      parameters:
+      - in: header
+        name: X-Cart-Token
+        schema:
+          type: string
+        description: Anonymous cart identifier.
+      tags:
+      - cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+    delete:
+      operationId: cart_destroy
+      description: The current cart, repriced on every read.
+      summary: Empty the cart
+      tags:
+      - cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/cart/items/:
+    post:
+      operationId: cart_items_create
+      description: Add a configured line.
+      summary: Add an item to the cart
+      tags:
+      - cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddItemRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddItemRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddItemRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/cart/items/{id}/:
+    patch:
+      operationId: cart_items_partial_update
+      description: Change or remove one line.
+      summary: Update a cart line
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateItemRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateItemRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUpdateItemRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+    delete:
+      operationId: cart_items_destroy
+      description: Change or remove one line.
+      summary: Remove a cart line
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/cart/promo/:
+    post:
+      operationId: cart_promo_create
+      description: Apply or remove a promo code.
+      summary: Apply a promo code
+      tags:
+      - cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PromoRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PromoRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+    delete:
+      operationId: cart_promo_destroy
+      description: Apply or remove a promo code.
+      summary: Remove the promo code
+      tags:
+      - cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/cart/fulfilment/:
+    patch:
+      operationId: cart_fulfilment_partial_update
+      description: Set delivery or pickup, the address and the tip.
+      summary: Set fulfilment options
+      tags:
+      - cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFulfilmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFulfilmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFulfilmentRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/cart/merge/:
+    post:
+      operationId: cart_merge_create
+      description: Fold an anonymous cart into the signed-in one after login.
+      summary: Merge a guest cart
+      parameters:
+      - in: header
+        name: X-Cart-Token
+        schema:
+          type: string
+        description: Token of the guest cart to merge in.
+      tags:
+      - cart
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/orders/:
+    post:
+      operationId: orders_create
+      description: Place an order, or list the caller's own.
+      summary: Place an order
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: A UUID. Replaying it returns the original response.
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+  /api/v1/orders/mine/:
+    get:
+      operationId: orders_mine_list
+      description: The caller's order history.
+      summary: List my orders
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - orders
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrderListList'
+          description: ''
+  /api/v1/orders/{reference}/:
+    get:
+      operationId: orders_retrieve
+      description: One order. The polling target.
+      summary: Retrieve an order
+      parameters:
+      - in: header
+        name: If-None-Match
+        schema:
+          type: string
+        description: Send the previous ETag to receive 304 when unchanged.
+      - in: header
+        name: X-Guest-Token
+        schema:
+          type: string
+        description: Required for guest orders.
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - orders
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+  /api/v1/orders/{reference}/cancel/:
+    post:
+      operationId: orders_cancel_create
+      description: Customer-initiated cancellation.
+      summary: Cancel an order
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+          description: ''
+  /api/v1/orders/{reference}/reorder/:
+    post:
+      operationId: orders_reorder_create
+      description: Rebuild the basket from a past order, at today's prices.
+      summary: Reorder a past order
+      parameters:
+      - in: header
+        name: X-Cart-Token
+        schema:
+          type: string
+        description: Anonymous cart token, if the caller has one.
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - orders
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReorderRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderResponse'
+          description: ''
+  /api/v1/orders/{reference}/receipt/:
+    get:
+      operationId: orders_receipt_retrieve
+      description: A PDF receipt for a paid order.
+      summary: Download a receipt
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - orders
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/kds/orders/:
+    get:
+      operationId: kds_orders_retrieve
+      description: The live ticket queue, oldest first.
+      summary: Kitchen queue
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Comma-separated statuses.
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KDSQueue'
+          description: ''
+  /api/v1/kds/summary/:
+    get:
+      operationId: kds_summary_retrieve
+      description: Counts and today's revenue.
+      summary: Kitchen summary
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KDSSummary'
+          description: ''
+  /api/v1/kds/orders/{reference}/assign-rider/:
+    post:
+      operationId: kds_orders_assign_rider_create
+      description: Assign a rider to a ready order.
+      summary: Assign a rider
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderAssignment'
+          description: ''
+  /api/v1/kds/orders/{reference}/{action}/:
+    post:
+      operationId: kds_orders_create
+      description: Accept, reject or advance a ticket.
+      summary: Advance a ticket
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KDSTicket'
+          description: ''
+  /api/v1/kds/items/{slug}/availability/:
+    post:
+      operationId: kds_items_availability_create
+      description: '"86" an item — make it unavailable immediately.'
+      summary: Set item availability
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemAvailability'
+          description: ''
+  /api/v1/payments/initialise/:
+    post:
+      operationId: payments_initialise_create
+      description: Start (or retry) a payment and return the provider's checkout URL.
+      summary: Initialise a payment
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitialiseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InitialiseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InitialiseRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentInitialised'
+          description: ''
+  /api/v1/payments/verify/{reference}/:
+    get:
+      operationId: payments_verify_retrieve
+      description: |-
+        Re-verify a payment.
+
+        Called when the browser returns from the provider. The browser's return is
+        a *hint to verify*, never proof: this endpoint asks the provider directly,
+        so the outcome does not depend on anything the client asserts.
+      summary: Verify a payment
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - payments
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentVerification'
+          description: ''
+  /api/v1/payments/refund/{reference}/:
+    post:
+      operationId: payments_refund_create
+      description: Refund an order. Managers only.
+      summary: Refund an order
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResult'
+          description: ''
+  /api/v1/payments/methods/:
+    get:
+      operationId: payments_methods_list
+      description: Cards the customer chose to keep.
+      summary: My saved payment methods
+      tags:
+      - payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedPaymentMethod'
+          description: ''
+  /api/v1/payments/methods/{id}/:
+    delete:
+      operationId: payments_methods_destroy
+      description: Forget a saved card.
+      summary: Forget a saved card
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedPaymentMethod'
+          description: ''
+  /api/v1/payments/methods/{id}/set-default/:
+    post:
+      operationId: payments_methods_set_default_create
+      description: Choose which saved card is offered first.
+      summary: Set the default payment method
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedPaymentMethod'
+          description: ''
+  /api/v1/reservations/areas/:
+    get:
+      operationId: reservations_areas_list
+      description: Seating areas.
+      summary: List seating areas
+      tags:
+      - reservations
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableArea'
+          description: ''
+  /api/v1/reservations/availability/:
+    get:
+      operationId: reservations_availability_retrieve
+      description: |-
+        Real availability for a date.
+
+        Every slot carries a reason when it is unavailable, so the UI can say
+        "fully booked" rather than silently greying a button out.
+      summary: Reservation availability
+      parameters:
+      - in: query
+        name: area
+        schema:
+          type: string
+        description: Area slug. Omit for any area.
+      - in: query
+        name: date
+        schema:
+          type: string
+        description: YYYY-MM-DD.
+      - in: query
+        name: party_size
+        schema:
+          type: integer
+        description: Number of guests.
+      tags:
+      - reservations
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationAvailability'
+          description: ''
+  /api/v1/reservations/mine/:
+    get:
+      operationId: reservations_mine_list
+      description: The signed-in customer's bookings.
+      summary: My bookings
+      tags:
+      - reservations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/v1/reservations/book/:
+    get:
+      operationId: reservations_book_retrieve
+      description: |-
+        The day's reservations, for staff.
+
+        Front-of-house needs one screen showing who is coming and when.
+      summary: Today's book
+      tags:
+      - reservations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodaysBook'
+          description: ''
+  /api/v1/reservations/:
+    post:
+      operationId: reservations_create
+      description: Book a table.
+      summary: Book a table
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: A UUID. Replaying it returns the original booking.
+        required: true
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/v1/reservations/{reference}/:
+    get:
+      operationId: reservations_retrieve
+      description: View, reschedule or cancel one booking.
+      summary: Retrieve a booking
+      parameters:
+      - in: header
+        name: X-Reservation-Token
+        schema:
+          type: string
+        description: Required for guest bookings.
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - reservations
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+    patch:
+      operationId: reservations_partial_update
+      description: View, reschedule or cancel one booking.
+      summary: Reschedule a booking
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRescheduleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRescheduleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRescheduleRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/v1/reservations/{reference}/cancel/:
+    post:
+      operationId: reservations_cancel_create
+      description: Cancel a booking and free the table.
+      summary: Cancel a booking
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelReservationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelReservationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelReservationRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/v1/catering/packages/:
+    get:
+      operationId: catering_packages_list
+      description: The catering tiers.
+      summary: List catering packages
+      tags:
+      - catering
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CateringPackage'
+          description: ''
+  /api/v1/catering/enquiries/:
+    post:
+      operationId: catering_enquiries_create
+      description: |-
+        Submit a catering enquiry.
+
+        Unlike the current form, this persists the enquiry, acknowledges the
+        customer with a concrete response deadline, and puts it in front of a human.
+      summary: Submit a catering enquiry
+      tags:
+      - catering
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEnquiryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateEnquiryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateEnquiryRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnquiryCreated'
+          description: ''
+  /api/v1/catering/enquiries/overdue/:
+    get:
+      operationId: catering_enquiries_overdue_retrieve
+      description: |-
+        Enquiries past the 24 hours the website promises.
+
+        The list a manager should open every morning.
+      summary: Overdue catering enquiries
+      tags:
+      - catering
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverdueEnquiries'
+          description: ''
+  /api/v1/catering/enquiries/{reference}/:
+    get:
+      operationId: catering_enquiries_retrieve
+      description: Check an enquiry's progress.
+      summary: Retrieve a catering enquiry
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - catering
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enquiry'
+          description: ''
+  /api/v1/support/contact/:
+    post:
+      operationId: support_contact_create
+      description: |-
+        Submit the contact form.
+
+        Unlike the current implementation, the message is stored, a ticket is
+        opened, the customer is acknowledged and the team is emailed.
+      summary: Send a message
+      tags:
+      - support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactAcknowledgement'
+          description: ''
+  /api/v1/support/faq/:
+    get:
+      operationId: support_faq_list
+      description: Published answers. Powers the help page.
+      summary: List FAQ entries
+      tags:
+      - support
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Faq'
+          description: ''
+  /api/v1/support/tickets/:
+    get:
+      operationId: support_tickets_list
+      description: The signed-in customer's tickets.
+      summary: My support tickets
+      tags:
+      - support
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ticket'
+          description: ''
+  /api/v1/support/tickets/open/:
+    get:
+      operationId: support_tickets_open_retrieve
+      description: The support queue, for staff.
+      summary: Open support tickets
+      tags:
+      - support
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenTickets'
+          description: ''
+  /api/v1/support/tickets/{reference}/:
+    get:
+      operationId: support_tickets_retrieve
+      description: One ticket thread.
+      summary: Retrieve a ticket
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - support
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+    post:
+      operationId: support_tickets_create
+      description: One ticket thread.
+      summary: Reply to a ticket
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReplyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateReplyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateReplyRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+  /api/v1/wishlist/:
+    get:
+      operationId: wishlist_retrieve
+      description: The customer's saved dishes.
+      summary: My wishlist
+      tags:
+      - wishlist
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wishlist'
+          description: ''
+    post:
+      operationId: wishlist_create
+      description: The customer's saved dishes.
+      summary: Save a dish
+      tags:
+      - wishlist
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddToWishlistRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddToWishlistRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddToWishlistRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wishlist'
+          description: ''
+  /api/v1/wishlist/sync/:
+    post:
+      operationId: wishlist_sync_create
+      description: |-
+        Merge a browser's saved list into the account.
+
+        Additive by design: signing in should never lose something the customer
+        saved, on either side. Unknown or withdrawn slugs are reported rather than
+        silently dropped, because the frontend's list is keyed on an image filename
+        and will contain stale entries.
+      summary: Merge a local wishlist
+      tags:
+      - wishlist
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncWishlistRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SyncWishlistRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SyncWishlistRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wishlist'
+          description: ''
+  /api/v1/wishlist/{slug}/:
+    delete:
+      operationId: wishlist_destroy
+      description: Remove one saved dish.
+      summary: Remove a saved dish
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - wishlist
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wishlist'
+          description: ''
+  /api/v1/webhooks/paystack/:
+    post:
+      operationId: webhooks_paystack_create
+      description: |-
+        Provider webhooks.
+
+        Unauthenticated by design (WH-5): the signature is the authentication.
+        CSRF is exempt because the caller is a server, not a browser session.
+      summary: Payment webhook
+      tags:
+      - payments
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAck'
+          description: ''
+  /api/v1/webhooks/flutterwave/:
+    post:
+      operationId: webhooks_flutterwave_create
+      description: |-
+        Provider webhooks.
+
+        Unauthenticated by design (WH-5): the signature is the authentication.
+        CSRF is exempt because the caller is a server, not a browser session.
+      summary: Payment webhook
+      tags:
+      - payments
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAck'
+          description: ''
+  /api/v1/accounts/me/:
+    get:
+      operationId: accounts_me_retrieve
+      description: Read, update or erase the current user.
+      summary: Current profile
+      tags:
+      - accounts
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+    patch:
+      operationId: accounts_me_partial_update
+      description: Read, update or erase the current user.
+      summary: Update profile
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+          description: ''
+    delete:
+      operationId: accounts_me_destroy
+      description: Read, update or erase the current user.
+      summary: Erase account (NDPR)
+      tags:
+      - accounts
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/accounts/addresses/:
+    get:
+      operationId: accounts_addresses_list
+      description: The customer's address book.
+      summary: List addresses
+      tags:
+      - accounts
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+          description: ''
+    post:
+      operationId: accounts_addresses_create
+      description: The customer's address book.
+      summary: Add an address
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+  /api/v1/accounts/addresses/{id}/:
+    get:
+      operationId: accounts_addresses_retrieve
+      description: One saved address.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+    put:
+      operationId: accounts_addresses_update
+      description: One saved address.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+    patch:
+      operationId: accounts_addresses_partial_update
+      description: One saved address.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+    delete:
+      operationId: accounts_addresses_destroy
+      description: One saved address.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/accounts/addresses/{id}/set-default/:
+    post:
+      operationId: accounts_addresses_set_default_create
+      description: Promote an address to the default.
+      summary: Set default address
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - accounts
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+components:
+  schemas:
+    AddItemRequest:
+      type: object
+      description: Input for adding a line. Note the absence of any price field.
+      properties:
+        menu_item:
+          type: string
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+        quantity:
+          type: integer
+          maximum: 99
+          minimum: 1
+          default: 1
+        variant:
+          type: string
+          format: uuid
+          nullable: true
+        modifiers:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        special_instructions:
+          type: string
+          default: ''
+          maxLength: 500
+      required:
+      - menu_item
+    AddToWishlistRequest:
+      type: object
+      properties:
+        menu_item:
+          type: string
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - menu_item
+    Address:
+      type: object
+      description: |-
+        A saved address, with its resolved delivery zone.
+
+        ``zone: null`` means the address falls outside the delivery area — the UI
+        must offer pickup rather than letting the customer fail at checkout.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        label:
+          $ref: '#/components/schemas/LabelEnum'
+        recipient_name:
+          type: string
+          maxLength: 150
+        phone:
+          type: string
+          pattern: ^\+?[1-9]\d{7,14}$
+          maxLength: 20
+        street:
+          type: string
+          maxLength: 255
+        area:
+          type: string
+          description: District or neighbourhood, e.g. Victoria Island. Used to resolve
+            the zone.
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 100
+        state:
+          type: string
+          maxLength: 100
+        landmark:
+          type: string
+          maxLength: 255
+        delivery_notes:
+          type: string
+        is_default:
+          type: boolean
+        zone:
+          allOf:
+          - $ref: '#/components/schemas/DeliveryZone'
+          readOnly: true
+        is_deliverable:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - city
+      - created_at
+      - id
+      - is_deliverable
+      - phone
+      - recipient_name
+      - state
+      - street
+      - zone
+    AddressRequest:
+      type: object
+      description: |-
+        A saved address, with its resolved delivery zone.
+
+        ``zone: null`` means the address falls outside the delivery area — the UI
+        must offer pickup rather than letting the customer fail at checkout.
+      properties:
+        label:
+          $ref: '#/components/schemas/LabelEnum'
+        recipient_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        phone:
+          type: string
+          minLength: 1
+          pattern: ^\+?[1-9]\d{7,14}$
+          maxLength: 20
+        street:
+          type: string
+          minLength: 1
+          maxLength: 255
+        area:
+          type: string
+          description: District or neighbourhood, e.g. Victoria Island. Used to resolve
+            the zone.
+          maxLength: 120
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        state:
+          type: string
+          minLength: 1
+          maxLength: 100
+        landmark:
+          type: string
+          maxLength: 255
+        delivery_notes:
+          type: string
+        is_default:
+          type: boolean
+      required:
+      - city
+      - phone
+      - recipient_name
+      - state
+      - street
+    AuthUserResponse:
+      type: object
+      description: '``{"user": …}`` — returned by login and email verification.'
+      properties:
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+      required:
+      - user
+    BlankEnum:
+      enum:
+      - ''
+    BookedReservation:
+      type: object
+      description: A reservation as it appears in the day's book, with local time
+        added.
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ReservationStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        area:
+          allOf:
+          - $ref: '#/components/schemas/TableArea'
+          readOnly: true
+        table_number:
+          type: string
+          readOnly: true
+        reserved_for:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+        duration_minutes:
+          type: integer
+          readOnly: true
+        party_size:
+          type: integer
+          readOnly: true
+        guest_name:
+          type: string
+          readOnly: true
+        guest_email:
+          type: string
+          format: email
+          readOnly: true
+        guest_phone:
+          type: string
+          readOnly: true
+        special_requests:
+          type: string
+          readOnly: true
+        can_cancel:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        time:
+          type: string
+          readOnly: true
+          description: Local HH:MM.
+      required:
+      - area
+      - can_cancel
+      - created_at
+      - duration_minutes
+      - ends_at
+      - guest_email
+      - guest_name
+      - guest_phone
+      - party_size
+      - reference
+      - reserved_for
+      - special_requests
+      - status
+      - status_display
+      - table_number
+      - time
+    Branch:
+      type: object
+      description: Everything the frontend needs to decide whether ordering is possible.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        phone:
+          type: string
+          readOnly: true
+        whatsapp:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        address_line:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+          nullable: true
+        timezone:
+          type: string
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        prices_include_vat:
+          type: boolean
+          readOnly: true
+          description: When on, menu prices are what the customer pays and VAT is
+            extracted from them for accounting. When off, VAT is added at checkout.
+            The published terms currently promise tax-inclusive pricing — see docs/PRD.md
+            §7 before changing this.
+        vat_rate_bps:
+          type: integer
+          readOnly: true
+          description: Basis points. 750 = 7.5%. Integer, so the rate can never drift.
+        service_charge_bps:
+          type: integer
+          readOnly: true
+          description: Basis points applied to the order subtotal. 0 = none.
+        is_accepting_orders:
+          type: boolean
+          readOnly: true
+          description: Manual kill switch. Turn off to stop new orders during a rush.
+        is_open_now:
+          type: boolean
+          readOnly: true
+        can_accept_orders:
+          type: boolean
+          readOnly: true
+        next_opens_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        min_order_value:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        free_delivery_threshold:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        default_prep_minutes:
+          type: integer
+          readOnly: true
+          description: Fallback preparation time when a menu item has none.
+      required:
+      - address_line
+      - can_accept_orders
+      - city
+      - currency
+      - default_prep_minutes
+      - email
+      - free_delivery_threshold
+      - id
+      - is_accepting_orders
+      - is_open_now
+      - latitude
+      - longitude
+      - min_order_value
+      - name
+      - next_opens_at
+      - phone
+      - prices_include_vat
+      - service_charge_bps
+      - slug
+      - state
+      - timezone
+      - vat_rate_bps
+      - whatsapp
+    CancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+          maxLength: 300
+    CancelReservationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ''
+          maxLength: 300
+    Cart:
+      type: object
+      description: Documents the cart response shape for the generated schema.
+      properties:
+        id:
+          type: string
+          format: uuid
+        fulfilment_type:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        totals:
+          $ref: '#/components/schemas/Totals'
+        promo_code:
+          type: string
+        vat_note:
+          type: string
+        delivery_note:
+          type: string
+        estimated_minutes:
+          type: integer
+          nullable: true
+        changes:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        unavailable:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        blockers:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        can_checkout:
+          type: boolean
+      required:
+      - blockers
+      - can_checkout
+      - changes
+      - delivery_note
+      - estimated_minutes
+      - fulfilment_type
+      - id
+      - items
+      - promo_code
+      - totals
+      - unavailable
+      - vat_note
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          maxLength: 50
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 120
+        emoji:
+          type: string
+          description: Shown beside the category name.
+          maxLength: 8
+        description:
+          type: string
+        display_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        item_count:
+          type: integer
+          readOnly: true
+      required:
+      - id
+      - item_count
+      - name
+      - slug
+    CateringPackage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        min_guests:
+          type: integer
+          readOnly: true
+        max_guests:
+          type: integer
+          readOnly: true
+        price_per_person:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        features:
+          readOnly: true
+        is_popular:
+          type: boolean
+          readOnly: true
+      required:
+      - description
+      - features
+      - id
+      - is_popular
+      - max_guests
+      - min_guests
+      - name
+      - price_per_person
+      - slug
+    ContactAcknowledgement:
+      type: object
+      properties:
+        reference:
+          type: string
+        detail:
+          type: string
+      required:
+      - detail
+      - reference
+    ContactReasonEnum:
+      enum:
+      - general
+      - reservation
+      - catering
+      - feedback
+      - partnership
+      type: string
+      description: |-
+        * `general` - general
+        * `reservation` - reservation
+        * `catering` - catering
+        * `feedback` - feedback
+        * `partnership` - partnership
+    ContactRequest:
+      type: object
+      description: Mirrors the fields the contact form already collects.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+        phone:
+          type: string
+          default: ''
+          maxLength: 20
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/ContactReasonEnum'
+          default: general
+        subject:
+          type: string
+          default: ''
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        website:
+          type: string
+          default: ''
+      required:
+      - email
+      - message
+      - name
+    CreateEnquiryRequest:
+      type: object
+      description: |-
+        Exactly the fields the existing form collects.
+
+        Note what is absent: any price. The indicative total is computed server-side
+        from the package and the guest count.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+        guest_count:
+          type: integer
+          maximum: 5000
+          minimum: 1
+        package:
+          type: string
+          default: ''
+          pattern: ^[-a-zA-Z0-9_]+$
+        event_type:
+          type: string
+          default: ''
+          maxLength: 120
+        event_date:
+          type: string
+          format: date
+          nullable: true
+        event_time:
+          type: string
+          format: time
+          nullable: true
+        venue:
+          type: string
+          default: ''
+          maxLength: 255
+        message:
+          type: string
+          default: ''
+          maxLength: 2000
+      required:
+      - email
+      - guest_count
+      - name
+      - phone
+    CreateReplyRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+      required:
+      - body
+    CreateReservationRequest:
+      type: object
+      description: Input for booking. Mirrors the fields the frontend wizard already
+        collects.
+      properties:
+        area:
+          type: string
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          format: time
+        party_size:
+          type: integer
+          maximum: 50
+          minimum: 1
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        guest_email:
+          type: string
+          format: email
+          minLength: 1
+        guest_phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+        special_requests:
+          type: string
+          default: ''
+          maxLength: 1000
+      required:
+      - area
+      - date
+      - guest_email
+      - guest_name
+      - guest_phone
+      - party_size
+      - time
+    CurrentUser:
+      type: object
+      description: |-
+        The payload behind ``GET /auth/session/``.
+
+        This is the concept the frontend does not have at all today: there is no
+        ``isAuthenticated`` anywhere in the codebase.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+          description: The UI collects a single name field, not first/last. Optional
+            at the model level because social sign-in may not supply one; the signup
+            serializer requires it.
+        phone:
+          type: string
+          readOnly: true
+          description: International format. Required before placing a delivery order.
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        groups:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        marketing_opt_in:
+          type: boolean
+          readOnly: true
+      required:
+      - email
+      - full_name
+      - groups
+      - id
+      - is_email_verified
+      - marketing_opt_in
+      - phone
+    DeliveryZone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        fee:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        min_order_value:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        estimated_minutes:
+          type: integer
+          readOnly: true
+          description: Typical door-to-door time. Feeds the order ETA.
+      required:
+      - estimated_minutes
+      - fee
+      - id
+      - min_order_value
+      - name
+      - slug
+    DetailResponse:
+      type: object
+      description: A human-readable acknowledgement, for endpoints with nothing else
+        to say.
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    DietaryTag:
+      type: object
+      properties:
+        slug:
+          type: string
+          maxLength: 50
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 60
+        icon:
+          type: string
+          maxLength: 8
+        is_allergen:
+          type: boolean
+          description: Allergen warnings are shown prominently rather than as a filter
+            chip.
+      required:
+      - name
+      - slug
+    EmailOnlyRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    Enquiry:
+      type: object
+      description: What the customer gets back — never the internal notes or the real
+        quote.
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/EnquiryStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        guest_count:
+          type: integer
+          readOnly: true
+        package_name:
+          type: string
+          readOnly: true
+          default: ''
+        indicative_total:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        event_type:
+          type: string
+          readOnly: true
+        event_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        event_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        venue:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        respond_by:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - event_date
+      - event_time
+      - event_type
+      - guest_count
+      - indicative_total
+      - message
+      - name
+      - package_name
+      - phone
+      - reference
+      - respond_by
+      - status
+      - status_display
+      - venue
+    EnquiryCreated:
+      type: object
+      description: Adds the wording that replaces the frontend's unbacked promise.
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/EnquiryStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        guest_count:
+          type: integer
+          readOnly: true
+        package_name:
+          type: string
+          readOnly: true
+          default: ''
+        indicative_total:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        event_type:
+          type: string
+          readOnly: true
+        event_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        event_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        venue:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        respond_by:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        indicative_note:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - event_date
+      - event_time
+      - event_type
+      - guest_count
+      - indicative_note
+      - indicative_total
+      - message
+      - name
+      - package_name
+      - phone
+      - reference
+      - respond_by
+      - status
+      - status_display
+      - venue
+    EnquiryStatusEnum:
+      enum:
+      - new
+      - contacted
+      - quoted
+      - won
+      - lost
+      type: string
+      description: |-
+        * `new` - New
+        * `contacted` - Contacted
+        * `quoted` - Quoted
+        * `won` - Won
+        * `lost` - Lost
+    Faq:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        question:
+          type: string
+          readOnly: true
+        answer:
+          type: string
+          readOnly: true
+        category:
+          type: string
+          readOnly: true
+        helpful_count:
+          type: integer
+          readOnly: true
+      required:
+      - answer
+      - category
+      - helpful_count
+      - id
+      - question
+    FulfilmentTypeEnum:
+      enum:
+      - delivery
+      - pickup
+      type: string
+      description: |-
+        * `delivery` - delivery
+        * `pickup` - pickup
+    HolidayOverride:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        is_closed:
+          type: boolean
+        opens_at:
+          type: string
+          format: time
+          nullable: true
+        closes_at:
+          type: string
+          format: time
+          nullable: true
+        note:
+          type: string
+          maxLength: 200
+      required:
+      - date
+    InitialiseProviderEnum:
+      enum:
+      - paystack
+      - flutterwave
+      type: string
+      description: |-
+        * `paystack` - paystack
+        * `flutterwave` - flutterwave
+    InitialiseRequest:
+      type: object
+      properties:
+        order:
+          type: string
+          minLength: 1
+          description: Order reference, e.g. KYS-7Q2XF9.
+          maxLength: 20
+        provider:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/InitialiseProviderEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        save_card:
+          type: boolean
+          default: false
+          description: The customer's consent to keep this card for next time. Without
+            it no provider token is stored, even though the provider returns one.
+      required:
+      - order
+    ItemAvailability:
+      type: object
+      properties:
+        slug:
+          type: string
+        is_available_now:
+          type: boolean
+      required:
+      - is_available_now
+      - slug
+    KDSQueue:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/KDSTicket'
+      required:
+      - orders
+    KDSSummary:
+      type: object
+      properties:
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        todays_revenue:
+          type: object
+          additionalProperties: {}
+        open_tickets:
+          type: integer
+      required:
+      - counts
+      - open_tickets
+      - todays_revenue
+    KDSTicket:
+      type: object
+      description: One kitchen ticket.
+      properties:
+        reference:
+          type: string
+        status:
+          type: string
+        placed_at:
+          type: string
+          format: date-time
+        elapsed_seconds:
+          type: integer
+        is_late:
+          type: boolean
+        fulfilment_type:
+          type: string
+        zone:
+          type: string
+        payment_status:
+          type: string
+        payment_method:
+          type: string
+        requires_cash_collection:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        customer_note:
+          type: string
+        customer:
+          type: object
+          additionalProperties: {}
+        grand_total:
+          $ref: '#/components/schemas/Money'
+      required:
+      - customer
+      - customer_note
+      - elapsed_seconds
+      - fulfilment_type
+      - grand_total
+      - is_late
+      - items
+      - payment_method
+      - payment_status
+      - placed_at
+      - reference
+      - requires_cash_collection
+      - status
+      - zone
+    LabelEnum:
+      enum:
+      - home
+      - work
+      - other
+      type: string
+      description: |-
+        * `home` - Home
+        * `work` - Work
+        * `other` - Other
+    LegalPage:
+      type: object
+      description: A policy page as customers read it.
+      properties:
+        slug:
+          type: string
+          readOnly: true
+          description: terms, privacy, cookies, refunds, accessibility…
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+          description: Markdown.
+        version:
+          type: integer
+          readOnly: true
+          default: 1
+        effective_from:
+          type: string
+          format: date
+          readOnly: true
+          description: The date this wording takes effect.
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - body
+      - effective_from
+      - slug
+      - title
+      - updated_at
+      - version
+    LegalPageSummary:
+      type: object
+      description: 'The index: enough to build a footer, without shipping five documents.'
+      properties:
+        slug:
+          type: string
+          readOnly: true
+          description: terms, privacy, cookies, refunds, accessibility…
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+          default: 1
+        effective_from:
+          type: string
+          format: date
+          readOnly: true
+          description: The date this wording takes effect.
+      required:
+      - effective_from
+      - slug
+      - title
+      - version
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    MenuItemDetail:
+      type: object
+      description: Full shape, including everything needed to configure a line.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          maxLength: 160
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+        price:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        compare_at_price:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        dietary_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/DietaryTag'
+          readOnly: true
+        average_rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,1})?$
+          nullable: true
+        review_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        prep_time_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Drives the order ETA. Blank falls back to the branch default.
+        is_featured:
+          type: boolean
+          description: Surfaces in What's Hot.
+        is_available:
+          type: boolean
+          readOnly: true
+        category:
+          allOf:
+          - $ref: '#/components/schemas/Category'
+          readOnly: true
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItemImage'
+          readOnly: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+          readOnly: true
+        modifier_groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierGroup'
+          readOnly: true
+        calories:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        allergen_note:
+          type: string
+          maxLength: 255
+        tax_class:
+          $ref: '#/components/schemas/TaxClassEnum'
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the item first went live. Powers 'sort by newest'.
+      required:
+      - category
+      - compare_at_price
+      - dietary_tags
+      - id
+      - image_url
+      - images
+      - is_available
+      - modifier_groups
+      - name
+      - price
+      - slug
+      - variants
+    MenuItemImage:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        alt_text:
+          type: string
+          maxLength: 200
+        is_primary:
+          type: boolean
+      required:
+      - url
+    MenuItemList:
+      type: object
+      description: Compact shape for grids and carousels.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          maxLength: 160
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+        price:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        compare_at_price:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        dietary_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/DietaryTag'
+          readOnly: true
+        average_rating:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,1}(?:\.\d{0,1})?$
+          nullable: true
+        review_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        prep_time_minutes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Drives the order ETA. Blank falls back to the branch default.
+        is_featured:
+          type: boolean
+          description: Surfaces in What's Hot.
+        is_available:
+          type: boolean
+          readOnly: true
+        category:
+          type: string
+          readOnly: true
+      required:
+      - category
+      - compare_at_price
+      - dietary_tags
+      - id
+      - image_url
+      - is_available
+      - name
+      - price
+      - slug
+    Modifier:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        price_delta:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        is_default:
+          type: boolean
+        is_available:
+          type: boolean
+      required:
+      - id
+      - name
+      - price_delta
+    ModifierGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 255
+        min_select:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: 0 makes the group optional.
+        max_select:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: 1 is a radio, >1 checkboxes.
+        is_required:
+          type: boolean
+          readOnly: true
+        modifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Modifier'
+          readOnly: true
+      required:
+      - id
+      - is_required
+      - modifiers
+      - name
+    Money:
+      type: object
+      description: |-
+        Read-only representation of a money amount.
+
+        Always emits ``{amount, currency, display}``. ``amount`` is integer kobo;
+        ``display`` is the formatted string clients render. Clients never format
+        currency themselves and never do arithmetic on ``amount``.
+      properties:
+        amount:
+          type: integer
+          readOnly: true
+          description: Integer kobo. ₦1.00 = 100.
+        currency:
+          type: string
+          readOnly: true
+          default: NGN
+        display:
+          type: string
+          readOnly: true
+          description: Formatted, e.g. ₦12,500.00
+      required:
+      - amount
+      - currency
+      - display
+    OpenTickets:
+      type: object
+      description: Response envelope for ``GET /support/tickets/open/``.
+      properties:
+        count:
+          type: integer
+        tickets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ticket'
+      required:
+      - count
+      - tickets
+    OpeningHours:
+      type: object
+      properties:
+        weekday:
+          allOf:
+          - $ref: '#/components/schemas/WeekdayEnum'
+          minimum: 0
+          maximum: 9223372036854775807
+        weekday_display:
+          type: string
+          readOnly: true
+        service:
+          $ref: '#/components/schemas/ServiceEnum'
+        opens_at:
+          type: string
+          format: time
+        closes_at:
+          type: string
+          format: time
+        is_closed:
+          type: boolean
+          description: Closed all day for this service.
+      required:
+      - closes_at
+      - opens_at
+      - weekday
+      - weekday_display
+    OpeningHoursResponse:
+      type: object
+      description: |-
+        Response envelope for ``GET /core/opening-hours/``.
+
+        Declared explicitly so the generated OpenAPI schema — and therefore the
+        frontend's generated types — describe this endpoint accurately.
+      properties:
+        is_open_now:
+          type: boolean
+        timezone:
+          type: string
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpeningHours'
+        overrides:
+          type: array
+          items:
+            $ref: '#/components/schemas/HolidayOverride'
+      required:
+      - hours
+      - is_open_now
+      - overrides
+      - timezone
+    OrderDetail:
+      type: object
+      description: Response shape for order detail and the polling endpoint.
+      properties:
+        reference:
+          type: string
+        status:
+          type: string
+        status_display:
+          type: string
+        payment_status:
+          type: string
+        payment_method:
+          type: string
+        fulfilment_type:
+          type: string
+        placed_at:
+          type: string
+          format: date-time
+          nullable: true
+        estimated_ready_at:
+          type: string
+          format: date-time
+          nullable: true
+        estimated_delivery_at:
+          type: string
+          format: date-time
+          nullable: true
+        timeline:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        delivery_address:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        totals:
+          $ref: '#/components/schemas/Totals'
+        promo_code:
+          type: string
+        customer_note:
+          type: string
+        can_cancel:
+          type: boolean
+        rider:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        guest_token:
+          type: string
+      required:
+      - can_cancel
+      - customer_note
+      - delivery_address
+      - estimated_delivery_at
+      - estimated_ready_at
+      - fulfilment_type
+      - items
+      - payment_method
+      - payment_status
+      - placed_at
+      - promo_code
+      - reference
+      - rider
+      - status
+      - status_display
+      - timeline
+      - totals
+    OrderList:
+      type: object
+      description: Compact shape for order history.
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OrderStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        payment_status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        fulfilment_type:
+          type: string
+          readOnly: true
+        placed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        item_count:
+          type: integer
+          readOnly: true
+      required:
+      - fulfilment_type
+      - item_count
+      - payment_status
+      - placed_at
+      - reference
+      - status
+      - status_display
+      - total
+    OrderStatusEnum:
+      enum:
+      - pending_payment
+      - paid
+      - confirmed
+      - preparing
+      - ready
+      - out_for_delivery
+      - delivered
+      - rejected
+      - cancelled
+      - expired
+      - failed_delivery
+      - refunded
+      - failed
+      type: string
+      description: |-
+        * `pending_payment` - Awaiting payment
+        * `paid` - Paid
+        * `confirmed` - Confirmed by the kitchen
+        * `preparing` - Preparing
+        * `ready` - Ready
+        * `out_for_delivery` - Out for delivery
+        * `delivered` - Delivered
+        * `rejected` - Rejected
+        * `cancelled` - Cancelled
+        * `expired` - Expired
+        * `failed_delivery` - Delivery failed
+        * `refunded` - Refunded
+        * `failed` - Failed
+    OverdueEnquiries:
+      type: object
+      description: Response envelope for ``GET /catering/enquiries/overdue/``.
+      properties:
+        count:
+          type: integer
+        enquiries:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverdueEnquiry'
+      required:
+      - count
+      - enquiries
+    OverdueEnquiry:
+      type: object
+      description: An enquiry past its SLA, with how far past it is.
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/EnquiryStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        guest_count:
+          type: integer
+          readOnly: true
+        package_name:
+          type: string
+          readOnly: true
+          default: ''
+        indicative_total:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        event_type:
+          type: string
+          readOnly: true
+        event_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        event_time:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        venue:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        respond_by:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        hours_overdue:
+          type: number
+          format: double
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - event_date
+      - event_time
+      - event_type
+      - guest_count
+      - hours_overdue
+      - indicative_total
+      - message
+      - name
+      - package_name
+      - phone
+      - reference
+      - respond_by
+      - status
+      - status_display
+      - venue
+    PaginatedMenuItemListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItemList'
+    PaginatedOrderListList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderList'
+    PasswordChangeRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        new_password:
+          type: string
+          writeOnly: true
+          minLength: 10
+      required:
+      - current_password
+      - new_password
+    PasswordResetConfirmRequest:
+      type: object
+      properties:
+        uid:
+          type: string
+          minLength: 1
+        token:
+          type: string
+          minLength: 1
+        new_password:
+          type: string
+          writeOnly: true
+          minLength: 10
+      required:
+      - new_password
+      - token
+      - uid
+    PatchedAddressRequest:
+      type: object
+      description: |-
+        A saved address, with its resolved delivery zone.
+
+        ``zone: null`` means the address falls outside the delivery area — the UI
+        must offer pickup rather than letting the customer fail at checkout.
+      properties:
+        label:
+          $ref: '#/components/schemas/LabelEnum'
+        recipient_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        phone:
+          type: string
+          minLength: 1
+          pattern: ^\+?[1-9]\d{7,14}$
+          maxLength: 20
+        street:
+          type: string
+          minLength: 1
+          maxLength: 255
+        area:
+          type: string
+          description: District or neighbourhood, e.g. Victoria Island. Used to resolve
+            the zone.
+          maxLength: 120
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        state:
+          type: string
+          minLength: 1
+          maxLength: 100
+        landmark:
+          type: string
+          maxLength: 255
+        delivery_notes:
+          type: string
+        is_default:
+          type: boolean
+    PatchedFulfilmentRequest:
+      type: object
+      properties:
+        fulfilment_type:
+          $ref: '#/components/schemas/FulfilmentTypeEnum'
+        delivery_address:
+          type: string
+          format: uuid
+          nullable: true
+        tip:
+          type: integer
+          minimum: 0
+          description: Gratuity in kobo.
+    PatchedProfileRequest:
+      type: object
+      description: |-
+        Read/write profile.
+
+        ``email`` is deliberately read-only. Changing it must re-verify the new
+        address and notify the old one (AS-5); until that flow exists in Phase 2,
+        the safe behaviour is to refuse the change rather than allow an unverified one.
+      properties:
+        full_name:
+          type: string
+          description: The UI collects a single name field, not first/last. Optional
+            at the model level because social sign-in may not supply one; the signup
+            serializer requires it.
+          maxLength: 150
+        phone:
+          type: string
+          description: International format. Required before placing a delivery order.
+          pattern: ^\+?[1-9]\d{7,14}$
+          maxLength: 20
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        marketing_opt_in:
+          type: boolean
+    PatchedRescheduleRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          format: time
+        party_size:
+          type: integer
+          maximum: 50
+          minimum: 1
+    PatchedUpdateItemRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          maximum: 99
+          minimum: 1
+        special_instructions:
+          type: string
+          maxLength: 500
+    PaymentInitialised:
+      type: object
+      description: What the client needs to send the customer to hosted checkout.
+      properties:
+        reference:
+          type: string
+        provider:
+          type: string
+        authorization_url:
+          type: string
+          format: uri
+        amount:
+          $ref: '#/components/schemas/Money'
+        order:
+          type: string
+      required:
+      - amount
+      - authorization_url
+      - order
+      - provider
+      - reference
+    PaymentMethodEnum:
+      enum:
+      - card
+      - transfer
+      - cash
+      type: string
+      description: |-
+        * `card` - card
+        * `transfer` - transfer
+        * `cash` - cash
+    PaymentStatusEnum:
+      enum:
+      - unpaid
+      - pending
+      - paid
+      - partially_refunded
+      - refunded
+      - failed
+      type: string
+      description: |-
+        * `unpaid` - Unpaid
+        * `pending` - Pending
+        * `paid` - Paid
+        * `partially_refunded` - Partially refunded
+        * `refunded` - Refunded
+        * `failed` - Failed
+    PaymentVerification:
+      type: object
+      properties:
+        status:
+          type: string
+        order_reference:
+          type: string
+        order_status:
+          type: string
+        payment_status:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+      required:
+      - amount
+      - order_reference
+      - order_status
+      - payment_status
+      - status
+    PlaceOrderRequest:
+      type: object
+      description: |-
+        Input for placing an order.
+
+        Contains no price field of any kind. ``expected_total`` is a *guard*, not an
+        instruction: if it disagrees with the server's figure the order is refused
+        rather than silently charged at a different amount.
+      properties:
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        payment_provider:
+          type: string
+          default: ''
+        customer_note:
+          type: string
+          default: ''
+          maxLength: 500
+        expected_total:
+          type: integer
+          nullable: true
+          description: The grand total the customer was shown, in kobo.
+        guest:
+          type: object
+          additionalProperties: {}
+      required:
+      - payment_method
+    Profile:
+      type: object
+      description: |-
+        Read/write profile.
+
+        ``email`` is deliberately read-only. Changing it must re-verify the new
+        address and notify the old one (AS-5); until that flow exists in Phase 2,
+        the safe behaviour is to refuse the change rather than allow an unverified one.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        full_name:
+          type: string
+          description: The UI collects a single name field, not first/last. Optional
+            at the model level because social sign-in may not supply one; the signup
+            serializer requires it.
+          maxLength: 150
+        phone:
+          type: string
+          description: International format. Required before placing a delivery order.
+          pattern: ^\+?[1-9]\d{7,14}$
+          maxLength: 20
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        date_of_birth:
+          type: string
+          format: date
+          nullable: true
+        marketing_opt_in:
+          type: boolean
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date_joined
+      - email
+      - id
+      - is_email_verified
+    PromoRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+      required:
+      - code
+    RefundRequest:
+      type: object
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Amount in kobo. Omit to refund in full.
+        reason:
+          type: string
+          default: ''
+          maxLength: 500
+    RefundResult:
+      type: object
+      properties:
+        order:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+        status:
+          type: string
+        order_status:
+          type: string
+        payment_status:
+          type: string
+      required:
+      - amount
+      - order
+      - order_status
+      - payment_status
+      - status
+    RegisterRequest:
+      type: object
+      description: Mirrors the fields the frontend's signup form already collects.
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 10
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+        accept_terms:
+          type: boolean
+        marketing_opt_in:
+          type: boolean
+          default: false
+      required:
+      - accept_terms
+      - email
+      - full_name
+      - password
+      - phone
+    RegisterResponse:
+      type: object
+      description: Registration does not sign the customer in; verification is mandatory.
+      properties:
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+        email_verification_required:
+          type: boolean
+        detail:
+          type: string
+      required:
+      - detail
+      - email_verification_required
+      - user
+    ReorderChange:
+      type: object
+      description: One difference between the past order and today's menu.
+      properties:
+        item:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        detail:
+          type: string
+        old:
+          type: object
+          additionalProperties: {}
+          description: '{amount, display} — price changes only.'
+        new:
+          type: object
+          additionalProperties: {}
+          description: '{amount, display} — price changes only.'
+      required:
+      - item
+      - name
+      - type
+    ReorderRequest:
+      type: object
+      description: |-
+        Input for a reorder.
+
+        ``replace`` is opt-in, and the endpoint answers 409 without it when the
+        basket is not empty: a reorder that quietly discarded what the customer had
+        already chosen would be destroying their work to save them a tap.
+      properties:
+        replace:
+          type: boolean
+          default: false
+    ReorderResponse:
+      type: object
+      description: Response envelope for ``POST /orders/{reference}/reorder/``.
+      properties:
+        cart:
+          $ref: '#/components/schemas/Cart'
+        added:
+          type: integer
+        replaced_lines:
+          type: integer
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReorderChange'
+        unavailable:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReorderUnavailable'
+        message:
+          type: string
+      required:
+      - added
+      - cart
+      - changes
+      - replaced_lines
+      - unavailable
+    ReorderUnavailable:
+      type: object
+      properties:
+        item:
+          type: string
+        name:
+          type: string
+        reason:
+          type: string
+      required:
+      - item
+      - name
+      - reason
+    Reservation:
+      type: object
+      description: A booking as the customer sees it.
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ReservationStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        area:
+          allOf:
+          - $ref: '#/components/schemas/TableArea'
+          readOnly: true
+        table_number:
+          type: string
+          readOnly: true
+        reserved_for:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+        duration_minutes:
+          type: integer
+          readOnly: true
+        party_size:
+          type: integer
+          readOnly: true
+        guest_name:
+          type: string
+          readOnly: true
+        guest_email:
+          type: string
+          format: email
+          readOnly: true
+        guest_phone:
+          type: string
+          readOnly: true
+        special_requests:
+          type: string
+          readOnly: true
+        can_cancel:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - area
+      - can_cancel
+      - created_at
+      - duration_minutes
+      - ends_at
+      - guest_email
+      - guest_name
+      - guest_phone
+      - party_size
+      - reference
+      - reserved_for
+      - special_requests
+      - status
+      - status_display
+      - table_number
+    ReservationAvailability:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        party_size:
+          type: integer
+        area:
+          type: string
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservationSlot'
+      required:
+      - area
+      - date
+      - party_size
+      - slots
+    ReservationSlot:
+      type: object
+      properties:
+        time:
+          type: string
+        available:
+          type: boolean
+        tables_left:
+          type: integer
+        reason:
+          type: string
+      required:
+      - available
+      - tables_left
+      - time
+    ReservationStatusEnum:
+      enum:
+      - pending
+      - confirmed
+      - seated
+      - completed
+      - cancelled
+      - no_show
+      type: string
+      description: |-
+        * `pending` - Pending confirmation
+        * `confirmed` - Confirmed
+        * `seated` - Seated
+        * `completed` - Completed
+        * `cancelled` - Cancelled
+        * `no_show` - No show
+    RiderAssignment:
+      type: object
+      properties:
+        order:
+          type: string
+        rider:
+          type: object
+          additionalProperties: {}
+        assigned_at:
+          type: string
+          format: date-time
+      required:
+      - assigned_at
+      - order
+      - rider
+    SavedPaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider:
+          allOf:
+          - $ref: '#/components/schemas/SavedPaymentMethodProviderEnum'
+          readOnly: true
+        card_label:
+          type: string
+          readOnly: true
+        card_brand:
+          type: string
+          readOnly: true
+        card_last4:
+          type: string
+          readOnly: true
+        card_exp_month:
+          type: string
+          readOnly: true
+        card_exp_year:
+          type: string
+          readOnly: true
+        is_default:
+          type: boolean
+          readOnly: true
+        is_expired:
+          type: boolean
+          readOnly: true
+        last_used_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - card_brand
+      - card_exp_month
+      - card_exp_year
+      - card_label
+      - card_last4
+      - created_at
+      - id
+      - is_default
+      - is_expired
+      - last_used_at
+      - provider
+    SavedPaymentMethodProviderEnum:
+      enum:
+      - paystack
+      - flutterwave
+      - bank_transfer
+      - cash
+      type: string
+      description: |-
+        * `paystack` - Paystack
+        * `flutterwave` - Flutterwave
+        * `bank_transfer` - Bank transfer
+        * `cash` - Cash
+    ServiceEnum:
+      enum:
+      - all_day
+      - breakfast
+      - lunch
+      - dinner
+      type: string
+      description: |-
+        * `all_day` - All day
+        * `breakfast` - Breakfast
+        * `lunch` - Lunch
+        * `dinner` - Dinner
+    Session:
+      type: object
+      description: 'Envelope so an anonymous visitor gets ``{"user": null}`` rather
+        than a 401.'
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/CurrentUser'
+          nullable: true
+      required:
+      - user
+    SiteSettings:
+      type: object
+      properties:
+        site_name:
+          type: string
+          maxLength: 120
+        tagline:
+          type: string
+          maxLength: 200
+        meta_description:
+          type: string
+        instagram_url:
+          type: string
+          format: uri
+          maxLength: 200
+        facebook_url:
+          type: string
+          format: uri
+          maxLength: 200
+        twitter_url:
+          type: string
+          format: uri
+          maxLength: 200
+        tiktok_url:
+          type: string
+          format: uri
+          maxLength: 200
+        support_email:
+          type: string
+          format: email
+          maxLength: 254
+        orders_email:
+          type: string
+          format: email
+          maxLength: 254
+        stat_customers:
+          type: string
+          maxLength: 20
+        stat_dishes:
+          type: string
+          maxLength: 20
+        stat_years:
+          type: string
+          maxLength: 20
+        stat_rating:
+          type: string
+          maxLength: 20
+    SyncWishlistRequest:
+      type: object
+      description: Folds a browser's saved list into the account on first sign-in.
+      properties:
+        menu_items:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            pattern: ^[-a-zA-Z0-9_]+$
+          maxItems: 200
+      required:
+      - menu_items
+    TableArea:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        features:
+          readOnly: true
+          description: e.g. ["Air conditioned", "Ambient music"]
+        is_premium:
+          type: boolean
+          readOnly: true
+        surcharge:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+      required:
+      - description
+      - features
+      - id
+      - is_premium
+      - name
+      - slug
+      - surcharge
+    TaxClassEnum:
+      enum:
+      - standard
+      - zero_rated
+      - exempt
+      type: string
+      description: |-
+        * `standard` - Standard rated
+        * `zero_rated` - Zero rated
+        * `exempt` - Exempt
+    Ticket:
+      type: object
+      properties:
+        reference:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/TicketReasonEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TicketStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        requester_name:
+          type: string
+          readOnly: true
+        requester_email:
+          type: string
+          format: email
+          readOnly: true
+        replies:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          description: Internal notes are never exposed.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - reason
+      - reference
+      - replies
+      - requester_email
+      - requester_name
+      - status
+      - status_display
+      - subject
+    TicketReasonEnum:
+      enum:
+      - general
+      - reservation
+      - catering
+      - feedback
+      - partnership
+      type: string
+      description: |-
+        * `general` - General
+        * `reservation` - Reservation
+        * `catering` - Catering
+        * `feedback` - Feedback
+        * `partnership` - Partnership
+    TicketStatusEnum:
+      enum:
+      - open
+      - pending
+      - resolved
+      - closed
+      type: string
+      description: |-
+        * `open` - Open
+        * `pending` - Awaiting customer
+        * `resolved` - Resolved
+        * `closed` - Closed
+    TodaysBook:
+      type: object
+      description: |-
+        Response envelope for ``GET /reservations/book/``.
+
+        Declared explicitly so the generated OpenAPI schema — and the frontend types
+        generated from it — describe this endpoint instead of omitting it.
+      properties:
+        date:
+          type: string
+          format: date
+        covers:
+          type: integer
+        reservations:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookedReservation'
+      required:
+      - covers
+      - date
+      - reservations
+    Totals:
+      type: object
+      description: |-
+        The money breakdown shared by carts and orders.
+
+        Declared so the generated schema types every line as money instead of an
+        untyped dictionary — the frontend renders each ``display`` and has nothing
+        to add up.
+      properties:
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        discount:
+          $ref: '#/components/schemas/Money'
+        delivery_fee:
+          $ref: '#/components/schemas/Money'
+        service_charge:
+          $ref: '#/components/schemas/Money'
+        vat:
+          $ref: '#/components/schemas/Money'
+        tip:
+          $ref: '#/components/schemas/Money'
+        grand_total:
+          $ref: '#/components/schemas/Money'
+      required:
+      - delivery_fee
+      - discount
+      - grand_total
+      - service_charge
+      - subtotal
+      - tip
+      - vat
+    TypeEnum:
+      enum:
+      - price_increased
+      - price_reduced
+      - options_removed
+      type: string
+      description: |-
+        * `price_increased` - price_increased
+        * `price_reduced` - price_reduced
+        * `options_removed` - options_removed
+    Variant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        price_delta:
+          type: object
+          nullable: true
+          required:
+          - amount
+          - currency
+          - display
+          properties:
+            amount:
+              type: integer
+              description: Integer kobo. ₦1.00 = 100. Render `display`; never do arithmetic
+                on this.
+            currency:
+              type: string
+              example: NGN
+            display:
+              type: string
+              example: ₦12,500.00
+          readOnly: true
+        is_default:
+          type: boolean
+      required:
+      - id
+      - name
+      - price_delta
+    VerifyEmailRequest:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+      required:
+      - key
+    WebhookAck:
+      type: object
+      description: Providers only need an acknowledgement.
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    WeekdayEnum:
+      enum:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      type: integer
+      description: |-
+        * `0` - Monday
+        * `1` - Tuesday
+        * `2` - Wednesday
+        * `3` - Thursday
+        * `4` - Friday
+        * `5` - Saturday
+        * `6` - Sunday
+    Wishlist:
+      type: object
+      properties:
+        count:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItemList'
+      required:
+      - count
+      - items
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: kuyash_session

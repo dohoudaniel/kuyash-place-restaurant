@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.carts.serializers import money
+from apps.common.serializers import MoneySerializer, TotalsSerializer
 from apps.orders.models import Order, PaymentMethod
 from apps.orders.services.state import timeline
 
@@ -57,6 +59,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    @extend_schema_field(MoneySerializer)
     def get_total(self, obj: Order) -> dict[str, Any]:
         return money(obj.grand_total, obj.currency)
 
@@ -193,7 +196,7 @@ class OrderDetailResponseSerializer(serializers.Serializer):
     timeline = serializers.ListField(child=serializers.DictField())
     items = serializers.ListField(child=serializers.DictField())
     delivery_address = serializers.DictField(allow_null=True)
-    totals = serializers.DictField()
+    totals = TotalsSerializer()
     promo_code = serializers.CharField(allow_blank=True)
     customer_note = serializers.CharField(allow_blank=True)
     can_cancel = serializers.BooleanField()
@@ -220,7 +223,7 @@ class KDSTicketSerializer(serializers.Serializer):
     items = serializers.ListField(child=serializers.DictField())
     customer_note = serializers.CharField(allow_blank=True)
     customer = serializers.DictField()
-    grand_total = serializers.DictField()
+    grand_total = MoneySerializer()
 
     class Meta:
         ref_name = "KDSTicket"

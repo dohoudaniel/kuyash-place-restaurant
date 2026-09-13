@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Mail, ArrowLeft, Send, CheckCircle } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
+import { useAuthStore } from "@/lib/store/authStore";
 
 interface ForgotPasswordFormProps {
   onSuccess: () => void;
@@ -9,19 +11,31 @@ interface ForgotPasswordFormProps {
 }
 
 export default function ForgotPasswordForm({ onSuccess, onBackToLogin }: ForgotPasswordFormProps) {
+  const requestPasswordReset = useAuthStore((state) => state.requestPasswordReset);
+
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // The backend answers the same way whether or not the account exists, so
+      // this screen cannot be used to find out who has an account.
+      await requestPasswordReset(email.trim());
+      setEmailSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.fieldErrors.email ?? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setEmailSent(true);
-    }, 1000);
+    await send();
   };
 
   if (emailSent) {
@@ -39,11 +53,18 @@ export default function ForgotPasswordForm({ onSuccess, onBackToLogin }: ForgotP
         </h3>
 
         <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-          We've sent a password reset link to <strong>{email}</strong>
+          If an account exists for <strong>{email}</strong>, we&apos;ve sent it a password reset link.
         </p>
+
+        {error && (
+          <p role="alert" className="text-sm font-semibold mb-4" style={{ color: "var(--red)" }}>
+            {error}
+          </p>
+        )}
 
         <div className="space-y-3">
           <button
+            type="button"
             onClick={onSuccess}
             className="w-full px-6 py-3 rounded-lg font-bold transition-all hover:opacity-90"
             style={{ background: "var(--red)", color: "white" }}
@@ -52,17 +73,19 @@ export default function ForgotPasswordForm({ onSuccess, onBackToLogin }: ForgotP
           </button>
 
           <button
-            onClick={() => setEmailSent(false)}
-            className="w-full px-6 py-3 rounded-lg font-bold transition-all hover:opacity-90"
+            type="button"
+            onClick={send}
+            disabled={isLoading}
+            className="w-full px-6 py-3 rounded-lg font-bold transition-all hover:opacity-90 disabled:opacity-50"
             style={{ background: "var(--gray-light)", color: "var(--black)" }}
           >
-            Resend Email
+            {isLoading ? "Sending..." : "Resend Email"}
           </button>
         </div>
 
         <div className="mt-6 p-4 rounded-lg" style={{ background: "var(--gray-light)" }}>
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-            Didn't receive the email? Check your spam folder or try again.
+            Didn&apos;t receive the email? Check your spam folder or try again.
           </p>
         </div>
       </div>
@@ -72,6 +95,7 @@ export default function ForgotPasswordForm({ onSuccess, onBackToLogin }: ForgotP
   return (
     <div>
       <button
+        type="button"
         onClick={onBackToLogin}
         className="flex items-center gap-2 mb-6 font-bold text-sm transition-all hover:opacity-80"
         style={{ color: "var(--red)" }}
@@ -81,19 +105,21 @@ export default function ForgotPasswordForm({ onSuccess, onBackToLogin }: ForgotP
       </button>
 
       <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-        Enter your email address and we'll send you a link to reset your password
+        Enter your email address and we&apos;ll send you a link to reset your password
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Email */}
         <div>
-          <label className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
+          <label htmlFor="forgot-email" className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
             Email Address
           </label>
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: "var(--text-muted)" }} />
             <input
+              id="forgot-email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
@@ -103,6 +129,12 @@ export default function ForgotPasswordForm({ onSuccess, onBackToLogin }: ForgotP
             />
           </div>
         </div>
+
+        {error && (
+          <p role="alert" className="text-sm font-semibold" style={{ color: "var(--red)" }}>
+            {error}
+          </p>
+        )}
 
         {/* Submit */}
         <button

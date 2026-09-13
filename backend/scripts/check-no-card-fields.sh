@@ -26,13 +26,10 @@ ALLOWED_TOKENS='card_last4|card_brand|card_exp_month|card_exp_year|cardholder'
 
 # Pre-existing frontend debt, scheduled for DELETION in Phase 1
 # (docs/FRONTEND_INTEGRATION.md §2). This list may only shrink.
-KNOWN_FRONTEND_DEBT=(
-  "frontend/components/features/checkout/PaymentStep.tsx"
-  "frontend/components/features/checkout/PaymentStepCompact.tsx"
-  "frontend/components/features/checkout/ReviewStep.tsx"
-  "frontend/components/features/checkout/ReviewStepCompact.tsx"
-  "frontend/components/features/account/PaymentMethodsSection.tsx"
-)
+# Emptied when the card fields were deleted from the frontend. Keep it empty:
+# a new entry here means card data is being collected again, which is a
+# PCI-DSS scope change, not a lint exception.
+KNOWN_FRONTEND_DEBT=()
 
 hits="$(grep -rnIE "$PATTERN" frontend \
   --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' \

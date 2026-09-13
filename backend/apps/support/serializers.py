@@ -76,3 +76,10 @@ class FaqSerializer(serializers.ModelSerializer):
         model = FaqEntry
         fields = ["id", "question", "answer", "category", "helpful_count"]
         read_only_fields = fields
+
+
+class OpenTicketsSerializer(serializers.Serializer):
+    """Response envelope for ``GET /support/tickets/open/``."""
+
+    count = serializers.IntegerField()
+    tickets = TicketSerializer(many=True)

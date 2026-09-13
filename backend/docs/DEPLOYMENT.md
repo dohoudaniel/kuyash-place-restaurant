@@ -144,6 +144,9 @@ SUPABASE_BUCKET=kuyash-media
 SUPABASE_REGION=eu-west-1
 SUPABASE_S3_ACCESS_KEY=xxx
 SUPABASE_S3_SECRET_KEY=xxx
+# Optional — derived from the endpoint and bucket when blank:
+# https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>
+SUPABASE_PUBLIC_URL=
 
 # ── Email ───────────────────────────────────────────────────────────────
 EMAIL_BACKEND=anymail.backends.resend.EmailBackend
@@ -175,6 +178,7 @@ NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_live_xxx
 STORAGES = {"default": {"BACKEND": "storages.backends.s3.S3Storage"}}
 AWS_S3_ENDPOINT_URL     = env("SUPABASE_S3_ENDPOINT")
 AWS_STORAGE_BUCKET_NAME = env("SUPABASE_BUCKET")
+AWS_S3_CUSTOM_DOMAIN    = supabase_public_domain(...)   # see below
 AWS_S3_REGION_NAME      = env("SUPABASE_REGION")
 AWS_ACCESS_KEY_ID       = env("SUPABASE_S3_ACCESS_KEY")
 AWS_SECRET_ACCESS_KEY   = env("SUPABASE_S3_SECRET_KEY")
@@ -186,6 +190,24 @@ AWS_S3_FILE_OVERWRITE   = False
 4. **Add the Supabase hostname to `frontend/next.config.ts` → `images.remotePatterns`.** That file is currently empty, so remote images will silently fail to render.
 
 ---
+
+
+### 5.1 Reads and writes use different URLs
+
+Supabase Storage has two faces. **Writes** go through the S3-compatible endpoint,
+which needs signed requests. **Public reads** go through
+`/storage/v1/object/public/<bucket>/`.
+
+Left to itself, django-storages builds image URLs against the write endpoint —
+`https://<ref>.supabase.co/storage/v1/s3/<bucket>/<key>` — and every menu and
+gallery photo fails to load. `AWS_S3_CUSTOM_DOMAIN` is therefore set from
+`apps.common.storage.supabase_public_domain`, which derives the public path from
+`SUPABASE_S3_ENDPOINT` and `SUPABASE_BUCKET`. Set `SUPABASE_PUBLIC_URL` only if
+images are served through a CDN in front of Supabase.
+
+The bucket itself must be marked **public** in the Supabase dashboard. The
+frontend's `next.config.ts` allows `**.supabase.co/storage/v1/object/public/**`
+and nothing else from Supabase.
 
 ## 6. Provider webhook configuration
 
@@ -258,3 +280,25 @@ Expand-and-contract: add nullable columns first; backfill in a data migration; s
 4. Write an incident note: what, when, impact, cause, prevention
 
 Payment reconciliation runs automatically after any rollback — orders paid during the incident window are settled by the beat task.
+
+---
+
+## Frontend ↔ API checklist
+
+The frontend and API run on different origins. Every item below was found by running
+them together; each fails silently or with an unhelpful error when wrong.
+
+| Setting | Value | If wrong |
+|---|---|---|
+| `FRONTEND_URL` | `https://kuyashplace.com` | Email links and social error redirects point at the wrong site |
+| `CORS_ALLOWED_ORIGINS` | the frontend origin | The browser blocks every API call |
+| `CSRF_TRUSTED_ORIGINS` | the frontend origin | Every unsafe request fails CSRF; social sign-in rejects its `callback_url` |
+| `SESSION_COOKIE_DOMAIN` | the shared parent, e.g. `.kuyashplace.com` | `proxy.ts` on the frontend never sees the session, so signed-in customers are sent to sign in again (`kuyash.E012`) |
+| `GOOGLE_CLIENT_ID` / `_SECRET` | from the Google console | Blank: the Google button is hidden (by design) |
+| `FACEBOOK_CLIENT_ID` / `_SECRET` | from the Facebook console | Blank: the Facebook button is hidden (by design) |
+| OAuth redirect URIs in each console | `https://api.kuyashplace.com/accounts/<provider>/login/callback/` | The provider refuses the redirect |
+| Frontend `NEXT_PUBLIC_API_URL` | `https://api.kuyashplace.com/api/v1`, set **before** `next build` | The value is baked into the bundle at build time |
+
+`CORS_ALLOW_HEADERS` is not an environment setting: it is fixed in
+`config/settings/base.py` to include `X-Cart-Token`, `X-Guest-Token` and
+`Idempotency-Key`, and `apps/common/tests/test_cors.py` fails if any is removed.

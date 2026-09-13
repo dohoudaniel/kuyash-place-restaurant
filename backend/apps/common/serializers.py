@@ -39,6 +39,23 @@ class MoneySerializer(serializers.Serializer):
     display = serializers.CharField(read_only=True, help_text="Formatted, e.g. ₦12,500.00")
 
 
+class TotalsSerializer(serializers.Serializer):
+    """The money breakdown shared by carts and orders.
+
+    Declared so the generated schema types every line as money instead of an
+    untyped dictionary — the frontend renders each ``display`` and has nothing
+    to add up.
+    """
+
+    subtotal = MoneySerializer()
+    discount = MoneySerializer()
+    delivery_fee = MoneySerializer()
+    service_charge = MoneySerializer()
+    vat = MoneySerializer()
+    tip = MoneySerializer()
+    grand_total = MoneySerializer()
+
+
 @extend_schema_field(MONEY_SCHEMA)
 class MoneyField(serializers.Field):
     """Serializes an integer-kobo model field into the money wire format.

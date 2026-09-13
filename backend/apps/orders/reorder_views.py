@@ -17,7 +17,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.carts.serializers import serialise_cart
+from apps.carts.serializers import CartResponseSerializer, serialise_cart
 from apps.carts.services import cart as cart_services
 from apps.carts.services.pricing import price_cart
 from apps.carts.views import CART_TOKEN_HEADER
@@ -38,6 +38,34 @@ class ReorderSerializer(serializers.Serializer):
     replace = serializers.BooleanField(default=False)
 
 
+class ReorderChangeSerializer(serializers.Serializer):
+    """One difference between the past order and today's menu."""
+
+    item = serializers.CharField()
+    name = serializers.CharField()
+    type = serializers.ChoiceField(choices=["price_increased", "price_reduced", "options_removed"])
+    detail = serializers.CharField(required=False)
+    old = serializers.DictField(required=False, help_text="{amount, display} — price changes only.")
+    new = serializers.DictField(required=False, help_text="{amount, display} — price changes only.")
+
+
+class ReorderUnavailableSerializer(serializers.Serializer):
+    item = serializers.CharField(allow_blank=True)
+    name = serializers.CharField()
+    reason = serializers.CharField()
+
+
+class ReorderResponseSerializer(serializers.Serializer):
+    """Response envelope for ``POST /orders/{reference}/reorder/``."""
+
+    cart = CartResponseSerializer()
+    added = serializers.IntegerField()
+    replaced_lines = serializers.IntegerField()
+    changes = ReorderChangeSerializer(many=True)
+    unavailable = ReorderUnavailableSerializer(many=True)
+    message = serializers.CharField(required=False)
+
+
 class ReorderView(APIView):
     """Rebuild the basket from a past order, at today's prices."""
 
@@ -46,6 +74,7 @@ class ReorderView(APIView):
     @extend_schema(
         summary="Reorder a past order",
         request=ReorderSerializer,
+        responses={200: ReorderResponseSerializer},
         parameters=[
             OpenApiParameter(
                 CART_TOKEN_HEADER,
@@ -118,4 +147,4 @@ class ReceiptView(APIView):
         return response
 
 
-__all__ = ["ReceiptView", "ReorderSerializer", "ReorderView"]
+__all__ = ["ReceiptView", "ReorderResponseSerializer", "ReorderSerializer", "ReorderView"]

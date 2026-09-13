@@ -60,6 +60,11 @@ urlpatterns = [
     ),
     # allauth headless: JSON auth endpoints for the decoupled frontend.
     path("_allauth/", include("allauth.headless.urls")),
+    # Provider callbacks (e.g. /accounts/google/login/callback/). Under
+    # HEADLESS_ONLY this include exposes nothing but those routes — and without
+    # it every social sign-in fails with NoReverseMatch before reaching Google.
+    # Register these URLs in the Google and Facebook developer consoles.
+    path("accounts/", include("allauth.urls")),
 ]
 
 if settings.DEBUG:

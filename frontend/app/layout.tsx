@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import Navbar from "@/components/layouts/navbar/Navbar";
 import Footer from "@/components/layouts/footer";
 import ChatButton from "@/components/features/chat";
+import AuthProvider from "@/components/providers/AuthProvider";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -36,10 +37,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("h-full", "antialiased", inter.variable, playfair.variable, "font-sans", geist.variable)}>
       <body className="min-h-full flex flex-col font-[var(--font-inter)]">
-        <Navbar />
-        {children}
-        <Footer />
-        <ChatButton />
+        <AuthProvider>
+          <Navbar />
+          {children}
+          <Footer />
+          <ChatButton />
+        </AuthProvider>
       </body>
     </html>
   );

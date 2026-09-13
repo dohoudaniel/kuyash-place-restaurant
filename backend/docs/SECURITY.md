@@ -146,7 +146,7 @@ Sentry: `send_default_pii=False`, with a `before_send` scrubber for `password`, 
 
 Phase 1 does not ship until every box is ticked:
 
-- [ ] Card fields deleted from the frontend; CI grep gate passing
+- [x] Card fields deleted from the frontend; CI grep gate passing
 - [ ] `manage.py check --deploy` clean
 - [ ] `DEBUG = False`, `ALLOWED_HOSTS` explicit, HSTS on
 - [ ] All secrets in a secret manager; `gitleaks` clean on full history
@@ -155,6 +155,9 @@ Phase 1 does not ship until every box is ticked:
 - [ ] Idempotency verified under concurrent double-submit
 - [ ] Object-level permissions tested: user A cannot read user B's order
 - [ ] Rate limits verified on auth, promo and order endpoints
+- [x] CSRF enforced on sign-in endpoints for anonymous visitors — login CSRF (`test_auth_hardening.py`)
+- [x] Social sign-in failures and the takeover backstop return the browser to the frontend; no JSON or 500 on the provider callback
+- [x] `next` / `callback_url` redirects restricted to same-site paths and trusted origins (no open redirect)
 - [ ] 2FA enabled on all staff and admin accounts
 - [ ] Admin behind IP allowlist / VPN on a non-default path
 - [ ] CSP deployed and verified

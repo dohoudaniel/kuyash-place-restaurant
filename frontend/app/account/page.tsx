@@ -1,5 +1,6 @@
 "use client";
 
+import { RequireAuth } from "@/components/features/auth";
 import { useState } from "react";
 import AccountHero from "@/components/features/account/AccountHero";
 import ProfileSection from "@/components/features/account/ProfileSection";
@@ -10,7 +11,7 @@ import PreferencesSection from "@/components/features/account/PreferencesSection
 
 type TabType = "profile" | "orders" | "addresses" | "payment" | "preferences";
 
-export default function AccountPage() {
+function AccountPage() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
 
   return (
@@ -51,5 +52,13 @@ export default function AccountPage() {
         {activeTab === "preferences" && <PreferencesSection />}
       </div>
     </div>
+  );
+}
+
+export default function GuardedAccountPage() {
+  return (
+    <RequireAuth>
+      <AccountPage />
+    </RequireAuth>
   );
 }

@@ -261,3 +261,56 @@ class IsOwnerOrStaff(BasePermission):
 | `components/layouts/navbar/Navbar.tsx` | Show the real user; add a logout control |
 | `app/account/page.tsx`, `app/orders/`, `app/wishlist/` | Gate on auth; redirect unauthenticated visitors |
 | `lib/api/client.ts` (new) | `credentials: "include"` + CSRF header on every request |
+
+---
+
+## Frontend integration: what the live run changed
+
+Wiring the frontend to these endpoints (FRONTEND_INTEGRATION.md §5.2) surfaced
+defects that only appear with a real browser on a different origin. The resulting
+rules:
+
+### CSRF on sign-in endpoints
+
+DRF enforces CSRF only for requests it has authenticated from a session and treats
+every other view as CSRF-exempt — which includes login, registration, email
+verification, resend-verification, password reset and logout. Those endpoints also
+accept form-encoded bodies, so a page on any site could post a login form and sign the
+visitor into an attacker's account (login CSRF).
+
+They now inherit `CsrfEnforcedMixin` (`apps/accounts/views.py`), which requires the
+token on every unsafe request whether or not anyone is signed in. The frontend client
+sends `X-CSRFToken` on every unsafe request and primes the cookie via
+`GET /auth/csrf/` first, so it is unaffected. Regression: `test_auth_hardening.py`.
+
+### Password reset signs the requester out
+
+`confirm_password_reset` deletes every session for the user. When the visitor making
+the request is signed in, that includes their own session, so the view now logs the
+request out as well — otherwise the session middleware tries to save a deleted row
+and a successful reset is reported as an HTML 400.
+
+### Social sign-in
+
+| Setting / route | Why it is required |
+|---|---|
+| `path("accounts/", include("allauth.urls"))` | Provider callbacks. Under `HEADLESS_ONLY` this exposes only those routes; without it every redirect raised `NoReverseMatch`. |
+| `HEADLESS_FRONTEND_URLS["socialaccount_login_error"]` → `/auth/callback` | Where allauth sends a failed sign-in (cancelled, denied, provider error). Missing, every failure was a 500. |
+| Frontend origin in `CSRF_TRUSTED_ORIGINS` | allauth accepts a `callback_url` only on a host from `ALLOWED_HOSTS` or `CSRF_TRUSTED_ORIGINS`. |
+| Provider `APP` only when `*_CLIENT_ID` is set | allauth lists any provider with an `APP` entry, even a blank one; the frontend renders a button per listed provider. |
+
+Register these callback URLs in the provider consoles, on the **API** origin:
+
+```
+https://api.kuyashplace.com/accounts/google/login/callback/
+https://api.kuyashplace.com/accounts/facebook/login/callback/
+```
+
+The takeover backstop (§4.4) now answers a **browser** flow by redirecting to the
+frontend callback with `?error=social_email_unverified` (keeping `next`), after
+re-checking that the stored callback is a safe URL. Token flows, which have no
+browser to redirect, keep the JSON 409.
+
+Error codes the frontend's `/auth/callback` explains: `cancelled`, `denied`,
+`unknown`, `signup_closed`, `permission_denied`, `reauthentication_required`,
+`social_email_unverified`.

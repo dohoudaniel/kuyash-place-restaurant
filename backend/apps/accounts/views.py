@@ -7,10 +7,12 @@ from typing import Any
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth import update_session_auth_hash
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.middleware.csrf import get_token
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -21,12 +23,15 @@ from apps.accounts import services
 from apps.accounts.models import Address
 from apps.accounts.serializers import (
     AddressSerializer,
+    AuthUserResponseSerializer,
     CurrentUserSerializer,
+    DetailResponseSerializer,
     EmailOnlySerializer,
     LoginSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     ProfileSerializer,
+    RegisterResponseSerializer,
     RegisterSerializer,
     SessionSerializer,
     VerifyEmailSerializer,
@@ -74,6 +79,26 @@ def _raise(error: services.AuthError) -> None:
     raise domain(error.detail)
 
 
+class CsrfEnforcedMixin:
+    """Require a CSRF token even when nobody is signed in.
+
+    DRF only checks CSRF for requests it has authenticated from a session, and
+    marks every other view CSRF-exempt. That leaves the sign-in endpoints — the
+    ones a signed-out visitor posts to — unprotected, and they also accept
+    form-encoded bodies. A page on any other site could then post a login form
+    and sign the visitor into an attacker's account (login CSRF), so every
+    purchase and address they enter afterwards lands in that account.
+
+    The frontend already sends ``X-CSRFToken`` on every unsafe request, so this
+    costs it nothing.
+    """
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        if request.method not in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            SessionAuthentication().enforce_csrf(request)
+        super().initial(request, *args, **kwargs)  # type: ignore[misc]
+
+
 class CSRFView(APIView):
     """Seeds the CSRF cookie.
 
@@ -83,7 +108,9 @@ class CSRFView(APIView):
 
     permission_classes = [AllowAny]
 
-    @extend_schema(summary="Seed the CSRF cookie", tags=["auth"], responses={200: dict})
+    @extend_schema(
+        summary="Seed the CSRF cookie", tags=["auth"], responses={200: DetailResponseSerializer}
+    )
     def get(self, request: Request) -> Response:
         get_token(request)
         return Response({"detail": "CSRF cookie set."})
@@ -100,7 +127,7 @@ class SessionView(APIView):
         return Response(SessionSerializer({"user": user}).data)
 
 
-class RegisterView(APIView):
+class RegisterView(CsrfEnforcedMixin, APIView):
     """Create an account and send a verification email."""
 
     permission_classes = [AllowAny]
@@ -109,7 +136,7 @@ class RegisterView(APIView):
     @extend_schema(
         summary="Register",
         request=RegisterSerializer,
-        responses={201: CurrentUserSerializer},
+        responses={201: RegisterResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -134,7 +161,7 @@ class RegisterView(APIView):
         )
 
 
-class LoginView(APIView):
+class LoginView(CsrfEnforcedMixin, APIView):
     """Establish a session."""
 
     permission_classes = [AllowAny]
@@ -143,7 +170,7 @@ class LoginView(APIView):
     @extend_schema(
         summary="Log in",
         request=LoginSerializer,
-        responses={200: CurrentUserSerializer},
+        responses={200: AuthUserResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -162,7 +189,7 @@ class LoginView(APIView):
         return Response({"user": CurrentUserSerializer(user).data})
 
 
-class LogoutView(APIView):
+class LogoutView(CsrfEnforcedMixin, APIView):
     """Destroy the session."""
 
     permission_classes = [AllowAny]
@@ -173,7 +200,7 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class VerifyEmailView(APIView):
+class VerifyEmailView(CsrfEnforcedMixin, APIView):
     """Confirm an email address and sign the user in."""
 
     permission_classes = [AllowAny]
@@ -181,7 +208,7 @@ class VerifyEmailView(APIView):
     @extend_schema(
         summary="Verify email",
         request=VerifyEmailSerializer,
-        responses={200: CurrentUserSerializer},
+        responses={200: AuthUserResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -196,7 +223,7 @@ class VerifyEmailView(APIView):
         return Response({"user": CurrentUserSerializer(user).data})
 
 
-class ResendVerificationView(APIView):
+class ResendVerificationView(CsrfEnforcedMixin, APIView):
     """Re-send the verification email.
 
     Responds identically whether or not the account exists (AS-3).
@@ -208,7 +235,7 @@ class ResendVerificationView(APIView):
     @extend_schema(
         summary="Resend verification email",
         request=EmailOnlySerializer,
-        responses={200: dict},
+        responses={200: DetailResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -225,7 +252,7 @@ class ResendVerificationView(APIView):
         return Response({"detail": "If that account exists, a confirmation email is on its way."})
 
 
-class PasswordResetView(APIView):
+class PasswordResetView(CsrfEnforcedMixin, APIView):
     """Start a password reset. Always reports success (AS-3)."""
 
     permission_classes = [AllowAny]
@@ -234,7 +261,7 @@ class PasswordResetView(APIView):
     @extend_schema(
         summary="Request a password reset",
         request=EmailOnlySerializer,
-        responses={200: dict},
+        responses={200: DetailResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -246,7 +273,7 @@ class PasswordResetView(APIView):
         )
 
 
-class PasswordResetConfirmView(APIView):
+class PasswordResetConfirmView(CsrfEnforcedMixin, APIView):
     """Complete a password reset."""
 
     permission_classes = [AllowAny]
@@ -254,7 +281,7 @@ class PasswordResetConfirmView(APIView):
     @extend_schema(
         summary="Confirm a password reset",
         request=PasswordResetConfirmSerializer,
-        responses={200: dict},
+        responses={200: DetailResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -268,9 +295,14 @@ class PasswordResetConfirmView(APIView):
             )
         except services.AuthError as error:
             _raise(error)
-        except Exception as exc:  # Django's password validators
-            raise InvalidToken(str(exc)) from exc
+        except DjangoValidationError as exc:  # Django's password validators
+            raise InvalidToken(" ".join(exc.messages)) from exc
 
+        # Every session for this user has just been deleted — including this
+        # request's own, if the visitor was signed in. Log the request out too,
+        # or the session middleware tries to save a row that no longer exists
+        # and turns a successful reset into an HTML 400.
+        django_logout(request)
         return Response({"detail": "Your password has been changed. Please sign in."})
 
 
@@ -282,7 +314,7 @@ class PasswordChangeView(APIView):
     @extend_schema(
         summary="Change password",
         request=PasswordChangeSerializer,
-        responses={200: dict},
+        responses={200: DetailResponseSerializer},
         tags=["auth"],
     )
     def post(self, request: Request) -> Response:
@@ -296,8 +328,8 @@ class PasswordChangeView(APIView):
             )
         except services.AuthError as error:
             _raise(error)
-        except Exception as exc:
-            raise InvalidToken(str(exc)) from exc
+        except DjangoValidationError as exc:  # Django's password validators
+            raise InvalidToken(" ".join(exc.messages)) from exc
 
         # Keep this session signed in; other devices are unaffected here because
         # the user proved knowledge of the current password.

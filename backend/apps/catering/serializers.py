@@ -91,3 +91,19 @@ class EnquiryCreatedSerializer(EnquirySerializer):
         if not obj.indicative_total:
             return "We will price this for you once we know a little more."
         return "Indicative only — a member of our team will confirm your quote."
+
+
+class OverdueEnquirySerializer(EnquirySerializer):
+    """An enquiry past its SLA, with how far past it is."""
+
+    hours_overdue = serializers.FloatField(read_only=True)
+
+    class Meta(EnquirySerializer.Meta):
+        fields = [*EnquirySerializer.Meta.fields, "hours_overdue"]
+
+
+class OverdueEnquiriesSerializer(serializers.Serializer):
+    """Response envelope for ``GET /catering/enquiries/overdue/``."""
+
+    count = serializers.IntegerField()
+    enquiries = OverdueEnquirySerializer(many=True)

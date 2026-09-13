@@ -73,6 +73,60 @@ def test_an_unverified_provider_email_cannot_claim_an_existing_account(  # type:
     assert b"social_email_unverified" in response.content
 
 
+@pytest.mark.django_db
+def test_a_browser_sign_in_is_sent_back_to_the_frontend_not_shown_json(  # type: ignore[no-untyped-def]
+    adapter, verified_user, settings
+) -> None:
+    """The refusal happens on the provider callback, on the API's own origin.
+
+    A JSON 409 there strands the customer on a raw error document. Browser flows
+    carry the frontend callback in allauth's state, so they are redirected back
+    to it with an error code the frontend explains — and `next` survives.
+    """
+    settings.CSRF_TRUSTED_ORIGINS = ["http://localhost:3000"]
+    request = RequestFactory().get("/accounts/facebook/login/callback/", HTTP_HOST="localhost")
+    login = social_login("ada@example.com", verified=False, provider="facebook")
+    login.state = {"next": "http://localhost:3000/auth/callback?next=/account", "process": "login"}
+
+    from allauth.core import context
+
+    with context.request_context(request), pytest.raises(ImmediateHttpResponse) as excinfo:
+        adapter.pre_social_login(request, login)
+
+    response = excinfo.value.response
+    assert response.status_code == 302
+    location = response["Location"]
+    assert location.startswith("http://localhost:3000/auth/callback?")
+    assert "error=social_email_unverified" in location
+    assert "next=%2Faccount" in location
+    assert "error_process=login" in location
+
+
+@pytest.mark.django_db
+def test_an_unsafe_callback_in_the_state_falls_back_to_json(  # type: ignore[no-untyped-def]
+    adapter, verified_user, settings
+) -> None:
+    """Never redirect a browser somewhere foreign, even from stored state."""
+    settings.CSRF_TRUSTED_ORIGINS = ["http://localhost:3000"]
+    request = RequestFactory().get("/accounts/facebook/login/callback/", HTTP_HOST="localhost")
+    login = social_login("ada@example.com", verified=False, provider="facebook")
+    login.state = {"next": "https://evil.example/steal", "process": "login"}
+
+    from allauth.core import context
+
+    with context.request_context(request), pytest.raises(ImmediateHttpResponse) as excinfo:
+        adapter.pre_social_login(request, login)
+
+    assert excinfo.value.response.status_code == 409
+
+
+def test_query_parameters_are_merged_not_duplicated() -> None:
+    from apps.accounts.adapters import _with_query
+
+    url = _with_query("http://localhost:3000/auth/callback?next=/menu&error=old", error="new")
+    assert url == "http://localhost:3000/auth/callback?next=%2Fmenu&error=new"
+
+
 def test_a_verified_provider_email_may_link(adapter, request_, verified_user) -> None:  # type: ignore[no-untyped-def]
     """Google asserts email_verified, so linking is safe and avoids a confusing
     duplicate-email error for a customer who signed up with a password."""
