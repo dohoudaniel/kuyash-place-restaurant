@@ -1258,6 +1258,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reviews/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List published reviews for a dish
+         * @description Published reviews for a dish, and posting a new one.
+         */
+        get: operations["reviews_list"];
+        put?: never;
+        /**
+         * Review a dish you received
+         * @description Published reviews for a dish, and posting a new one.
+         */
+        post: operations["reviews_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/pending/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reviews awaiting moderation
+         * @description The moderation queue, oldest first.
+         */
+        get: operations["reviews_pending_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{review_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve your review
+         * @description The author editing or removing their own review.
+         */
+        get: operations["reviews_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete your review
+         * @description The author editing or removing their own review.
+         */
+        delete: operations["reviews_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit your review
+         * @description Only within the edit window. The edited review returns to moderation.
+         */
+        patch: operations["reviews_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/reviews/{review_id}/helpful/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a review as helpful
+         * @description Require a CSRF token even when nobody is signed in.
+         *
+         *     DRF only checks CSRF for requests it has authenticated from a session, and
+         *     marks every other view CSRF-exempt. That leaves the sign-in endpoints — the
+         *     ones a signed-out visitor posts to — unprotected, and they also accept
+         *     form-encoded bodies. A page on any other site could then post a login form
+         *     and sign the visitor into an attacker's account (login CSRF), so every
+         *     purchase and address they enter afterwards lands in that account.
+         *
+         *     The frontend already sends ``X-CSRFToken`` on every unsafe request, so this
+         *     costs it nothing.
+         */
+        post: operations["reviews_helpful_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews/{review_id}/moderate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or reject a review */
+        post: operations["reviews_moderate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wishlist/": {
         parameters: {
             query?: never;
@@ -1469,6 +1588,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description * `approve` - Approve
+         *     * `reject` - Reject
+         * @enum {string}
+         */
+        ActionEnum: "approve" | "reject";
         /** @description Input for adding a line. Note the absence of any price field. */
         AddItemRequest: {
             menu_item: string;
@@ -2146,6 +2271,14 @@ export interface components {
             readonly is_available: boolean;
             readonly category: string;
         };
+        ModerateRequest: {
+            action: components["schemas"]["ActionEnum"];
+            /**
+             * @description Shown to the customer. Required when rejecting.
+             * @default
+             */
+            reason: string;
+        };
         Modifier: {
             /** Format: uuid */
             readonly id: string;
@@ -2261,6 +2394,8 @@ export interface components {
             guest_token?: string;
         };
         OrderLine: {
+            /** Format: uuid */
+            id: string;
             name: string;
             slug: string;
             variant_name: string;
@@ -2270,6 +2405,15 @@ export interface components {
             unit_price: components["schemas"]["Money"];
             line_subtotal: components["schemas"]["Money"];
             image_url: string | null;
+            /** @description The customer's review of this line, if they wrote one. */
+            review: components["schemas"]["OrderLineReview"] | null;
+            can_review: boolean;
+        };
+        OrderLineReview: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            rating: number;
         };
         /** @description Compact shape for order history. */
         OrderList: {
@@ -2357,6 +2501,28 @@ export interface components {
             /** Format: double */
             readonly hours_overdue: number;
         };
+        /** @description A review as its author, or a moderator, sees it. */
+        OwnReview: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly rating: number;
+            readonly title: string;
+            readonly comment: string;
+            readonly recommends: boolean;
+            readonly author_name: string;
+            readonly is_verified_purchase: boolean;
+            readonly helpful_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly status: components["schemas"]["ReviewStatusEnum"];
+            /** @description Shown to the customer. Required when rejecting. */
+            readonly rejection_reason: string;
+            readonly menu_item: components["schemas"]["ReviewItem"] | null;
+            readonly order_reference: string | null;
+            readonly can_edit: boolean;
+            /** Format: date-time */
+            readonly editable_until: string;
+        };
         PaginatedMenuItemListList: {
             /** @example 123 */
             count: number;
@@ -2384,6 +2550,36 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["OrderList"][];
+        };
+        PaginatedOwnReviewList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["OwnReview"][];
+        };
+        PaginatedReviewList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Review"][];
         };
         PasswordChangeRequest: {
             current_password: string;
@@ -2438,6 +2634,13 @@ export interface components {
             /** Format: time */
             time?: string;
             party_size?: number;
+        };
+        PatchedReviewInputRequest: {
+            rating?: number;
+            title?: string;
+            comment?: string;
+            /** @default true */
+            recommends: boolean;
         };
         PatchedUpdateItemRequest: {
             quantity?: number;
@@ -2634,6 +2837,48 @@ export interface components {
          * @enum {string}
          */
         ReservationStatusEnum: "pending" | "confirmed" | "seated" | "completed" | "cancelled" | "no_show";
+        /** @description A published review, as anyone sees it. */
+        Review: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly rating: number;
+            readonly title: string;
+            readonly comment: string;
+            readonly recommends: boolean;
+            readonly author_name: string;
+            readonly is_verified_purchase: boolean;
+            readonly helpful_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ReviewCreateRequest: {
+            rating: number;
+            title: string;
+            comment: string;
+            /** @default true */
+            recommends: boolean;
+            /**
+             * Format: uuid
+             * @description The `id` of a line on one of your delivered orders.
+             */
+            order_line: string;
+        };
+        ReviewHelpful: {
+            helpful_count: number;
+            /** @description False when this voter had already voted. */
+            counted: boolean;
+        };
+        ReviewItem: {
+            slug: string;
+            name: string;
+        };
+        /**
+         * @description * `pending` - Awaiting moderation
+         *     * `approved` - Published
+         *     * `rejected` - Not published
+         * @enum {string}
+         */
+        ReviewStatusEnum: "pending" | "approved" | "rejected";
         RiderAssignment: {
             order: string;
             rider: {
@@ -4307,6 +4552,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ticket"];
+                };
+            };
+        };
+    };
+    reviews_list: {
+        parameters: {
+            query: {
+                /** @description Dish slug. */
+                item: string;
+                /** @description Number of results to return per page. */
+                limit?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                sort?: "helpful" | "highest" | "lowest" | "newest";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedReviewList"];
+                };
+            };
+        };
+    };
+    reviews_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReviewCreateRequest"];
+                "multipart/form-data": components["schemas"]["ReviewCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnReview"];
+                };
+            };
+        };
+    };
+    reviews_pending_list: {
+        parameters: {
+            query?: {
+                /** @description Number of results to return per page. */
+                limit?: number;
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedOwnReviewList"];
+                };
+            };
+        };
+    };
+    reviews_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnReview"];
+                };
+            };
+        };
+    };
+    reviews_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reviews_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedReviewInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedReviewInputRequest"];
+                "multipart/form-data": components["schemas"]["PatchedReviewInputRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnReview"];
+                };
+            };
+        };
+    };
+    reviews_helpful_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewHelpful"];
+                };
+            };
+        };
+    };
+    reviews_moderate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModerateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ModerateRequest"];
+                "multipart/form-data": components["schemas"]["ModerateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnReview"];
                 };
             };
         };

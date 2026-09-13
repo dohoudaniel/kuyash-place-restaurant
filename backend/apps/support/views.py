@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.permissions import IsStaffMember, current_user
+from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
 from apps.support.models import FaqEntry, Ticket
 from apps.support.serializers import (
@@ -37,6 +38,7 @@ class ContactView(APIView):
 
     permission_classes = [AllowAny]
     throttle_scope = "contact"
+    throttle_classes = SCOPED_THROTTLES
 
     @extend_schema(
         summary="Send a message",

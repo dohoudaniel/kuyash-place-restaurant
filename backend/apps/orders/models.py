@@ -7,6 +7,7 @@ raising a price must never rewrite what a customer already agreed to pay.
 from __future__ import annotations
 
 import secrets
+import uuid
 
 from django.db import models
 
@@ -195,6 +196,9 @@ class OrderItem(models.Model):
         blank=True,
         related_name="order_items",
     )
+
+    #: The id clients see. The integer primary key never leaves the server.
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     name_snapshot = models.CharField(max_length=150)
     description_snapshot = models.TextField(blank=True)

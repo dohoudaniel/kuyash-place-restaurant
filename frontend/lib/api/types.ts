@@ -52,6 +52,13 @@ export type OrderDetail = Schemas["OrderDetail"];
 export type OrderLine = OrderDetail["items"][number];
 export type OrderTimelineStep = OrderDetail["timeline"][number];
 export type OrderRow = Schemas["OrderList"];
+export type OrderLineReview = Schemas["OrderLineReview"];
+
+// Reviews
+export type Review = Schemas["Review"];
+export type OwnReview = Schemas["OwnReview"];
+export type PaginatedReviews = Schemas["PaginatedReviewList"];
+export type ReviewHelpful = Schemas["ReviewHelpful"];
 export type PaymentVerification = Schemas["PaymentVerification"];
 export type Address = Schemas["Address"];
 

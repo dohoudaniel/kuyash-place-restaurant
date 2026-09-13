@@ -9,7 +9,7 @@ from rest_framework import serializers
 
 from apps.carts.serializers import money
 from apps.common.serializers import MoneySerializer, TotalsSerializer
-from apps.orders.models import Order, PaymentMethod
+from apps.orders.models import Order, OrderItem, PaymentMethod
 from apps.orders.services.state import timeline
 
 
@@ -38,7 +38,17 @@ class CancelSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, default="", max_length=300)
 
 
+class OrderLineReviewSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.CharField()
+    rating = serializers.IntegerField()
+
+    class Meta:
+        ref_name = "OrderLineReview"
+
+
 class OrderLineSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
     name = serializers.CharField()
     slug = serializers.CharField(allow_blank=True)
     variant_name = serializers.CharField(allow_blank=True)
@@ -48,6 +58,10 @@ class OrderLineSerializer(serializers.Serializer):
     unit_price = MoneySerializer()
     line_subtotal = MoneySerializer()
     image_url = serializers.CharField(allow_null=True)
+    review = OrderLineReviewSerializer(
+        allow_null=True, help_text="The customer's review of this line, if they wrote one."
+    )
+    can_review = serializers.BooleanField()
 
     class Meta:
         ref_name = "OrderLine"
@@ -150,6 +164,25 @@ class OrderListSerializer(serializers.ModelSerializer):
         ]
 
 
+def _line_review(order: Order, line: OrderItem) -> dict[str, Any]:
+    """Whether a line has been reviewed, and whether it still can be.
+
+    Only the order's owner writes reviews for its lines, so any review attached
+    to the line is theirs.
+    """
+    review = next(iter(line.reviews.all()), None)
+    return {
+        "review": (
+            {"id": str(review.id), "status": review.status, "rating": review.rating}
+            if review
+            else None
+        ),
+        "can_review": bool(
+            review is None and order.user_id and line.menu_item_id and order.delivered_at
+        ),
+    }
+
+
 def serialise_order(order: Order, *, include_token: bool = False) -> dict[str, Any]:
     """Full order detail — the polling payload."""
     currency = order.currency
@@ -170,6 +203,7 @@ def serialise_order(order: Order, *, include_token: bool = False) -> dict[str, A
         "timeline": timeline(order),
         "items": [
             {
+                "id": str(line.public_id),
                 "name": line.name_snapshot,
                 "slug": line.slug_snapshot,
                 "variant_name": line.variant_name_snapshot,
@@ -179,6 +213,7 @@ def serialise_order(order: Order, *, include_token: bool = False) -> dict[str, A
                 "unit_price": money(line.unit_price, currency),
                 "line_subtotal": money(line.line_subtotal, currency),
                 "image_url": line.image_url_snapshot or None,
+                **_line_review(order, line),
             }
             for line in order.items.all()
         ],

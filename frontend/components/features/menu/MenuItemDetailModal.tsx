@@ -11,6 +11,7 @@ import { mediaUrl } from "@/lib/api/media";
 import type { ItemQuote, MenuItemDetail, MenuItemSummary, ModifierGroup } from "@/lib/api/types";
 import { useCartStore } from "@/lib/store/cartStore";
 import { useWishlistStore } from "@/lib/store/wishlistStore";
+import { ReviewList } from "@/components/features/reviews";
 
 interface MenuItemDetailModalProps {
   slug: string;
@@ -490,6 +491,8 @@ export default function MenuItemDetailModal({ slug, summary, fallbackEmoji, isOp
                     : "Add to Cart"}
               </button>
             </div>
+
+            {detail && <ReviewList slug={detail.slug} averageRating={detail.average_rating} reviewCount={detail.review_count ?? 0} />}
           </div>
         </DialogPrimitive.Content>
       </DialogPortal>

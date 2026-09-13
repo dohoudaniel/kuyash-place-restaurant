@@ -6,9 +6,10 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Phone, MessageCircle, CheckCircle, AlertCircle, Loader2, FileDown, ShoppingCart, CreditCard, XCircle } from "lucide-react";
 import { OrderStatus, OrderDetails, OrderSummary } from "@/components/features/orders";
 import { FINAL_STATUSES } from "@/components/features/orders/statusStyles";
+import { ReviewModal } from "@/components/features/reviews";
 import { ApiError, api } from "@/lib/api/client";
 import { cancelOrder, downloadReceipt, fetchOrder, initialisePayment, reorder } from "@/lib/api/orders";
-import type { Branch, OrderDetail } from "@/lib/api/types";
+import type { Branch, OrderDetail, OrderLine } from "@/lib/api/types";
 import { useAuthModalStore } from "@/lib/store/authModalStore";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useCartStore } from "@/lib/store/cartStore";
@@ -39,6 +40,7 @@ function OrderTracking() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState<OrderLine | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +114,11 @@ function OrderTracking() {
       window.open(url, "_blank", "noopener");
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     });
+
+  // Polling stops once an order is final, so re-read it after a review changes.
+  const reloadOrder = () => {
+    fetchOrder(reference).then(setOrder).catch(() => undefined);
+  };
 
   const orderAgain = (replace: boolean) =>
     run("reorder", async () => {
@@ -221,7 +228,7 @@ function OrderTracking() {
             {/* Left Column - Order Status & Details */}
             <div className="lg:col-span-2 space-y-6 sm:space-y-8">
               <OrderStatus order={order} />
-              <OrderDetails order={order} />
+              <OrderDetails order={order} onReview={authStatus === "authenticated" ? setReviewing : undefined} />
             </div>
 
             {/* Right Column - Order Summary */}
@@ -314,6 +321,16 @@ function OrderTracking() {
           </div>
         </div>
       </main>
+
+      <ReviewModal
+        key={reviewing?.id ?? "closed"}
+        isOpen={reviewing !== null}
+        onClose={() => setReviewing(null)}
+        itemName={reviewing?.name ?? ""}
+        orderLineId={reviewing?.can_review ? reviewing.id : undefined}
+        reviewId={reviewing?.review?.id}
+        onSaved={reloadOrder}
+      />
     </div>
   );
 }

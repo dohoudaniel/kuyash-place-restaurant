@@ -24,6 +24,7 @@ from apps.catering.serializers import (
 )
 from apps.catering.services import submit_enquiry
 from apps.common.permissions import IsManager
+from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
 
 
@@ -51,6 +52,7 @@ class EnquiryCreateView(APIView):
 
     permission_classes = [AllowAny]
     throttle_scope = "catering"
+    throttle_classes = SCOPED_THROTTLES
 
     @extend_schema(
         summary="Submit a catering enquiry",

@@ -1692,6 +1692,250 @@ paths:
               schema:
                 $ref: '#/components/schemas/Ticket'
           description: ''
+  /api/v1/reviews/:
+    get:
+      operationId: reviews_list
+      description: Published reviews for a dish, and posting a new one.
+      summary: List published reviews for a dish
+      parameters:
+      - in: query
+        name: item
+        schema:
+          type: string
+        description: Dish slug.
+        required: true
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum:
+          - helpful
+          - highest
+          - lowest
+          - newest
+      tags:
+      - reviews
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReviewList'
+          description: ''
+    post:
+      operationId: reviews_create
+      description: Published reviews for a dish, and posting a new one.
+      summary: Review a dish you received
+      tags:
+      - reviews
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnReview'
+          description: ''
+  /api/v1/reviews/pending/:
+    get:
+      operationId: reviews_pending_list
+      description: The moderation queue, oldest first.
+      summary: Reviews awaiting moderation
+      parameters:
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - reviews
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOwnReviewList'
+          description: ''
+  /api/v1/reviews/{review_id}/:
+    get:
+      operationId: reviews_retrieve
+      description: The author editing or removing their own review.
+      summary: Retrieve your review
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reviews
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnReview'
+          description: ''
+    patch:
+      operationId: reviews_partial_update
+      description: Only within the edit window. The edited review returns to moderation.
+      summary: Edit your review
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reviews
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReviewInputRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnReview'
+          description: ''
+    delete:
+      operationId: reviews_destroy
+      description: The author editing or removing their own review.
+      summary: Delete your review
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reviews
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/reviews/{review_id}/helpful/:
+    post:
+      operationId: reviews_helpful_create
+      description: |-
+        Require a CSRF token even when nobody is signed in.
+
+        DRF only checks CSRF for requests it has authenticated from a session, and
+        marks every other view CSRF-exempt. That leaves the sign-in endpoints — the
+        ones a signed-out visitor posts to — unprotected, and they also accept
+        form-encoded bodies. A page on any other site could then post a login form
+        and sign the visitor into an attacker's account (login CSRF), so every
+        purchase and address they enter afterwards lands in that account.
+
+        The frontend already sends ``X-CSRFToken`` on every unsafe request, so this
+        costs it nothing.
+      summary: Mark a review as helpful
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reviews
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewHelpful'
+          description: ''
+  /api/v1/reviews/{review_id}/moderate/:
+    post:
+      operationId: reviews_moderate_create
+      summary: Approve or reject a review
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reviews
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ModerateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ModerateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnReview'
+          description: ''
   /api/v1/wishlist/:
     get:
       operationId: wishlist_retrieve
@@ -2058,6 +2302,14 @@ paths:
           description: ''
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - approve
+      - reject
+      type: string
+      description: |-
+        * `approve` - Approve
+        * `reject` - Reject
     AddItemRequest:
       type: object
       description: Input for adding a line. Note the absence of any price field.
@@ -3810,6 +4062,18 @@ components:
       - name
       - price
       - slug
+    ModerateRequest:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        reason:
+          type: string
+          default: ''
+          description: Shown to the customer. Required when rejecting.
+          maxLength: 500
+      required:
+      - action
     Modifier:
       type: object
       properties:
@@ -4095,6 +4359,9 @@ components:
     OrderLine:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
         name:
           type: string
         slug:
@@ -4116,16 +4383,40 @@ components:
         image_url:
           type: string
           nullable: true
+        review:
+          allOf:
+          - $ref: '#/components/schemas/OrderLineReview'
+          nullable: true
+          description: The customer's review of this line, if they wrote one.
+        can_review:
+          type: boolean
       required:
+      - can_review
+      - id
       - image_url
       - line_subtotal
       - modifiers
       - name
       - quantity
+      - review
       - slug
       - special_instructions
       - unit_price
       - variant_name
+    OrderLineReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        rating:
+          type: integer
+      required:
+      - id
+      - rating
+      - status
     OrderList:
       type: object
       description: Compact shape for order history.
@@ -4361,6 +4652,79 @@ components:
       - status
       - status_display
       - venue
+    OwnReview:
+      type: object
+      description: A review as its author, or a moderator, sees it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        rating:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        comment:
+          type: string
+          readOnly: true
+        recommends:
+          type: boolean
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        is_verified_purchase:
+          type: boolean
+          readOnly: true
+        helpful_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ReviewStatusEnum'
+          readOnly: true
+        rejection_reason:
+          type: string
+          readOnly: true
+          description: Shown to the customer. Required when rejecting.
+        menu_item:
+          allOf:
+          - $ref: '#/components/schemas/ReviewItem'
+          nullable: true
+          readOnly: true
+        order_reference:
+          type: string
+          nullable: true
+          readOnly: true
+        can_edit:
+          type: boolean
+          readOnly: true
+        editable_until:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author_name
+      - can_edit
+      - comment
+      - created_at
+      - editable_until
+      - helpful_count
+      - id
+      - is_verified_purchase
+      - menu_item
+      - order_reference
+      - rating
+      - recommends
+      - rejection_reason
+      - status
+      - title
     PaginatedMenuItemListList:
       type: object
       required:
@@ -4403,6 +4767,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OrderList'
+    PaginatedOwnReviewList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnReview'
+    PaginatedReviewList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Review'
     PasswordChangeRequest:
       type: object
       properties:
@@ -4529,6 +4939,24 @@ components:
           type: integer
           maximum: 50
           minimum: 1
+    PatchedReviewInputRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        recommends:
+          type: boolean
+          default: true
     PatchedUpdateItemRequest:
       type: object
       properties:
@@ -4969,6 +5397,107 @@ components:
         * `completed` - Completed
         * `cancelled` - Cancelled
         * `no_show` - No show
+    Review:
+      type: object
+      description: A published review, as anyone sees it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        rating:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        comment:
+          type: string
+          readOnly: true
+        recommends:
+          type: boolean
+          readOnly: true
+        author_name:
+          type: string
+          readOnly: true
+        is_verified_purchase:
+          type: boolean
+          readOnly: true
+        helpful_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author_name
+      - comment
+      - created_at
+      - helpful_count
+      - id
+      - is_verified_purchase
+      - rating
+      - recommends
+      - title
+    ReviewCreateRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        recommends:
+          type: boolean
+          default: true
+        order_line:
+          type: string
+          format: uuid
+          description: The `id` of a line on one of your delivered orders.
+      required:
+      - comment
+      - order_line
+      - rating
+      - title
+    ReviewHelpful:
+      type: object
+      properties:
+        helpful_count:
+          type: integer
+        counted:
+          type: boolean
+          description: False when this voter had already voted.
+      required:
+      - counted
+      - helpful_count
+    ReviewItem:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+      required:
+      - name
+      - slug
+    ReviewStatusEnum:
+      enum:
+      - pending
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `pending` - Awaiting moderation
+        * `approved` - Published
+        * `rejected` - Not published
     RiderAssignment:
       type: object
       properties:

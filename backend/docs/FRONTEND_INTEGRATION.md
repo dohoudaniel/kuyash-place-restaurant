@@ -262,7 +262,7 @@ Replace the 18 hardcoded slots with `GET /reservations/availability/?date=&party
 |---|---|
 | `app/catering/page.tsx:89` | `alert(...)` + `console.log` → `POST /catering/enquiries/` |
 | `components/features/contact/ContactForm.tsx:17` | local state → `POST /support/contact/` |
-| `components/features/reviews/ReviewModal.tsx:50` | `alert(...)` → `POST /reviews/` |
+| `components/features/reviews/ReviewModal.tsx:50` | ✅ `alert(...)` → `POST /reviews/` (Phase 3.1, see §5.5) |
 | `app/academy/page.tsx:28` | inline `COURSES` array → `GET /academy/courses/` |
 | `components/features/academy/EnrollmentModal.tsx:24` | `alert(...)` → `POST /academy/enrolments/` with cohort selection. **Remove the "installment" option** unless a payment-plan model is built (ACA-6) |
 | `app/rewards/page.tsx:22` | `useState(false)` → `GET /loyalty/account/` |
@@ -591,11 +591,42 @@ warnings with no new findings; a live run of site data, reservations (including 
 full area refusing a booking rather than double-booking), catering, contact,
 profile, password change, addresses, wishlist merge and account erasure passes.
 
-**Still not wired — all Phase 3, with no backend yet:** reviews (`ReviewModal`
-still `alert()`s and `console.log`s), academy enrolment (`alert()`), gallery
+**Still not wired — all Phase 3, with no backend yet:** reviews (done in §5.5), academy enrolment (`alert()`), gallery
 share/download (`alert()`), and chat (a scripted bot with a 600 ms fake delay;
 there are also two copies of `ChatButton`). Menu photographs and real prices are
 the restaurant's data to supply (OD-2).
+
+### 5.5 Phase 3.1 reviews delivered
+
+**Backend.** New `apps/reviews` (API_SPEC §11, DATA_MODEL §13). A review targets
+one delivered order line, so every review is a verified purchase; it stays
+private until a manager approves it (API or Django admin), and the dish's
+`average_rating`/`review_count` are rebuilt from approved reviews on every
+moderation, edit and deletion. Order lines gained a UUID `id`, `review` and
+`can_review`. Erasure deletes a person's reviews and corrects the ratings.
+
+Found on the way: `throttle_scope` on the contact, catering, order-placement and
+promo views had never been enforced — no view installed `ScopedRateThrottle`.
+They now use `SCOPED_THROTTLES` (writes only, so reading order history does not
+spend the order allowance), guarded by a test that walks every URL.
+
+**Frontend.**
+- `lib/api/reviews.ts` — list, create, read own, edit, delete, helpful.
+- `ReviewModal` — rebuilt on the shared Dialog primitives with the original
+  markup. The name and email fields are gone (the author is the account);
+  errors render inline; editing shows moderation status, the rejection reason
+  and the edit deadline. Mount it with a `key` per target.
+- `ReviewList` — published reviews inside `MenuItemDetailModal`: real rating
+  summary, sort, "Show more", verified-purchase badge, one-per-voter Helpful.
+- `/orders/[id]` — each delivered line offers "Write a review", or shows the
+  review's status and opens it.
+
+Verified: backend 967 passed, reviews app at 100% coverage, ruff/mypy clean,
+schema synced with `--fail-on-warn`; `tsc` clean; `next build` passes; ESLint
+27 → 26 errors, no new findings; a live run (26 checks) covers CORS, CSRF,
+verified purchase, duplicate refusal, moderation, public visibility, rating
+rebuild, helpful de-duplication, edit-to-pending, deletion, and the contact
+throttle now returning 429.
 
 ---
 

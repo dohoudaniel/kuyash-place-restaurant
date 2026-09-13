@@ -514,15 +514,23 @@ Message: `session` FK · `sender` (`user`/`bot`) · `body` · `matched_faq` FK n
 
 ---
 
-## 13. `reviews`  *(Phase 3)*
+## 13. `reviews`  *(Phase 3 — ✅ delivered in 3.1)*
 
 ### Review
 
 `user` FK · `menu_item` FK null · `order` FK null · `order_item` FK null · `rating` (1–5, `CheckConstraint`) · `title` · `comment` · `recommends` `BooleanField` · `is_verified_purchase` · `status` (`pending`/`approved`/`rejected`) · `moderated_by` FK null · `moderated_at` · `rejection_reason` · `helpful_count`.
 
-`UniqueConstraint(user, order_item)` — one review per purchased line.
+`UniqueConstraint(user, order_item)` — one review per purchased line. `CheckConstraint` keeps `rating` within 1–5.
 
-On approval a Celery task recomputes `MenuItem.average_rating` and `review_count`, retiring the hardcoded `5.0`.
+`MenuItem.average_rating` (one decimal place, rounded half up) and `review_count` are recomputed **synchronously** from the approved reviews whenever a review is approved, rejected, edited or deleted — one aggregate query, cheap enough not to need a task, and recomputed from scratch so the figure cannot drift. This retires the hardcoded `5.0`.
+
+`OrderItem.public_id` (UUID, unique) is what reviews and clients reference; the integer key stays server-side.
+
+### ReviewHelpfulVote  *(✅ delivered)*
+
+`review` FK · `user` FK null · `voter_key` · `created_at`. `UniqueConstraint(review, voter_key)`.
+
+`voter_key` is `user:<id>` for signed-in voters and a salted SHA-256 of the client address for anonymous ones; the address itself is never stored.
 
 ---
 

@@ -31,6 +31,7 @@ from apps.carts.serializers import (
 )
 from apps.carts.services import cart as cart_services
 from apps.carts.services.pricing import price_cart
+from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
 
 CART_TOKEN_HEADER = "X-Cart-Token"  # noqa: S105 - a header name, not a credential
@@ -146,6 +147,7 @@ class CartPromoView(CartBaseView):
     """Apply or remove a promo code."""
 
     throttle_scope = "promo_apply"
+    throttle_classes = SCOPED_THROTTLES
 
     @extend_schema(
         summary="Apply a promo code",

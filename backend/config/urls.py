@@ -38,6 +38,7 @@ api_v1 = [
     path("reservations/", include("apps.reservations.urls")),
     path("catering/", include("apps.catering.urls")),
     path("support/", include("apps.support.urls")),
+    path("reviews/", include("apps.reviews.urls")),
     path("wishlist/", include((wishlist_urlpatterns, "wishlist"))),
     path("webhooks/", include((webhook_urlpatterns, "webhooks"))),
     path("accounts/", include((account_urlpatterns, "accounts"))),

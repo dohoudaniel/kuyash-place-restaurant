@@ -605,12 +605,19 @@ The bot answers **only** from `FaqEntry` and an order-status lookup. Unmatched i
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/reviews/?item={slug}` | — | Approved only, paginated |
-| POST | `/reviews/` | ✓ | Verified purchase required |
-| PATCH/DELETE | `/reviews/{id}/` | ✓ | Within the edit window |
-| POST | `/reviews/{id}/helpful/` | optional | |
-| GET | `/reviews/pending/` | staff | Moderation queue |
-| POST | `/reviews/{id}/moderate/` | staff | approve / reject |
+| GET | `/reviews/?item={slug}` | — | ✅ Approved only, page-paginated with `count`. `?sort=newest\|helpful\|highest\|lowest`. Author shown as first name + last initial |
+| POST | `/reviews/` | ✓ | ✅ `{order_line, rating, title, comment, recommends}`. `order_line` is `OrderDetail.items[].id` from a **delivered** order you own. 409 `review_not_allowed` (not delivered, dish removed) · 409 `already_reviewed` · 404 for a line that isn't yours |
+| GET | `/reviews/{id}/` | ✓ author | ✅ Your review with `status`, `rejection_reason`, `can_edit`, `editable_until` |
+| PATCH | `/reviews/{id}/` | ✓ author | ✅ Within `REVIEW_EDIT_WINDOW_DAYS` (default 7), else 409 `edit_window_closed`. An edit returns the review to `pending` |
+| DELETE | `/reviews/{id}/` | ✓ author | ✅ At any time — a customer can always take down their own words. The window governs edits only |
+| POST | `/reviews/{id}/helpful/` | optional | ✅ One vote per account or per client address (stored only as a salted hash). Returns `{helpful_count, counted}`. 409 `own_review`; 404 unless published. CSRF enforced for anonymous callers too |
+| GET | `/reviews/pending/` | manager | ✅ Moderation queue, oldest first |
+| POST | `/reviews/{id}/moderate/` | manager | ✅ `{action: approve\|reject, reason}`; `reason` required to reject and shown to the author. Reversible |
+
+- Every review is a verified purchase: a review targets one order line (REV-5), and only lines of delivered orders qualify. "Delivered" means `delivered_at` is set — an order refunded after delivery stays reviewable, one refunded before it left does not.
+- Order lines gained `id` (a UUID; the integer key never leaves the server), `review` (`{id, status, rating}` or null) and `can_review`.
+- `MenuItem.average_rating` / `review_count` are rebuilt from approved reviews on every approval, rejection, edit and deletion (REV-4). Moderation happens here or in the Django admin; both go through the same service.
+- On account erasure (`user_anonymised`) a person's reviews are deleted and the ratings they fed are recomputed.
 
 ---
 
@@ -675,9 +682,13 @@ The bot answers **only** from `FaqEntry` and an order-status lookup. Unmatched i
 | `POST /cart/promo/` | 10/min per cart — **stops promo-code brute force** |
 | `POST /support/contact/` | 3/hour per IP |
 | `POST /catering/enquiries/` | 5/hour per IP |
+| `POST /reviews/` | 10/hour per user |
+| `POST /reviews/{id}/helpful/` | 60/hour per user or IP |
 | Webhooks | unlimited, signature-gated |
 
 429 responses carry `Retry-After`.
+
+Scoped limits count **writes only** (`apps/common/throttling.py`): reading `/orders/` history does not use up the allowance for placing an order. Until Phase 3.1 the scoped rows above were declared but never enforced — no view installed `ScopedRateThrottle` — so they fell back to the global limit; `apps/common/tests/test_scoped_throttles.py` now fails if a view declares a scope without the throttle.
 
 ---
 

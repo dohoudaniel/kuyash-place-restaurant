@@ -21,6 +21,7 @@ from apps.common import idempotency
 from apps.common.exceptions import DomainError, IllegalTransition
 from apps.common.pagination import CursorPagination
 from apps.common.permissions import IsKitchenStaff, current_user
+from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
 from apps.orders.models import EventSource, Order, OrderStatus
 from apps.orders.serializers import (
@@ -79,6 +80,7 @@ class OrderCreateListView(APIView):
 
     permission_classes = [AllowAny]
     throttle_scope = "order_create"
+    throttle_classes = SCOPED_THROTTLES
 
     @extend_schema(
         summary="Place an order",
@@ -178,7 +180,8 @@ class OrderDetailView(APIView):
     )
     def get(self, request: Request, reference: str) -> Response:
         order = get_object_or_404(
-            Order.objects.prefetch_related("items__modifiers", "events"), reference=reference
+            Order.objects.prefetch_related("items__modifiers", "items__reviews", "events"),
+            reference=reference,
         )
         if not _may_read(request, order):
             # 404 rather than 403: existence itself is not disclosed.

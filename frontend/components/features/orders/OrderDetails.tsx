@@ -1,15 +1,24 @@
 "use client";
 
 import Image from "next/image";
+import { Star } from "lucide-react";
 import { mediaUrl } from "@/lib/api/media";
-import type { OrderDetail } from "@/lib/api/types";
+import type { OrderDetail, OrderLine } from "@/lib/api/types";
 import { formatDate } from "./statusStyles";
 
 interface OrderDetailsProps {
   order: OrderDetail;
+  /** Offer reviews on delivered lines. Omit for guests. */
+  onReview?: (line: OrderLine) => void;
 }
 
-export default function OrderDetails({ order }: OrderDetailsProps) {
+const REVIEW_LABELS: Record<NonNullable<OrderLine["review"]>["status"], string> = {
+  pending: "Review awaiting approval",
+  approved: "Review published",
+  rejected: "Review not published",
+};
+
+export default function OrderDetails({ order, onReview }: OrderDetailsProps) {
   return (
     <div className="bg-white rounded-xl border p-6 sm:p-8" style={{ borderColor: "var(--gray-mid)" }}>
       <div className="flex items-center justify-between mb-6">
@@ -35,7 +44,7 @@ export default function OrderDetails({ order }: OrderDetailsProps) {
           const imageSrc = mediaUrl(line.image_url);
           const details = [line.variant_name, ...line.modifiers].filter(Boolean).join(" · ");
           return (
-            <div key={`${line.slug}-${index}`} className="flex gap-4 pb-4 border-b last:border-b-0" style={{ borderColor: "var(--gray-mid)" }}>
+            <div key={line.id ?? `${line.slug}-${index}`} className="flex gap-4 pb-4 border-b last:border-b-0" style={{ borderColor: "var(--gray-mid)" }}>
               {/* Image */}
               <div className="shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden relative" style={{ background: "var(--off-white)" }}>
                 {imageSrc ? (
@@ -63,6 +72,17 @@ export default function OrderDetails({ order }: OrderDetailsProps) {
                 <p className="text-xs font-semibold mt-2" style={{ color: "var(--text-muted)" }}>
                   Qty: {line.quantity}
                 </p>
+                {onReview && (line.can_review || line.review) && (
+                  <button
+                    type="button"
+                    onClick={() => onReview(line)}
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-bold transition-opacity hover:opacity-70"
+                    style={{ color: "var(--red)" }}
+                  >
+                    <Star className={`w-3.5 h-3.5 ${line.review ? "fill-current" : ""}`} />
+                    {line.review ? `${REVIEW_LABELS[line.review.status]} · View` : "Write a review"}
+                  </button>
+                )}
               </div>
 
               {/* Price */}

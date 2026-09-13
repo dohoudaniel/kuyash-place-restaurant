@@ -62,6 +62,7 @@ LOCAL_APPS = [
     "apps.catering",
     "apps.support",
     "apps.notifications",
+    "apps.reviews",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -147,6 +148,9 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_CONFIRM_EMAIL_ON_GET = False
 ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
+
+# How long a customer may edit a review after posting it (REV-5).
+REVIEW_EDIT_WINDOW_DAYS = env.int("REVIEW_EDIT_WINDOW_DAYS", default=7)
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_ADAPTER = "apps.accounts.adapters.KuyashAccountAdapter"
 
@@ -252,6 +256,8 @@ REST_FRAMEWORK = {
         "promo_apply": "10/min",
         "contact": "3/hour",
         "catering": "5/hour",
+        "review_create": "10/hour",
+        "review_vote": "60/hour",
     },
     "UNAUTHENTICATED_USER": "django.contrib.auth.models.AnonymousUser",
 }
@@ -283,6 +289,7 @@ SPECTACULAR_SETTINGS = {
         "RefundStatusEnum": "apps.payments.models.RefundStatus",
         "RedemptionStatusEnum": "apps.promotions.models.RedemptionStatus",
         "NotificationStatusEnum": "apps.notifications.models.NotificationStatus",
+        "ReviewStatusEnum": "apps.reviews.models.ReviewStatus",
     },
 }
 
