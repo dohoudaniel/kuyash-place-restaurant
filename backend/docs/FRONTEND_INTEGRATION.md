@@ -324,10 +324,10 @@ Follow this sequence; each step is independently shippable.
 1. ✅ API client, generated types, `authStore`, env vars, `next.config.ts` images
 2. ✅ **Delete** the dead trees and the card fields (before writing integration code, not after)
 3. ✅ Auth: login, signup, reset, verify, session bootstrap, route gating
-4. Catalogue: menu list, detail, real modifiers, server-side filtering
-5. Cart: server cart, server totals, promo application
-6. Checkout + payments: order creation, hosted checkout, completion page
-7. Orders: tracking with polling, history
+4. ✅ Catalogue: menu list, detail, real modifiers, server-side filtering
+5. ✅ Cart: server cart, server totals, promo application
+6. ✅ Checkout + payments: order creation, hosted checkout, completion page
+7. ✅ Orders: tracking with polling, history
 8. Account: profile, addresses
 9. — **Phase 1 ships here** —
 10. Reservations, catering, contact, wishlist sync
@@ -437,6 +437,93 @@ social failure → logout passes end to end with zero server errors.
 
 Not yet done, and not part of step 3: `ProfileSection` and `PreferencesSection` still
 `alert()` on save (step 8, Account).
+
+---
+
+### 5.3 Steps 4–7 delivered
+
+The whole purchase path now runs on the API: browse → configure → cart → checkout →
+pay → track → reorder. Built on the existing design system; the screens keep their
+markup, classes and colours.
+
+**Why four steps landed together.** Every "Add to cart" button fed the local cart with
+`parseFloat`-ed naira strings, and the cart summary did its own discount, delivery and
+VAT arithmetic. Menu items from the API carry integer-kobo `Money`, so wiring the menu
+alone meant either client-side money arithmetic (forbidden) or two carts that
+disagreed. Once the cart lived on the server, a "Confirm" that wrote to the local order
+history would have recorded kobo as naira. So the chain was finished rather than left
+half-migrated.
+
+**Catalogue (4).** Homepage and `/menu` read `/catalog/*`. Search, filters and all five
+sorts run on the server (two were `return 0`). The "Filters" button used to open an
+empty overlay; the unmounted `MenuFilters` panel is now that overlay, with dietary tags
+from the API and price bands as fixed kobo bounds. Ratings are real or say "No reviews
+yet" (every dish showed five stars). The hero's "50+ Popular / 100+ Rated 5★ / 30 min"
+were fixed strings and are now counts. The item dialog renders the dish's own sizes and
+option groups with real required/up-to-N rules — replacing one `MOCK_CUSTOMIZATIONS`
+array on every dish — and its total comes from `POST /cart/quote/`, priced by the same
+service the cart charges with. `/menu?item=<slug>` deep-links to a dish; "Share" copies
+that link instead of `alert()`.
+
+**Cart (5).** `cartStore` holds the server's cart and nothing it computed; writes are
+queued so overlapping responses cannot land out of order. The summary shows server
+totals, VAT and delivery notes, price changes and unavailable items since they were
+added, and blockers. Checkout stays enabled for blockers resolved *in* checkout (an
+address). `promoStore` is deleted — it listed every promo code to every visitor. The
+"Frequently Bought Together" panel (hardcoded dishes, dollar-figure prices, a summed
+"Add All") shows featured dishes instead. The wishlist stays local until step 10, keyed
+by slug; its v1 mock entries are dropped by a persist migration.
+
+**Checkout (6).** Delivery or pickup; signed-in customers pick or add a saved address
+(`area` resolves the zone; `landmark` replaces the unused "Zip Code"), and the cart is
+re-priced for that zone before review. Payment offers bank transfer only when the
+branch has account details. Review shows the server cart, places the order with an
+`Idempotency-Key` kept across network retries and `expected_total` as a guard, handles
+`price_changed`, and redirects to the provider's hosted page. `/checkout/complete`
+verifies by polling the backend — the browser's return is a hint, not proof.
+
+**Orders (7).** `/orders/[id]` renders the event-log timeline (the old one invented
+times from the clock), polls every 15 s until a final status while the tab is visible,
+and offers pay-now, cancel, receipt PDF and reorder. `/orders` and the account tab read
+`/orders/mine/` with a two-line preview. Guests track by the token issued at placement,
+kept per reference in this browser. `orderHistoryStore` and the menu image registry are
+deleted.
+
+**Product constraints surfaced, not invented around:**
+
+- **Guests can only choose pickup.** Delivery addresses belong to accounts
+  (`Address.user` is required and the cart refuses an address for an anonymous cart).
+  Checkout offers guests "Sign in for delivery". Allowing guest delivery is a backend
+  change and a product decision — see DECISIONS.md OD-7.
+- **Bank transfer was a false promise.** The payment step said "You will receive bank
+  transfer details after placing your order"; no such details existed anywhere. Branch
+  now has bank fields; with any blank, the option is hidden *and* the API refuses a
+  transfer order.
+- **Cash on delivery is ungated.** PAYMENTS.md §5.3 specifies a cap and a verified
+  account; placement does not enforce either. See OD-8.
+
+**Defects found only by running the flow against a live server** (all fixed, all with
+regression tests):
+
+| Defect | Effect |
+|---|---|
+| The dummy payment provider verified every payment as ₦0 | Settlement treated it as an amount-mismatch attack: no simulated card payment could ever succeed in development |
+| The verify endpoint built its response from an order cached before settlement | Reported `payment_status: pending` for an order it had just marked paid |
+| Cart line items, changes, blockers; order lines, timeline, address, rider were untyped dicts in the schema | The generated client had no types for the screens that matter most |
+| A serializer field named `label` shadowed DRF's `Field.label` | Caught by mypy; the wire key is added in `get_fields()` |
+
+Verified: backend 915 passed, ruff/mypy/migrations clean; frontend `tsc` clean,
+`next build` passes, ESLint 40 → 33 errors and 12 → 7 warnings with no new findings; a
+scripted live run — catalogue, quotes, guest cart, pickup + cash with idempotent replay,
+guest token access, transfer refusal, stale-total refusal, register → verify → cart
+merge → address → zone-priced delivery → card → verify → paid → receipt → history →
+cancel — passes with zero server errors.
+
+**Still to do:** step 8 (account profile, addresses tab, preferences — `ProfileSection`
+and `PreferencesSection` still `alert()`, `AddressesSection` still shows two hardcoded
+Lagos addresses), wishlist server sync (step 10), reservations/catering/contact wiring,
+real menu photographs (none exist — `public/images/menu` is empty), and real prices
+(OD-2: 15 of 18 dishes are hidden until repriced).
 
 ---
 

@@ -220,3 +220,18 @@ def test_a_stranger_cannot_cancel_someone_elses_order(  # type: ignore[no-untype
     )
     assert response.status_code == 404
     assert Order.objects.get(reference=reference).status != OrderStatus.CANCELLED
+
+
+def test_order_history_rows_carry_a_short_preview(api_client, verified_user, ready_cart) -> None:  # type: ignore[no-untyped-def]
+    """A history card shows what was ordered without one request per order."""
+    from apps.orders.services.placement import place_order
+
+    place_order(cart=ready_cart, payment_method="card")
+    api_client.force_authenticate(verified_user)
+
+    row = api_client.get(reverse("v1:orders:history")).json()["results"][0]
+
+    assert row["preview"][0]["name"] == "Classic Smash Burger"
+    assert row["preview"][0]["quantity"] == 2
+    assert row["preview"][0]["line_subtotal"]["display"].startswith("₦")
+    assert len(row["preview"]) <= 2

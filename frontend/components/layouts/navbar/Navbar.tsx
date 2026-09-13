@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Heart, LogOut, User } from "lucide-react";
 import { IMAGES } from "@/lib/assets/images";
-import { useCartStore } from "@/lib/store/cartStore";
+import { selectCartCount, useCartStore } from "@/lib/store/cartStore";
 import { useWishlistStore } from "@/lib/store/wishlistStore";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useAuthModalStore } from "@/lib/store/authModalStore";
@@ -20,10 +20,8 @@ export default function Navbar() {
   const logout = useAuthStore((state) => state.logout);
   const openAuth = useAuthModalStore((state) => state.open);
   const isSignedIn = authStatus === "authenticated";
-  const { getTotalItems } = useCartStore();
-  const { getTotalItems: getWishlistCount } = useWishlistStore();
-  const cartCount = getTotalItems();
-  const wishlistCount = getWishlistCount();
+  const cartCount = useCartStore(selectCartCount);
+  const wishlistCount = useWishlistStore((state) => state.items.length);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);

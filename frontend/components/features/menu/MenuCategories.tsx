@@ -1,9 +1,9 @@
 "use client";
 
-import type { MenuCategory } from "@/lib/types";
+import type { Category } from "@/lib/api/types";
 
 interface MenuCategoriesProps {
-  categories: MenuCategory[];
+  categories: Category[];
   activeSlug: string;
   onCategoryChange: (slug: string) => void;
 }
@@ -17,6 +17,7 @@ export default function MenuCategories({ categories, activeSlug, onCategoryChang
           <button
             key={cat.slug}
             onClick={() => onCategoryChange(cat.slug)}
+            aria-pressed={isActive}
             className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105 active:scale-95"
             style={{
               background: isActive ? "var(--orange)" : "white",
@@ -26,7 +27,7 @@ export default function MenuCategories({ categories, activeSlug, onCategoryChang
             }}
           >
             <span aria-hidden="true">{cat.emoji}</span>
-            {cat.label}
+            {cat.name}
           </button>
         );
       })}

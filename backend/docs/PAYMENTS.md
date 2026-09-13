@@ -242,13 +242,29 @@ class PaymentProvider(Protocol):
 
 Adding a third provider is a new class, not a new branch in the order service.
 
+In development, with no provider keys and `DEBUG` on, the simulated provider returns a
+checkout URL pointing straight back at `/checkout/complete`, and verifies using the
+amount recorded for that transaction. It used to verify every payment as ₦0, which
+settlement correctly rejects as an amount mismatch — so the checkout could not be
+walked end to end locally. It is refused outright when `DEBUG` is off.
+
 ### 5.2 Bank transfer
+
+> **Status (frontend integration):** implemented as `Branch.bank_name`,
+> `bank_account_name` and `bank_account_number`, published as `bank_transfer` on
+> `/core/branch/`. With any field blank the checkout hides the option **and**
+> placement refuses it — an order placed for transfer with no account to pay into can
+> never be paid. The checkout previously promised details that did not exist.
 
 Order created `pending_payment`; API returns the account details that were hardcoded in the frontend's `PaymentStepCompact.tsx` (since deleted) — **now served from `Branch`, so they can be changed without a deploy.** Staff confirm receipt in admin, which transitions the order and writes a `PaymentTransaction(provider="bank_transfer")`.
 
 > Phase 3 upgrade: a dedicated virtual account per order (both providers support this) for automatic reconciliation.
 
 ### 5.3 Cash on delivery
+
+> **Status:** the cap and the verified-account requirement below are **not enforced**
+> by `place_order` today — cash orders are accepted and confirmed immediately. Open
+> decision OD-8 in DECISIONS.md.
 
 Order created `confirmed` with `payment_status="unpaid"`. `DeliveryAssignment.cash_collected` records what the rider took; a shift-end reconciliation report flags shortfalls. COD carries fraud risk, so it is gated on: order total below a configurable cap, and either a verified account or a previously delivered order.
 

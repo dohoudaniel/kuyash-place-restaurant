@@ -92,7 +92,10 @@ class VerifyPaymentView(APIView):
         if record is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        # Re-read: settlement updates the order through its own query, so the
+        # instance cached on the transaction still carries the old payment status.
         order = record.order
+        order.refresh_from_db()
         return Response(
             {
                 "status": record.status,

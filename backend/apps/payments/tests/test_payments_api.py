@@ -251,3 +251,24 @@ def test_initialise_records_consent_to_keep_the_card(  # type: ignore[no-untyped
         PaymentTransaction.objects.get(our_reference=response.json()["reference"]).save_method
         is True
     )
+
+
+@pytest.mark.django_db
+def test_verify_reports_the_order_as_paid_in_the_same_response(
+    api_client, verified_user, order, settings
+) -> None:  # type: ignore[no-untyped-def]
+    """The response used to say `payment_status: pending` for an order it had just
+    marked paid — it read an order instance cached before settlement."""
+    from apps.payments.services.payments import initialise_payment
+
+    settings.DEBUG = True
+    settings.PAYSTACK_SECRET_KEY = ""
+    settings.FLUTTERWAVE_SECRET_KEY = ""
+    record = initialise_payment(order=order)
+
+    api_client.force_authenticate(user=verified_user)
+    body = api_client.get(reverse("v1:payments:verify", args=[record.our_reference])).json()
+
+    assert body["status"] == "success"
+    assert body["order_status"] == "paid"
+    assert body["payment_status"] == "paid"

@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { MenuCategory } from "@/lib/types";
+import type { Category } from "@/lib/api/types";
 
 interface MenuCategoriesScrollProps {
-  categories: MenuCategory[];
+  categories: Category[];
   activeCategory: string;
   onCategoryChange: (category: string) => void;
 }
@@ -20,8 +20,8 @@ export default function MenuCategoriesScroll({
   const [showRightArrow, setShowRightArrow] = useState(true);
 
   const allCategories = [
-    { label: "All Items", slug: "all", emoji: "🍽️" },
-    ...categories,
+    { name: "All Items", slug: "all", emoji: "🍽️" },
+    ...categories.map((category) => ({ name: category.name, slug: category.slug, emoji: category.emoji ?? "" })),
   ];
 
   const checkScroll = () => {
@@ -33,13 +33,17 @@ export default function MenuCategoriesScroll({
   };
 
   useEffect(() => {
-    checkScroll();
     const current = scrollRef.current;
     if (current) {
       current.addEventListener("scroll", checkScroll);
-      return () => current.removeEventListener("scroll", checkScroll);
+      // Measure once the categories have rendered; they arrive from the API.
+      const frame = window.requestAnimationFrame(checkScroll);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        current.removeEventListener("scroll", checkScroll);
+      };
     }
-  }, []);
+  }, [categories.length]);
 
   const scroll = (direction: "left" | "right") => {
     if (scrollRef.current) {
@@ -57,6 +61,7 @@ export default function MenuCategoriesScroll({
       {showLeftArrow && (
         <button
           onClick={() => scroll("left")}
+          aria-label="Scroll categories left"
           className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110"
           style={{ background: "white", border: "2px solid var(--gray-mid)" }}
         >
@@ -74,6 +79,7 @@ export default function MenuCategoriesScroll({
           <button
             key={category.slug}
             onClick={() => onCategoryChange(category.slug)}
+            aria-pressed={activeCategory === category.slug}
             className="shrink-0 px-6 py-3 rounded-full font-bold text-sm transition-all hover:scale-105 whitespace-nowrap"
             style={{
               background: activeCategory === category.slug ? "var(--red)" : "white",
@@ -82,7 +88,7 @@ export default function MenuCategoriesScroll({
             }}
           >
             <span className="mr-2">{category.emoji}</span>
-            {category.label}
+            {category.name}
           </button>
         ))}
       </div>
@@ -91,6 +97,7 @@ export default function MenuCategoriesScroll({
       {showRightArrow && (
         <button
           onClick={() => scroll("right")}
+          aria-label="Scroll categories right"
           className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110"
           style={{ background: "white", border: "2px solid var(--gray-mid)" }}
         >

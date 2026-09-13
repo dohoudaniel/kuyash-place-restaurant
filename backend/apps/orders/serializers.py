@@ -38,11 +38,79 @@ class CancelSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True, default="", max_length=300)
 
 
+class OrderLineSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    slug = serializers.CharField(allow_blank=True)
+    variant_name = serializers.CharField(allow_blank=True)
+    quantity = serializers.IntegerField()
+    modifiers = serializers.ListField(child=serializers.CharField())
+    special_instructions = serializers.CharField(allow_blank=True)
+    unit_price = MoneySerializer()
+    line_subtotal = MoneySerializer()
+    image_url = serializers.CharField(allow_null=True)
+
+    class Meta:
+        ref_name = "OrderLine"
+
+
+class OrderTimelineStepSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    at = serializers.DateTimeField(allow_null=True)
+    reached = serializers.BooleanField()
+
+    class Meta:
+        ref_name = "OrderTimelineStep"
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        # The wire key is `label`, but declaring a class attribute of that name
+        # shadows DRF's own Field.label. Added here instead.
+        fields = super().get_fields()
+        fields["label"] = serializers.CharField()
+        return fields
+
+
+class OrderAddressSerializer(serializers.Serializer):
+    recipient_name = serializers.CharField(allow_blank=True)
+    phone = serializers.CharField(allow_blank=True)
+    street = serializers.CharField(allow_blank=True)
+    area = serializers.CharField(allow_blank=True)
+    city = serializers.CharField(allow_blank=True)
+    state = serializers.CharField(allow_blank=True)
+    landmark = serializers.CharField(allow_blank=True)
+    delivery_notes = serializers.CharField(allow_blank=True)
+    zone = serializers.CharField(allow_blank=True)
+
+    class Meta:
+        ref_name = "OrderAddress"
+
+
+class OrderRiderSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    phone = serializers.CharField(allow_blank=True)
+
+    class Meta:
+        ref_name = "OrderRider"
+
+
+class OrderPreviewLineSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    quantity = serializers.IntegerField()
+    line_subtotal = MoneySerializer()
+    image_url = serializers.CharField(allow_null=True)
+
+    class Meta:
+        ref_name = "OrderPreviewLine"
+
+
+PREVIEW_LINES = 2
+
+
 class OrderListSerializer(serializers.ModelSerializer):
     """Compact shape for order history."""
 
     total = serializers.SerializerMethodField()
     item_count = serializers.SerializerMethodField()
+    preview = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
@@ -56,6 +124,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "placed_at",
             "total",
             "item_count",
+            "preview",
         )
         read_only_fields = fields
 
@@ -65,6 +134,20 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_item_count(self, obj: Order) -> int:
         return sum(line.quantity for line in obj.items.all())
+
+    @extend_schema_field(OrderPreviewLineSerializer(many=True))
+    def get_preview(self, obj: Order) -> list[dict[str, Any]]:
+        """The first lines of the order, so a history card can show what was ordered
+        without a request per order. Uses the prefetched lines."""
+        return [
+            {
+                "name": line.name_snapshot,
+                "quantity": line.quantity,
+                "line_subtotal": money(line.line_subtotal, obj.currency),
+                "image_url": line.image_url_snapshot or None,
+            }
+            for line in list(obj.items.all())[:PREVIEW_LINES]
+        ]
 
 
 def serialise_order(order: Order, *, include_token: bool = False) -> dict[str, Any]:
@@ -193,14 +276,14 @@ class OrderDetailResponseSerializer(serializers.Serializer):
     placed_at = serializers.DateTimeField(allow_null=True)
     estimated_ready_at = serializers.DateTimeField(allow_null=True)
     estimated_delivery_at = serializers.DateTimeField(allow_null=True)
-    timeline = serializers.ListField(child=serializers.DictField())
-    items = serializers.ListField(child=serializers.DictField())
-    delivery_address = serializers.DictField(allow_null=True)
+    timeline = OrderTimelineStepSerializer(many=True)
+    items = OrderLineSerializer(many=True)
+    delivery_address = OrderAddressSerializer(allow_null=True)
     totals = TotalsSerializer()
     promo_code = serializers.CharField(allow_blank=True)
     customer_note = serializers.CharField(allow_blank=True)
     can_cancel = serializers.BooleanField()
-    rider = serializers.DictField(allow_null=True)
+    rider = OrderRiderSerializer(allow_null=True)
     guest_token = serializers.CharField(required=False)
 
     class Meta:

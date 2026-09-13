@@ -248,3 +248,24 @@ def test_payment_marks_the_amount_paid(ready_cart) -> None:  # type: ignore[no-u
     order.refresh_from_db()
     assert order.payment_status == PaymentStatus.PAID
     assert order.amount_paid == order.grand_total
+
+
+def test_a_transfer_order_is_refused_when_there_is_no_account_to_pay_into(ready_cart) -> None:  # type: ignore[no-untyped-def]
+    """Hiding the option is not enough: the API itself refuses."""
+    from apps.orders.services.placement import CheckoutBlocked
+
+    with pytest.raises(CheckoutBlocked):
+        place(ready_cart, payment_method="transfer")
+
+
+def test_a_transfer_order_is_accepted_once_bank_details_exist(ready_cart) -> None:  # type: ignore[no-untyped-def]
+    branch = ready_cart.branch
+    branch.bank_name = "Example Bank"
+    branch.bank_account_name = "Kuyash Place Ltd"
+    branch.bank_account_number = "0123456789"
+    branch.save()
+
+    order = place(ready_cart, payment_method="transfer")
+
+    assert order.payment_method == "transfer"
+    assert order.status == "pending_payment"

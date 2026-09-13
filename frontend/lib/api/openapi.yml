@@ -738,6 +738,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/Cart'
           description: ''
+  /api/v1/cart/quote/:
+    post:
+      operationId: cart_quote_create
+      description: |-
+        Price a configured dish without adding it to a cart.
+
+        The item dialog shows a live total while options are chosen. Computing that
+        in the browser would duplicate — and eventually contradict — the pricing
+        rules, so the dialog asks here, and gets the figure the cart will charge.
+      summary: Quote a configured item
+      tags:
+      - cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemQuoteInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ItemQuoteInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ItemQuoteInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemQuote'
+          description: ''
   /api/v1/orders/:
     post:
       operationId: orders_create
@@ -2044,8 +2078,7 @@ components:
         modifiers:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/ModifierChoiceRequest'
         special_instructions:
           type: string
           default: ''
@@ -2181,6 +2214,19 @@ components:
           $ref: '#/components/schemas/CurrentUser'
       required:
       - user
+    BankTransferDetails:
+      type: object
+      properties:
+        bank_name:
+          type: string
+        account_name:
+          type: string
+        account_number:
+          type: string
+      required:
+      - account_name
+      - account_number
+      - bank_name
     BlankEnum:
       enum:
       - ''
@@ -2385,8 +2431,14 @@ components:
           type: integer
           readOnly: true
           description: Fallback preparation time when a menu item has none.
+        bank_transfer:
+          allOf:
+          - $ref: '#/components/schemas/BankTransferDetails'
+          nullable: true
+          readOnly: true
       required:
       - address_line
+      - bank_transfer
       - can_accept_orders
       - city
       - currency
@@ -2432,15 +2484,23 @@ components:
           format: uuid
         fulfilment_type:
           type: string
+        delivery_address:
+          type: string
+          format: uuid
+          nullable: true
         items:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/CartLine'
+        item_count:
+          type: integer
+          description: Total quantity across lines, for badges.
         totals:
           $ref: '#/components/schemas/Totals'
         promo_code:
           type: string
+        prices_include_vat:
+          type: boolean
         vat_note:
           type: string
         delivery_note:
@@ -2451,33 +2511,146 @@ components:
         changes:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/CartChange'
         unavailable:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/CartUnavailable'
         blockers:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/CartBlocker'
         can_checkout:
           type: boolean
       required:
       - blockers
       - can_checkout
       - changes
+      - delivery_address
       - delivery_note
       - estimated_minutes
       - fulfilment_type
       - id
+      - item_count
       - items
+      - prices_include_vat
       - promo_code
       - totals
       - unavailable
       - vat_note
+    CartBlocker:
+      type: object
+      properties:
+        code:
+          type: string
+          description: address_required | outside_delivery_area | below_minimum_order
+            | item_unavailable | cart_empty | branch_closed
+        detail:
+          type: string
+      required:
+      - code
+      - detail
+    CartChange:
+      type: object
+      properties:
+        item:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          description: price_increased | price_reduced
+        old:
+          $ref: '#/components/schemas/PriceFragment'
+        new:
+          $ref: '#/components/schemas/PriceFragment'
+      required:
+      - item
+      - name
+      - type
+    CartLine:
+      type: object
+      properties:
+        id:
+          type: string
+        menu_item:
+          $ref: '#/components/schemas/CartMenuItemRef'
+        variant_name:
+          type: string
+        quantity:
+          type: integer
+        modifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartLineModifier'
+        unit_price:
+          $ref: '#/components/schemas/Money'
+        line_subtotal:
+          $ref: '#/components/schemas/Money'
+        discount:
+          $ref: '#/components/schemas/Money'
+        vat:
+          $ref: '#/components/schemas/Money'
+        special_instructions:
+          type: string
+        is_available:
+          type: boolean
+        unavailable_reason:
+          type: string
+      required:
+      - discount
+      - id
+      - is_available
+      - line_subtotal
+      - menu_item
+      - modifiers
+      - quantity
+      - special_instructions
+      - unavailable_reason
+      - unit_price
+      - variant_name
+      - vat
+    CartLineModifier:
+      type: object
+      properties:
+        name:
+          type: string
+        quantity:
+          type: integer
+        price_delta:
+          $ref: '#/components/schemas/Money'
+      required:
+      - name
+      - price_delta
+      - quantity
+    CartMenuItemRef:
+      type: object
+      properties:
+        slug:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+      required:
+      - image_url
+      - name
+      - slug
+    CartUnavailable:
+      type: object
+      properties:
+        item:
+          type: string
+        name:
+          type: string
+        reason:
+          type: string
+      required:
+      - item
+      - name
+      - reason
     Category:
       type: object
       properties:
@@ -3177,6 +3350,52 @@ components:
       required:
       - is_available_now
       - slug
+    ItemQuote:
+      type: object
+      properties:
+        menu_item:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        quantity:
+          type: integer
+        unit_price:
+          $ref: '#/components/schemas/Money'
+        line_total:
+          $ref: '#/components/schemas/Money'
+        is_available_now:
+          type: boolean
+          description: False outside the dish's serving window; it can be quoted but
+            not added.
+      required:
+      - is_available_now
+      - line_total
+      - menu_item
+      - quantity
+      - unit_price
+    ItemQuoteInputRequest:
+      type: object
+      description: A dish configuration to price. The same fields as adding to the
+        cart.
+      properties:
+        menu_item:
+          type: string
+          minLength: 1
+          pattern: ^[-a-zA-Z0-9_]+$
+        quantity:
+          type: integer
+          maximum: 99
+          minimum: 1
+          default: 1
+        variant:
+          type: string
+          format: uuid
+          nullable: true
+        modifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierChoiceRequest'
+      required:
+      - menu_item
     KDSQueue:
       type: object
       properties:
@@ -3628,6 +3847,20 @@ components:
       - id
       - name
       - price_delta
+    ModifierChoiceRequest:
+      type: object
+      description: One chosen option. Typed, so the generated client knows the shape.
+      properties:
+        modifier:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          maximum: 20
+          minimum: 1
+          default: 1
+      required:
+      - modifier
     ModifierGroup:
       type: object
       properties:
@@ -3756,6 +3989,37 @@ components:
       - is_open_now
       - overrides
       - timezone
+    OrderAddress:
+      type: object
+      properties:
+        recipient_name:
+          type: string
+        phone:
+          type: string
+        street:
+          type: string
+        area:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        landmark:
+          type: string
+        delivery_notes:
+          type: string
+        zone:
+          type: string
+      required:
+      - area
+      - city
+      - delivery_notes
+      - landmark
+      - phone
+      - recipient_name
+      - state
+      - street
+      - zone
     OrderDetail:
       type: object
       description: Response shape for order detail and the polling endpoint.
@@ -3787,16 +4051,14 @@ components:
         timeline:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/OrderTimelineStep'
         items:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/OrderLine'
         delivery_address:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/OrderAddress'
           nullable: true
         totals:
           $ref: '#/components/schemas/Totals'
@@ -3807,8 +4069,8 @@ components:
         can_cancel:
           type: boolean
         rider:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/OrderRider'
           nullable: true
         guest_token:
           type: string
@@ -3830,6 +4092,40 @@ components:
       - status_display
       - timeline
       - totals
+    OrderLine:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        variant_name:
+          type: string
+        quantity:
+          type: integer
+        modifiers:
+          type: array
+          items:
+            type: string
+        special_instructions:
+          type: string
+        unit_price:
+          $ref: '#/components/schemas/Money'
+        line_subtotal:
+          $ref: '#/components/schemas/Money'
+        image_url:
+          type: string
+          nullable: true
+      required:
+      - image_url
+      - line_subtotal
+      - modifiers
+      - name
+      - quantity
+      - slug
+      - special_instructions
+      - unit_price
+      - variant_name
     OrderList:
       type: object
       description: Compact shape for order history.
@@ -3863,15 +4159,48 @@ components:
         item_count:
           type: integer
           readOnly: true
+        preview:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderPreviewLine'
+          readOnly: true
       required:
       - fulfilment_type
       - item_count
       - payment_status
       - placed_at
+      - preview
       - reference
       - status
       - status_display
       - total
+    OrderPreviewLine:
+      type: object
+      properties:
+        name:
+          type: string
+        quantity:
+          type: integer
+        line_subtotal:
+          $ref: '#/components/schemas/Money'
+        image_url:
+          type: string
+          nullable: true
+      required:
+      - image_url
+      - line_subtotal
+      - name
+      - quantity
+    OrderRider:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+      required:
+      - name
+      - phone
     OrderStatusEnum:
       enum:
       - pending_payment
@@ -3902,6 +4231,24 @@ components:
         * `failed_delivery` - Delivery failed
         * `refunded` - Refunded
         * `failed` - Failed
+    OrderTimelineStep:
+      type: object
+      properties:
+        status:
+          type: string
+        at:
+          type: string
+          format: date-time
+          nullable: true
+        reached:
+          type: boolean
+        label:
+          type: string
+      required:
+      - at
+      - label
+      - reached
+      - status
     OverdueEnquiries:
       type: object
       description: Response envelope for ``GET /catering/enquiries/overdue/``.
@@ -4285,6 +4632,16 @@ components:
           additionalProperties: {}
       required:
       - payment_method
+    PriceFragment:
+      type: object
+      properties:
+        amount:
+          type: integer
+        display:
+          type: string
+      required:
+      - amount
+      - display
     Profile:
       type: object
       description: |-

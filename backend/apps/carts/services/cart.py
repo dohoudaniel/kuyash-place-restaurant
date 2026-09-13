@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from django.db import transaction
@@ -81,33 +82,46 @@ def _validate_modifier_selection(
     return [(modifier, max(by_id[str(modifier.id)], 1)) for modifier in modifiers]
 
 
-@transaction.atomic
-def add_item(
+@dataclass(frozen=True)
+class ConfiguredLine:
+    """A dish with its size and options validated, and its unit price computed."""
+
+    menu_item: MenuItem
+    variant: Variant | None
+    modifiers: list[tuple[Modifier, int]]
+    unit_price: int
+
+
+def configure_line(
     *,
-    cart: Cart,
+    branch: Any,
     item_slug: str,
     quantity: int = 1,
     variant_id: str | None = None,
     modifiers: list[dict[str, Any]] | None = None,
-    special_instructions: str = "",
-) -> CartItem:
-    """Add a configured line.
+    require_available: bool = True,
+) -> ConfiguredLine:
+    """Validate a configuration against the live menu and price it.
 
-    Any ``price`` in the payload is ignored — the price comes from the
-    catalogue, every time.
+    Shared by adding to the cart and by quoting, so the total a customer sees
+    while choosing options is computed by exactly the code that will charge them.
+
+    ``require_available=False`` is for quoting only: someone reading the breakfast
+    menu at dinner should still see what a configuration costs, even though it
+    cannot be added until the window opens.
     """
     if quantity < 1:
         raise CartValidationError("Quantity must be at least 1.")
 
     menu_item = (
         MenuItem.objects.orderable()
-        .filter(branch=cart.branch, slug=item_slug)
+        .filter(branch=branch, slug=item_slug)
         .prefetch_related("modifier_groups")
         .first()
     )
     if menu_item is None:
         raise ItemUnavailable("That item is not on the menu.")
-    if not menu_item.available_at():
+    if require_available and not menu_item.available_at():
         raise ItemUnavailable(f"{menu_item.name} is unavailable right now.")
 
     variant = None
@@ -124,16 +138,43 @@ def add_item(
     unit_price = compute_unit_price(
         menu_item.base_price, variant.price_delta if variant else 0, deltas
     )
+    return ConfiguredLine(
+        menu_item=menu_item, variant=variant, modifiers=selected, unit_price=unit_price
+    )
+
+
+@transaction.atomic
+def add_item(
+    *,
+    cart: Cart,
+    item_slug: str,
+    quantity: int = 1,
+    variant_id: str | None = None,
+    modifiers: list[dict[str, Any]] | None = None,
+    special_instructions: str = "",
+) -> CartItem:
+    """Add a configured line.
+
+    Any ``price`` in the payload is ignored — the price comes from the
+    catalogue, every time.
+    """
+    configured = configure_line(
+        branch=cart.branch,
+        item_slug=item_slug,
+        quantity=quantity,
+        variant_id=variant_id,
+        modifiers=modifiers,
+    )
 
     line = CartItem.objects.create(
         cart=cart,
-        menu_item=menu_item,
-        variant=variant,
+        menu_item=configured.menu_item,
+        variant=configured.variant,
         quantity=quantity,
         special_instructions=special_instructions.strip(),
-        unit_price_snapshot=unit_price,
+        unit_price_snapshot=configured.unit_price,
     )
-    for modifier, count in selected:
+    for modifier, count in configured.modifiers:
         CartItemModifier.objects.create(cart_item=line, modifier=modifier, quantity=count)
 
     cart.save(update_fields=["expires_at", "updated_at"])

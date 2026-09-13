@@ -9,7 +9,7 @@
  *
  * Sections
  *   hero      – hero section backgrounds / feature shots
- *   menu      – individual dish photos (keyed to MenuItem.imageKey)
+ *   (menu photos come from the API — see lib/api/media.ts)
  *   brand     – logos, icons, og-images
  */
 
@@ -24,38 +24,6 @@ export const IMAGES = {
     garlic: "/images/hero/garlic.png",
   },
 
-  // ── Menu — What's Hot ───────────────────────────────────────────────────────
-  menu: {
-    signatureGrillPlate:  "/images/menu/signature-grill-plate.jpg",
-    fireChickenCombo:     "/images/menu/fire-chicken-combo.jpg",
-    chefsSpecialPasta:    "/images/menu/chefs-special-pasta.jpg",
-
-    // Burgers
-    classicSmashBurger:   "/images/menu/classic-smash-burger.jpg",
-    bbqBaconStack:        "/images/menu/bbq-bacon-stack.jpg",
-    spicyJalapenoBurger:  "/images/menu/spicy-jalapeno-burger.jpg",
-
-    // Chicken & Salads
-    grilledChickenBreast: "/images/menu/grilled-chicken-breast.jpg",
-    caesarSalad:          "/images/menu/caesar-salad.jpg",
-    crispyChickenStrips:  "/images/menu/crispy-chicken-strips.jpg",
-
-    // Tacos, Fries & Sides
-    streetTacos:          "/images/menu/street-tacos.jpg",
-    loadedFries:          "/images/menu/loaded-fries.jpg",
-    onionRings:           "/images/menu/onion-rings.jpg",
-
-    // Breakfast
-    fullBreakfastPlate:   "/images/menu/full-breakfast-plate.jpg",
-    pancakeStack:         "/images/menu/pancake-stack.jpg",
-    avocadoToast:         "/images/menu/avocado-toast.jpg",
-
-    // Desserts & Drinks
-    chocolateLavaCake:    "/images/menu/chocolate-lava-cake.jpg",
-    berryCheesecake:      "/images/menu/berry-cheesecake.jpg",
-    classicMilkshake:     "/images/menu/classic-milkshake.jpg",
-  },
-
   // ── Academy ─────────────────────────────────────────────────────────────────
   academy: {
     chef: "/images/chef.png",
@@ -68,4 +36,3 @@ export const IMAGES = {
   },
 } as const;
 
-export type ImageKey = keyof typeof IMAGES.menu;

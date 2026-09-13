@@ -1,20 +1,30 @@
 "use client";
 
-import { useOrderHistoryStore } from "@/lib/store/orderHistoryStore";
-import { Package, Clock, CheckCircle, Eye } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Package, Eye, Loader2 } from "lucide-react";
+import { statusStyle, useOrderHistory } from "@/components/features/orders";
 
 export default function OrderHistorySection() {
-  const { orders } = useOrderHistoryStore();
   const router = useRouter();
+  const { orders, state, hasMore } = useOrderHistory(5);
 
-  const statusConfig = {
-    confirmed: { icon: Clock, label: "Confirmed", color: "var(--red)" },
-    preparing: { icon: Package, label: "Preparing", color: "#f59e0b" },
-    ontheway: { icon: Package, label: "On The Way", color: "#3b82f6" },
-    delivered: { icon: CheckCircle, label: "Delivered", color: "#10b981" },
-    cancelled: { icon: Clock, label: "Cancelled", color: "#6b7280" },
-  };
+  if (state === "loading") {
+    return (
+      <div className="bg-white rounded-xl border p-12 flex items-center justify-center gap-2" style={{ borderColor: "var(--gray-mid)" }} role="status">
+        <Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--red)" }} />
+        <span className="text-sm" style={{ color: "var(--text-muted)" }}>Loading your orders…</span>
+      </div>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <div className="bg-white rounded-xl border p-12 text-center" style={{ borderColor: "var(--gray-mid)" }}>
+        <p role="alert" className="text-sm" style={{ color: "var(--text-muted)" }}>We couldn&apos;t load your orders. Please refresh.</p>
+      </div>
+    );
+  }
 
   if (orders.length === 0) {
     return (
@@ -38,43 +48,42 @@ export default function OrderHistorySection() {
   return (
     <div className="space-y-4">
       {orders.map((order) => {
-        const status = statusConfig[order.status];
-        const StatusIcon = status.icon;
+        const { icon: StatusIcon, color } = statusStyle(order.status);
+        const href = `/orders/${encodeURIComponent(order.reference)}`;
 
         return (
           <div
-            key={order.orderId}
+            key={order.reference}
             className="bg-white rounded-xl border p-4 sm:p-6 transition-all hover:shadow-md"
             style={{ borderColor: "var(--gray-mid)" }}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
                 <h3 className="font-black text-lg mb-1" style={{ color: "var(--black)" }}>
-                  Order #{order.orderId}
+                  Order #{order.reference}
                 </h3>
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {new Date(order.orderDate).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </p>
+                {order.placed_at && (
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    {new Date(order.placed_at).toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <div
                   className="px-3 py-1.5 rounded-full flex items-center gap-2 font-bold text-sm"
-                  style={{ background: `${status.color}15`, color: status.color }}
+                  style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
                 >
                   <StatusIcon className="w-4 h-4" />
-                  {status.label}
+                  {order.status_display}
                 </div>
-                <button
-                  onClick={() => router.push(`/orders/${order.orderId}`)}
+                <Link
+                  href={href}
+                  aria-label={`View order ${order.reference}`}
                   className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:bg-gray-100"
                   style={{ border: "1px solid var(--gray-mid)" }}
                 >
                   <Eye className="w-4 h-4" />
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -82,27 +91,33 @@ export default function OrderHistorySection() {
               <div>
                 <p className="text-xs font-bold mb-1" style={{ color: "var(--text-muted)" }}>Items</p>
                 <p className="font-bold text-sm" style={{ color: "var(--black)" }}>
-                  {order.items.length} {order.items.length === 1 ? "item" : "items"}
+                  {order.item_count} {order.item_count === 1 ? "item" : "items"}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-bold mb-1" style={{ color: "var(--text-muted)" }}>Total</p>
                 <p className="font-black text-lg" style={{ fontFamily: "var(--font-playfair)", color: "var(--red)" }}>
-                  ₦{order.pricing.total.toFixed(2)}
+                  {order.total.display}
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={() => router.push(`/orders/${order.orderId}`)}
-              className="w-full px-4 py-2.5 rounded-lg font-bold text-sm transition-all hover:opacity-80"
+            <Link
+              href={href}
+              className="block w-full text-center px-4 py-2.5 rounded-lg font-bold text-sm transition-all hover:opacity-80"
               style={{ background: "var(--gray-light)", color: "var(--black)" }}
             >
               View Details
-            </button>
+            </Link>
           </div>
         );
       })}
+
+      {hasMore && (
+        <Link href="/orders" className="block text-center text-sm font-bold py-2" style={{ color: "var(--red)" }}>
+          View all orders →
+        </Link>
+      )}
     </div>
   );
 }

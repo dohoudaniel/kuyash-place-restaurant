@@ -88,6 +88,14 @@ class Branch(TimeStampedModel, SoftDeleteModel):
         help_text="Fallback preparation time when a menu item has none.",
     )
 
+    bank_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="For bank transfer orders. Leave any bank field blank to switch transfer off.",
+    )
+    bank_account_name = models.CharField(max_length=150, blank=True)
+    bank_account_number = models.CharField(max_length=20, blank=True)
+
     class Meta:
         verbose_name_plural = "branches"
         ordering = ["name"]
@@ -124,6 +132,15 @@ class Branch(TimeStampedModel, SoftDeleteModel):
 
         windows = self.opening_hours.filter(weekday=moment.weekday(), is_closed=False)
         return any(window.opens_at <= moment.time() <= window.closes_at for window in windows)
+
+    @property
+    def accepts_bank_transfer(self) -> bool:
+        """Transfer is only offered once someone has entered where to send money.
+
+        The checkout used to promise "You will receive bank transfer details after
+        placing your order" when no such details existed anywhere in the system.
+        """
+        return bool(self.bank_name and self.bank_account_name and self.bank_account_number)
 
     @property
     def is_open_now(self) -> bool:

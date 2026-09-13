@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, SlidersHorizontal, Grid3x3, List, LayoutGrid, ArrowUpDown } from "lucide-react";
-import type { MenuFilters, ViewMode, SortOption } from "@/app/menu/page";
+import { SORT_OPTIONS, countActiveFilters, type MenuFilters, type SortOption, type ViewMode } from "./filters";
 
 interface MenuFiltersBarProps {
   filters: MenuFilters;
@@ -10,15 +10,8 @@ interface MenuFiltersBarProps {
   onViewModeChange: (mode: ViewMode) => void;
   onShowFilters: () => void;
   resultsCount: number;
+  isLoading?: boolean;
 }
-
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "popular", label: "Most Popular" },
-  { value: "price-low", label: "Price: Low to High" },
-  { value: "price-high", label: "Price: High to Low" },
-  { value: "rating", label: "Highest Rated" },
-  { value: "newest", label: "Newest First" },
-];
 
 export default function MenuFiltersBar({
   filters,
@@ -27,11 +20,9 @@ export default function MenuFiltersBar({
   onViewModeChange,
   onShowFilters,
   resultsCount,
+  isLoading = false,
 }: MenuFiltersBarProps) {
-  const activeFiltersCount =
-    (filters.priceRange[0] !== 0 || filters.priceRange[1] !== 100 ? 1 : 0) +
-    filters.dietary.length +
-    (filters.rating > 0 ? 1 : 0);
+  const activeFiltersCount = countActiveFilters(filters);
 
   return (
     <div className="sticky top-20 sm:top-24 z-20 bg-white rounded-xl border p-4 mb-6 shadow-sm" style={{ borderColor: "var(--gray-mid)" }}>
@@ -44,6 +35,7 @@ export default function MenuFiltersBar({
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
             placeholder="Search dishes, ingredients..."
+            aria-label="Search the menu"
             className="flex-1 outline-none text-sm"
             style={{ color: "var(--black)" }}
           />
@@ -55,6 +47,7 @@ export default function MenuFiltersBar({
           <select
             value={filters.sortBy}
             onChange={(e) => onFiltersChange({ ...filters, sortBy: e.target.value as SortOption })}
+            aria-label="Sort dishes"
             className="outline-none text-sm font-semibold cursor-pointer bg-transparent"
             style={{ color: "var(--black)" }}
           >
@@ -92,6 +85,7 @@ export default function MenuFiltersBar({
             className="p-2 rounded transition-all"
             style={{ background: viewMode === "grid" ? "var(--red)" : "transparent" }}
             title="Grid View"
+            aria-label="Grid view"
           >
             <Grid3x3 className="w-4 h-4" style={{ color: viewMode === "grid" ? "white" : "var(--text-muted)" }} />
           </button>
@@ -100,6 +94,7 @@ export default function MenuFiltersBar({
             className="p-2 rounded transition-all"
             style={{ background: viewMode === "list" ? "var(--red)" : "transparent" }}
             title="List View"
+            aria-label="List view"
           >
             <List className="w-4 h-4" style={{ color: viewMode === "list" ? "white" : "var(--text-muted)" }} />
           </button>
@@ -108,6 +103,7 @@ export default function MenuFiltersBar({
             className="p-2 rounded transition-all"
             style={{ background: viewMode === "compact" ? "var(--red)" : "transparent" }}
             title="Compact View"
+            aria-label="Compact view"
           >
             <LayoutGrid className="w-4 h-4" style={{ color: viewMode === "compact" ? "white" : "var(--text-muted)" }} />
           </button>
@@ -116,7 +112,7 @@ export default function MenuFiltersBar({
 
       {/* Results Count */}
       <div className="mt-3 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-        Showing {resultsCount} {resultsCount === 1 ? "item" : "items"}
+        {isLoading ? "Updating…" : `Showing ${resultsCount} ${resultsCount === 1 ? "item" : "items"}`}
         {filters.search && ` for "${filters.search}"`}
       </div>
     </div>

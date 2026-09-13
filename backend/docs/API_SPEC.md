@@ -248,6 +248,7 @@ The index returns one row per slug, not one per version.
 | POST | `/cart/promo/` | optional | Apply a code |
 | DELETE | `/cart/promo/` | optional | Remove |
 | PATCH | `/cart/fulfilment/` | optional | Set delivery/pickup, address, tip |
+| POST | `/cart/quote/` | — | ✅ Price a configured dish (size + options × quantity) without adding it. Same service the cart charges with; `is_available_now` is false outside a serving window |
 
 Guests carry `X-Cart-Token` (issued on first write, echoed in `X-Cart-Token` response header).
 
@@ -329,6 +330,14 @@ const total = subtotal - discount + deliveryFee + tax;                          
 | GET | `/orders/{reference}/receipt/` | optional* | ✅ PDF |
 
 \* Guests authenticate by `reference` + the `guest_token` returned at creation.
+
+**`GET /orders/mine/`** rows carry `preview`: the first two lines as
+`{name, quantity, line_subtotal: Money, image_url}`, so a history card shows what was
+ordered without a request per order.
+
+**`GET /core/branch/`** carries `bank_transfer: {bank_name, account_name, account_number} | null`.
+Null means transfer is switched off: the checkout hides it and `POST /orders/` refuses
+`payment_method: "transfer"` with `409 checkout_blocked`.
 
 **`POST /orders/{reference}/reorder/`**
 

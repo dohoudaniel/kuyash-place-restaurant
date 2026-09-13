@@ -63,6 +63,16 @@ class BranchAdmin(admin.ModelAdmin):
                 "description": "Money fields are in <strong>kobo</strong>: ₦1,500.00 is 150000.",
             },
         ),
+        (
+            "Bank transfer",
+            {
+                "fields": ("bank_name", "bank_account_name", "bank_account_number"),
+                "description": (
+                    "Shown to customers who choose bank transfer. Leave any field blank "
+                    "and the option is hidden at checkout and refused by the API."
+                ),
+            },
+        ),
         ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 

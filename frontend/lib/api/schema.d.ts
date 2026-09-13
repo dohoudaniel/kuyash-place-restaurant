@@ -549,6 +549,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cart/quote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quote a configured item
+         * @description Price a configured dish without adding it to a cart.
+         *
+         *     The item dialog shows a live total while options are chosen. Computing that
+         *     in the browser would duplicate — and eventually contradict — the pricing
+         *     rules, so the dialog asks here, and gets the figure the cart will charge.
+         */
+        post: operations["cart_quote_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orders/": {
         parameters: {
             query?: never;
@@ -1452,9 +1476,7 @@ export interface components {
             quantity: number;
             /** Format: uuid */
             variant?: string | null;
-            modifiers?: {
-                [key: string]: unknown;
-            }[];
+            modifiers?: components["schemas"]["ModifierChoiceRequest"][];
             /** @default  */
             special_instructions: string;
         };
@@ -1504,6 +1526,11 @@ export interface components {
         /** @description ``{"user": …}`` — returned by login and email verification. */
         AuthUserResponse: {
             user: components["schemas"]["CurrentUser"];
+        };
+        BankTransferDetails: {
+            bank_name: string;
+            account_name: string;
+            account_number: string;
         };
         /** @enum {unknown} */
         BlankEnum: "";
@@ -1580,6 +1607,7 @@ export interface components {
             } | null;
             /** @description Fallback preparation time when a menu item has none. */
             readonly default_prep_minutes: number;
+            readonly bank_transfer: components["schemas"]["BankTransferDetails"] | null;
         };
         CancelRequest: {
             /** @default  */
@@ -1594,24 +1622,63 @@ export interface components {
             /** Format: uuid */
             id: string;
             fulfilment_type: string;
-            items: {
-                [key: string]: unknown;
-            }[];
+            /** Format: uuid */
+            delivery_address: string | null;
+            items: components["schemas"]["CartLine"][];
+            /** @description Total quantity across lines, for badges. */
+            item_count: number;
             totals: components["schemas"]["Totals"];
             promo_code: string;
+            prices_include_vat: boolean;
             vat_note: string;
             delivery_note: string;
             estimated_minutes: number | null;
-            changes: {
-                [key: string]: unknown;
-            }[];
-            unavailable: {
-                [key: string]: unknown;
-            }[];
-            blockers: {
-                [key: string]: unknown;
-            }[];
+            changes: components["schemas"]["CartChange"][];
+            unavailable: components["schemas"]["CartUnavailable"][];
+            blockers: components["schemas"]["CartBlocker"][];
             can_checkout: boolean;
+        };
+        CartBlocker: {
+            /** @description address_required | outside_delivery_area | below_minimum_order | item_unavailable | cart_empty | branch_closed */
+            code: string;
+            detail: string;
+        };
+        CartChange: {
+            item: string;
+            name: string;
+            /** @description price_increased | price_reduced */
+            type: string;
+            old?: components["schemas"]["PriceFragment"];
+            new?: components["schemas"]["PriceFragment"];
+        };
+        CartLine: {
+            id: string;
+            menu_item: components["schemas"]["CartMenuItemRef"];
+            variant_name: string;
+            quantity: number;
+            modifiers: components["schemas"]["CartLineModifier"][];
+            unit_price: components["schemas"]["Money"];
+            line_subtotal: components["schemas"]["Money"];
+            discount: components["schemas"]["Money"];
+            vat: components["schemas"]["Money"];
+            special_instructions: string;
+            is_available: boolean;
+            unavailable_reason: string;
+        };
+        CartLineModifier: {
+            name: string;
+            quantity: number;
+            price_delta: components["schemas"]["Money"];
+        };
+        CartMenuItemRef: {
+            slug: string;
+            name: string;
+            image_url: string | null;
+        };
+        CartUnavailable: {
+            item: string;
+            name: string;
+            reason: string;
         };
         Category: {
             /** Format: uuid */
@@ -1888,6 +1955,23 @@ export interface components {
             slug: string;
             is_available_now: boolean;
         };
+        ItemQuote: {
+            menu_item: string;
+            quantity: number;
+            unit_price: components["schemas"]["Money"];
+            line_total: components["schemas"]["Money"];
+            /** @description False outside the dish's serving window; it can be quoted but not added. */
+            is_available_now: boolean;
+        };
+        /** @description A dish configuration to price. The same fields as adding to the cart. */
+        ItemQuoteInputRequest: {
+            menu_item: string;
+            /** @default 1 */
+            quantity: number;
+            /** Format: uuid */
+            variant?: string | null;
+            modifiers?: components["schemas"]["ModifierChoiceRequest"][];
+        };
         KDSQueue: {
             orders: components["schemas"]["KDSTicket"][];
         };
@@ -2077,6 +2161,13 @@ export interface components {
             is_default?: boolean;
             is_available?: boolean;
         };
+        /** @description One chosen option. Typed, so the generated client knows the shape. */
+        ModifierChoiceRequest: {
+            /** Format: uuid */
+            modifier: string;
+            /** @default 1 */
+            quantity: number;
+        };
         ModifierGroup: {
             /** Format: uuid */
             readonly id: string;
@@ -2134,6 +2225,17 @@ export interface components {
             hours: components["schemas"]["OpeningHours"][];
             overrides: components["schemas"]["HolidayOverride"][];
         };
+        OrderAddress: {
+            recipient_name: string;
+            phone: string;
+            street: string;
+            area: string;
+            city: string;
+            state: string;
+            landmark: string;
+            delivery_notes: string;
+            zone: string;
+        };
         /** @description Response shape for order detail and the polling endpoint. */
         OrderDetail: {
             reference: string;
@@ -2148,23 +2250,26 @@ export interface components {
             estimated_ready_at: string | null;
             /** Format: date-time */
             estimated_delivery_at: string | null;
-            timeline: {
-                [key: string]: unknown;
-            }[];
-            items: {
-                [key: string]: unknown;
-            }[];
-            delivery_address: {
-                [key: string]: unknown;
-            } | null;
+            timeline: components["schemas"]["OrderTimelineStep"][];
+            items: components["schemas"]["OrderLine"][];
+            delivery_address: components["schemas"]["OrderAddress"] | null;
             totals: components["schemas"]["Totals"];
             promo_code: string;
             customer_note: string;
             can_cancel: boolean;
-            rider: {
-                [key: string]: unknown;
-            } | null;
+            rider: components["schemas"]["OrderRider"] | null;
             guest_token?: string;
+        };
+        OrderLine: {
+            name: string;
+            slug: string;
+            variant_name: string;
+            quantity: number;
+            modifiers: string[];
+            special_instructions: string;
+            unit_price: components["schemas"]["Money"];
+            line_subtotal: components["schemas"]["Money"];
+            image_url: string | null;
         };
         /** @description Compact shape for order history. */
         OrderList: {
@@ -2177,6 +2282,17 @@ export interface components {
             readonly placed_at: string | null;
             readonly total: components["schemas"]["Money"];
             readonly item_count: number;
+            readonly preview: components["schemas"]["OrderPreviewLine"][];
+        };
+        OrderPreviewLine: {
+            name: string;
+            quantity: number;
+            line_subtotal: components["schemas"]["Money"];
+            image_url: string | null;
+        };
+        OrderRider: {
+            name: string;
+            phone: string;
         };
         /**
          * @description * `pending_payment` - Awaiting payment
@@ -2195,6 +2311,13 @@ export interface components {
          * @enum {string}
          */
         OrderStatusEnum: "pending_payment" | "paid" | "confirmed" | "preparing" | "ready" | "out_for_delivery" | "delivered" | "rejected" | "cancelled" | "expired" | "failed_delivery" | "refunded" | "failed";
+        OrderTimelineStep: {
+            status: string;
+            /** Format: date-time */
+            at: string | null;
+            reached: boolean;
+            label: string;
+        };
         /** @description Response envelope for ``GET /catering/enquiries/overdue/``. */
         OverdueEnquiries: {
             count: number;
@@ -2369,6 +2492,10 @@ export interface components {
             guest?: {
                 [key: string]: unknown;
             };
+        };
+        PriceFragment: {
+            amount: number;
+            display: string;
         };
         /** @description Read/write profile.
          *
@@ -3357,6 +3484,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Cart"];
+                };
+            };
+        };
+    };
+    cart_quote_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemQuoteInputRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ItemQuoteInputRequest"];
+                "multipart/form-data": components["schemas"]["ItemQuoteInputRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemQuote"];
                 };
             };
         };

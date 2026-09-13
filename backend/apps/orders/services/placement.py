@@ -72,6 +72,12 @@ def place_order(
         raise CheckoutBlocked("Your cart is empty.")
     if not branch.can_accept_orders:
         raise BranchClosed("We are not accepting orders right now.")
+    if payment_method == PaymentMethod.TRANSFER and not branch.accepts_bank_transfer:
+        # Enforced here, not only by hiding the option: an order placed for
+        # transfer with no account to pay into can never be paid.
+        raise CheckoutBlocked(
+            "Bank transfer isn't available right now. Please choose another way to pay."
+        )
 
     unavailable = [line for line in priced.lines if not line.is_available]
     if unavailable:

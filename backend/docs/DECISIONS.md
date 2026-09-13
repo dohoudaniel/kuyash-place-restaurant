@@ -206,6 +206,8 @@ The cost is a dev/prod database divergence. It is bounded and managed:
 | OD-4 | Deployment target (`DEPLOYMENT.md`) | Before Gate 1 | Engineering |
 | OD-5 | Keep or remove the academy "installment" option (ACA-6) | Phase 3 | Product owner |
 | OD-6 | Tip presets — the current ₦2/₦5/₦10 are dollar figures | Before Gate 1 | Product owner |
+| **OD-7** | **Should guests be able to choose delivery?** Addresses belong to accounts today, so guests get pickup or must sign in. Allowing it needs a guest address on the cart/order. | Before Gate 1 | Product owner |
+| **OD-8** | **Cash-on-delivery limits.** PAYMENTS.md §5.3 specifies a cap and a verified account; neither is enforced. Pick the cap (or none). | Before Gate 1 | Product owner |
 
 ### OD-1 — still open, but no longer silent
 

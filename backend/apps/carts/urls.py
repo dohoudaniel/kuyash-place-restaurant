@@ -11,6 +11,7 @@ from apps.carts.views import (
     CartMergeView,
     CartPromoView,
     CartView,
+    ItemQuoteView,
 )
 
 app_name = "carts"
@@ -22,4 +23,5 @@ urlpatterns = [
     path("promo/", CartPromoView.as_view(), name="promo"),
     path("fulfilment/", CartFulfilmentView.as_view(), name="fulfilment"),
     path("merge/", CartMergeView.as_view(), name="merge"),
+    path("quote/", ItemQuoteView.as_view(), name="quote"),
 ]

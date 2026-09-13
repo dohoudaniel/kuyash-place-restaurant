@@ -1,20 +1,40 @@
 "use client";
 
-import { Check, Package, Truck, Home } from "lucide-react";
+import type { OrderDetail } from "@/lib/api/types";
+import { FINAL_STATUSES, formatTime, statusStyle } from "./statusStyles";
 
 interface OrderStatusProps {
-  status: "confirmed" | "preparing" | "ontheway" | "delivered";
+  order: OrderDetail;
 }
 
-export default function OrderStatus({ status }: OrderStatusProps) {
-  const statuses = [
-    { id: "confirmed", label: "Order Confirmed", icon: Check },
-    { id: "preparing", label: "Preparing", icon: Package },
-    { id: "ontheway", label: "On the Way", icon: Truck },
-    { id: "delivered", label: "Delivered", icon: Home },
-  ];
+const MESSAGES: Record<string, string> = {
+  pending_payment: "We're waiting for your payment to be confirmed.",
+  paid: "Payment received. The kitchen will confirm your order shortly.",
+  confirmed: "Your order has been confirmed and will be prepared shortly.",
+  preparing: "Our chefs are preparing your meal with care.",
+  ready: "Your order is ready.",
+  out_for_delivery: "Your order is on the way! Our rider will arrive soon.",
+  delivered: "Your order has been delivered. Enjoy your meal!",
+  cancelled: "This order was cancelled.",
+  rejected: "The kitchen couldn't take this order. Any payment will be refunded.",
+  expired: "This order expired before payment was completed.",
+  refunded: "This order was refunded.",
+  failed: "Something went wrong with this order. Please contact us.",
+  failed_delivery: "We couldn't complete the delivery. We'll be in touch.",
+};
 
-  const currentIndex = statuses.findIndex((s) => s.id === status);
+/**
+ * Progress from the order's own event log. The previous version showed a fixed
+ * four-step list with times invented from the current clock.
+ */
+export default function OrderStatus({ order }: OrderStatusProps) {
+  // Cash orders are confirmed straight away; they never pass through payment.
+  const steps = order.timeline.filter(
+    (step) => !(order.payment_method === "cash" && (step.status === "pending_payment" || step.status === "paid"))
+  );
+  const currentIndex = steps.reduce((last, step, index) => (step.reached ? index : last), -1);
+  const isFinal = FINAL_STATUSES.has(order.status);
+  const estimate = order.fulfilment_type === "delivery" ? order.estimated_delivery_at : order.estimated_ready_at;
 
   return (
     <div className="bg-white rounded-xl border p-6 sm:p-8" style={{ borderColor: "var(--gray-mid)" }}>
@@ -22,23 +42,22 @@ export default function OrderStatus({ status }: OrderStatusProps) {
         Order Status
       </h2>
 
-      <div className="space-y-6">
-        {statuses.map((step, index) => {
-          const Icon = step.icon;
-          const isCompleted = index <= currentIndex;
+      <ol className="space-y-6">
+        {steps.map((step, index) => {
+          const { icon: Icon } = statusStyle(step.status);
+          const isCompleted = step.reached;
           const isCurrent = index === currentIndex;
+          const isProblem = FINAL_STATUSES.has(step.status) && step.status !== "delivered";
 
           return (
-            <div key={step.id} className="flex gap-4">
+            <li key={step.status} className="flex gap-4" aria-current={isCurrent ? "step" : undefined}>
               {/* Icon */}
               <div className="shrink-0">
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                    isCurrent ? "animate-pulse" : ""
+                    isCurrent && !isFinal ? "animate-pulse" : ""
                   }`}
-                  style={{
-                    background: isCompleted ? "var(--red)" : "var(--gray-mid)",
-                  }}
+                  style={{ background: isCompleted ? (isProblem ? "#6b7280" : "var(--red)") : "var(--gray-mid)" }}
                 >
                   <Icon className="w-6 h-6" style={{ color: isCompleted ? "white" : "var(--text-muted)" }} />
                 </div>
@@ -48,69 +67,35 @@ export default function OrderStatus({ status }: OrderStatusProps) {
               <div className="flex-1 pt-2">
                 <p
                   className={`font-bold text-base ${isCurrent ? "text-lg" : ""}`}
-                  style={{ color: isCompleted ? "var(--red)" : "var(--text-muted)" }}
+                  style={{ color: isCompleted ? (isProblem ? "var(--black)" : "var(--red)") : "var(--text-muted)" }}
                 >
                   {step.label}
                 </p>
                 <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-                  {isCurrent && getStatusMessage(status)}
+                  {isCurrent && MESSAGES[step.status]}
                   {isCompleted && !isCurrent && "✓ Completed"}
                 </p>
               </div>
 
               {/* Time */}
-              {isCompleted && (
+              {step.at && (
                 <div className="text-xs font-semibold pt-2" style={{ color: "var(--text-muted)" }}>
-                  {getTimeForStatus(index)}
+                  {formatTime(step.at)}
                 </div>
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
 
       {/* Estimated Time */}
-      {status !== "delivered" && (
+      {!isFinal && estimate && (
         <div className="mt-6 p-4 rounded-lg" style={{ background: "rgba(217,4,41,0.05)" }}>
           <p className="text-sm font-semibold" style={{ color: "var(--red)" }}>
-            Estimated delivery: {getEstimatedTime(status)}
+            {order.fulfilment_type === "delivery" ? "Estimated delivery by" : "Estimated ready by"} {formatTime(estimate)}
           </p>
         </div>
       )}
     </div>
   );
-}
-
-function getStatusMessage(status: string): string {
-  switch (status) {
-    case "confirmed":
-      return "Your order has been confirmed and will be prepared shortly.";
-    case "preparing":
-      return "Our chefs are preparing your delicious meal with care.";
-    case "ontheway":
-      return "Your order is on the way! Our rider will arrive soon.";
-    case "delivered":
-      return "Your order has been delivered. Enjoy your meal!";
-    default:
-      return "";
-  }
-}
-
-function getTimeForStatus(index: number): string {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - (3 - index) * 10);
-  return now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-}
-
-function getEstimatedTime(status: string): string {
-  switch (status) {
-    case "confirmed":
-      return "30-40 minutes";
-    case "preparing":
-      return "20-30 minutes";
-    case "ontheway":
-      return "10-15 minutes";
-    default:
-      return "Soon";
-  }
 }

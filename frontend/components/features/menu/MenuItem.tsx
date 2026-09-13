@@ -2,57 +2,45 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { ShoppingCart, Check, Heart } from "lucide-react";
-import type { MenuItem as MenuItemType, MenuCategory } from "@/lib/types";
-import { IMAGES, type ImageKey } from "@/lib/assets/images";
-import { useCartStore } from "@/lib/store/cartStore";
+import { ShoppingCart, Check, Heart, Loader2 } from "lucide-react";
+import type { Category, MenuItemSummary } from "@/lib/api/types";
+import { mediaUrl } from "@/lib/api/media";
 import { useWishlistStore } from "@/lib/store/wishlistStore";
 import MenuItemDetailModal from "./MenuItemDetailModal";
+import StarRating from "./StarRating";
+import { useAddToCart } from "./useAddToCart";
 
 interface MenuItemProps {
-  item: MenuItemType;
-  activeCategory?: MenuCategory;
+  item: MenuItemSummary;
+  activeCategory?: Category;
 }
 
 export default function MenuItem({ item, activeCategory }: MenuItemProps) {
-  const [added, setAdded] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const { addItem } = useCartStore();
+  const { add, pending, added, error } = useAddToCart();
   const { addItem: addToWishlist, removeItem: removeFromWishlist, isInWishlist } = useWishlistStore();
 
-  const imageSrc = item.imageKey
-    ? IMAGES.menu[item.imageKey as ImageKey]
-    : null;
-
-  const priceValue = parseFloat(item.price.replace(/[^\d.]/g, ""));
-  const itemId = item.imageKey || item.name.toLowerCase().replace(/\s+/g, "-");
-  const inWishlist = isInWishlist(itemId);
+  const imageSrc = mediaUrl(item.image_url);
+  const inWishlist = isInWishlist(item.slug);
+  const isAdding = pending === item.slug;
+  const isAdded = added === item.slug;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addItem({
-      id: itemId,
-      name: item.name,
-      description: item.description,
-      price: priceValue,
-      imageKey: item.imageKey,
-    });
-
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2000);
+    void add(item.slug, { onNeedsOptions: () => setShowDetailModal(true) });
   };
 
   const handleToggleWishlist = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (inWishlist) {
-      removeFromWishlist(itemId);
+      removeFromWishlist(item.slug);
     } else {
       addToWishlist({
-        id: itemId,
+        slug: item.slug,
         name: item.name,
-        description: item.description,
-        price: item.price,
-        imageKey: item.imageKey,
+        description: item.description ?? "",
+        price: item.price?.display ?? "",
+        imageUrl: item.image_url,
       });
     }
   };
@@ -61,6 +49,10 @@ export default function MenuItem({ item, activeCategory }: MenuItemProps) {
     <>
       <div
         onClick={() => setShowDetailModal(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") setShowDetailModal(true);
+        }}
+        tabIndex={0}
         className="bg-white rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer"
         style={{ border: "1px solid var(--cream-dark)" }}
       >
@@ -72,6 +64,8 @@ export default function MenuItem({ item, activeCategory }: MenuItemProps) {
           {/* Wishlist button */}
           <button
             onClick={handleToggleWishlist}
+            aria-label={inWishlist ? `Remove ${item.name} from wishlist` : `Save ${item.name} to wishlist`}
+            aria-pressed={inWishlist}
             className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10"
             style={{ background: "rgba(255,255,255,0.95)" }}
           >
@@ -88,7 +82,7 @@ export default function MenuItem({ item, activeCategory }: MenuItemProps) {
             />
           ) : (
             <span className="text-5xl" aria-hidden="true">
-              {activeCategory?.emoji}
+              {activeCategory?.emoji || "🍽️"}
             </span>
           )}
         </div>
@@ -105,25 +99,33 @@ export default function MenuItem({ item, activeCategory }: MenuItemProps) {
           </div>
 
           {/* Star rating */}
-          <div className="flex items-center gap-1">
-            {[...Array(5)].map((_, i) => (
-              <svg key={i} className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="var(--red)">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-            ))}
-            <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>5.0</span>
-          </div>
+          <StarRating rating={item.average_rating} count={item.review_count} />
 
           <div className="flex items-center justify-between mt-auto pt-1">
-            <span className="font-black text-lg" style={{ color: "var(--red)" }}>
-              {item.price}
+            <span className="flex items-baseline gap-2">
+              <span className="font-black text-lg" style={{ color: "var(--red)" }}>
+                {item.price?.display}
+              </span>
+              {item.compare_at_price && (
+                <span className="text-xs line-through" style={{ color: "var(--text-muted)" }}>
+                  {item.compare_at_price.display}
+                </span>
+              )}
             </span>
             <button
               onClick={handleAddToCart}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95"
-              style={{ background: added ? "var(--black)" : "var(--red)" }}
+              disabled={isAdding || !item.is_available}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold text-white transition-all duration-200 hover:opacity-90 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
+              style={{ background: isAdded ? "var(--black)" : "var(--red)" }}
             >
-              {added ? (
+              {!item.is_available ? (
+                "Unavailable"
+              ) : isAdding ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Adding
+                </>
+              ) : isAdded ? (
                 <>
                   <Check className="w-3.5 h-3.5" />
                   Added
@@ -136,11 +138,19 @@ export default function MenuItem({ item, activeCategory }: MenuItemProps) {
               )}
             </button>
           </div>
+
+          {error?.slug === item.slug && (
+            <p role="alert" className="text-xs font-semibold" style={{ color: "var(--red)" }}>
+              {error.message}
+            </p>
+          )}
         </div>
       </div>
 
       <MenuItemDetailModal
-        item={item}
+        slug={item.slug}
+        summary={item}
+        fallbackEmoji={activeCategory?.emoji}
         isOpen={showDetailModal}
         onClose={() => setShowDetailModal(false)}
       />

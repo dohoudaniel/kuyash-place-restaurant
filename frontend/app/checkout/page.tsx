@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { api } from "@/lib/api/client";
+import type { Branch } from "@/lib/api/types";
+import { useAuthStore } from "@/lib/store/authStore";
 import { useCartStore } from "@/lib/store/cartStore";
 import {
   CheckoutProgress,
@@ -20,47 +24,44 @@ const STEPS = [
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, clearCart } = useCartStore();
+  const cart = useCartStore((state) => state.cart);
+  const cartStatus = useCartStore((state) => state.status);
+  const authStatus = useAuthStore((state) => state.status);
   const [currentStep, setCurrentStep] = useState(1);
   const [deliveryData, setDeliveryData] = useState<DeliveryData | null>(null);
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
+  const [branch, setBranch] = useState<Branch | null>(null);
+  const placing = useRef(false);
 
-  // Redirect to cart if no items
   useEffect(() => {
-    if (items.length === 0) {
-      router.push("/cart");
-    }
-  }, [items, router]);
+    let cancelled = false;
+    api<Branch>("/core/branch/")
+      .then((data) => {
+        if (!cancelled) setBranch(data);
+      })
+      .catch(() => {
+        /* steps degrade: pickup address and transfer details are simply not shown */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleDeliveryNext = (data: DeliveryData) => {
-    setDeliveryData(data);
-    setCurrentStep(2);
-  };
+  const ready = cartStatus === "ready" && authStatus !== "idle" && authStatus !== "loading";
+  const isEmpty = !cart || cart.items.length === 0;
 
-  const handlePaymentNext = (data: PaymentData) => {
-    setPaymentData(data);
-    setCurrentStep(3);
-  };
+  // Back to the cart if there is nothing to check out — unless an order is being
+  // placed, which empties the cart on the way to the order page.
+  useEffect(() => {
+    if (ready && isEmpty && !placing.current) router.push("/cart");
+  }, [ready, isEmpty, router]);
 
-  const handleConfirmOrder = () => {
-    // Generate order ID
-    const orderId = `KYS-${Date.now().toString(36).toUpperCase()}`;
-
-    // In a real app, you would:
-    // 1. Send order data to backend API
-    // 2. Process payment
-    // 3. Create order in database
-    // 4. Send confirmation email
-
-    // Clear cart
-    clearCart();
-
-    // Redirect to order tracking page
-    router.push(`/orders/${orderId}`);
-  };
-
-  if (items.length === 0) {
-    return null; // Will redirect
+  if (!ready || isEmpty) {
+    return (
+      <div className="min-h-screen flex items-center justify-center pt-20" style={{ background: "var(--off-white)" }}>
+        <Loader2 className="w-6 h-6 animate-spin" style={{ color: "var(--red)" }} />
+      </div>
+    );
   }
 
   return (
@@ -84,21 +85,41 @@ export default function CheckoutPage() {
           <CheckoutProgress currentStep={currentStep} steps={STEPS} />
 
           {/* Step Content */}
-          {currentStep === 1 && <DeliveryStep onNext={handleDeliveryNext} />}
+          {currentStep === 1 && (
+            <DeliveryStep
+              initial={deliveryData}
+              branch={branch}
+              onNext={(data) => {
+                setDeliveryData(data);
+                setCurrentStep(2);
+              }}
+            />
+          )}
 
-          {currentStep === 2 && paymentData === null && (
+          {currentStep === 2 && deliveryData && (
             <PaymentStep
-              onNext={handlePaymentNext}
+              initial={paymentData}
+              fulfilment={deliveryData.fulfilment}
+              branch={branch}
+              isSignedIn={authStatus === "authenticated"}
+              onNext={(data) => {
+                setPaymentData(data);
+                setCurrentStep(3);
+              }}
               onBack={() => setCurrentStep(1)}
             />
           )}
 
           {currentStep === 3 && deliveryData && paymentData && (
             <ReviewStep
+              cart={cart}
+              branch={branch}
               deliveryData={deliveryData}
               paymentData={paymentData}
               onBack={() => setCurrentStep(2)}
-              onConfirm={handleConfirmOrder}
+              onPlacingChange={(value) => {
+                placing.current = value;
+              }}
             />
           )}
         </div>

@@ -26,6 +26,15 @@ class HolidayOverrideSerializer(serializers.ModelSerializer):
         fields = ("date", "is_closed", "opens_at", "closes_at", "note")
 
 
+class BankTransferSerializer(serializers.Serializer):
+    bank_name = serializers.CharField()
+    account_name = serializers.CharField()
+    account_number = serializers.CharField()
+
+    class Meta:
+        ref_name = "BankTransferDetails"
+
+
 class BranchSerializer(serializers.ModelSerializer):
     """Everything the frontend needs to decide whether ordering is possible."""
 
@@ -34,6 +43,7 @@ class BranchSerializer(serializers.ModelSerializer):
     is_open_now = serializers.BooleanField(read_only=True)
     can_accept_orders = serializers.BooleanField(read_only=True)
     next_opens_at = serializers.SerializerMethodField()
+    bank_transfer = serializers.SerializerMethodField()
 
     class Meta:
         model = Branch
@@ -61,8 +71,20 @@ class BranchSerializer(serializers.ModelSerializer):
             "min_order_value",
             "free_delivery_threshold",
             "default_prep_minutes",
+            "bank_transfer",
         )
         read_only_fields = fields
+
+    @extend_schema_field(BankTransferSerializer(allow_null=True))
+    def get_bank_transfer(self, obj: Branch) -> dict[str, str] | None:
+        """Null when transfer is switched off, so the checkout does not offer it."""
+        if not obj.accepts_bank_transfer:
+            return None
+        return {
+            "bank_name": obj.bank_name,
+            "account_name": obj.bank_account_name,
+            "account_number": obj.bank_account_number,
+        }
 
     @extend_schema_field(serializers.DateTimeField(allow_null=True))
     def get_next_opens_at(self, obj: Branch) -> Any:

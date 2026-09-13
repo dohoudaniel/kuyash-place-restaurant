@@ -302,6 +302,7 @@ def test_the_simulator_never_trusts_a_webhook() -> None:
     assert DummyProvider().verify_webhook(b"{}", {"any": "header"}) is False
 
 
+@pytest.mark.django_db
 def test_the_simulator_round_trips() -> None:
     provider = DummyProvider()
     init = provider.initialise(
@@ -314,3 +315,37 @@ def test_the_simulator_round_trips() -> None:
 
     failing = DummyProvider(succeed=False)
     assert failing.verify("r").succeeded is False
+
+
+# ── Simulated provider ────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+def test_the_simulated_provider_settles_a_payment_end_to_end(order, settings) -> None:  # type: ignore[no-untyped-def]
+    """In development the dummy provider must let the whole checkout be walked.
+
+    It used to verify every payment as ₦0, which settlement correctly treats as
+    an amount mismatch — so no simulated card payment could ever succeed.
+    """
+    from apps.payments.models import TransactionStatus
+    from apps.payments.services.payments import initialise_payment, verify_and_settle
+
+    settings.DEBUG = True
+    settings.PAYSTACK_SECRET_KEY = ""
+    settings.FLUTTERWAVE_SECRET_KEY = ""
+
+    record = initialise_payment(order=order)
+    settled = verify_and_settle(record)
+
+    assert settled.status == TransactionStatus.SUCCESS
+    assert settled.amount_verified == order.grand_total
+    order.refresh_from_db()
+    assert order.is_paid
+
+
+@pytest.mark.django_db
+def test_the_simulated_provider_reports_nothing_for_an_unknown_reference(db) -> None:  # type: ignore[no-untyped-def]
+    from apps.payments.providers.dummy import DummyProvider
+
+    result = DummyProvider().verify("no-such-reference")
+    assert result.amount_kobo == 0

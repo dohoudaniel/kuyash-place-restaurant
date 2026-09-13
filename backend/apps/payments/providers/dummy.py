@@ -38,9 +38,25 @@ class DummyProvider:
         )
 
     def verify(self, reference: str) -> VerifyResult:
+        """Report the amount that was actually asked for.
+
+        A real provider tells us what it charged, and settlement refuses any
+        payment whose amount differs from the order's. The simulation used to
+        report ₦0, so every simulated card payment in development tripped that
+        security check and failed — the whole checkout could not be walked.
+        """
+        from django.db.models import Q
+
+        from apps.payments.models import PaymentTransaction
+
+        record = PaymentTransaction.objects.filter(
+            Q(our_reference=reference) | Q(provider_reference=reference)
+        ).first()
         return VerifyResult(
             status="success" if self.succeed else "failed",
-            amount_kobo=0,
+            amount_kobo=record.amount if record else 0,
+            currency=record.currency if record else "NGN",
+            channel="simulated",
             message="simulated",
             raw={"simulated": True},
         )

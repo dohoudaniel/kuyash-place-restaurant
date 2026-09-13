@@ -84,6 +84,11 @@ function storageSet(key: string, value: string): void {
   }
 }
 
+/** Whether this browser already has an anonymous cart. */
+export function hasCartToken(): boolean {
+  return Boolean(storageGet(CART_TOKEN_KEY));
+}
+
 export function clearCartToken(): void {
   try {
     if (isBrowser) window.localStorage.removeItem(CART_TOKEN_KEY);
@@ -179,6 +184,39 @@ export async function api<T>(path: string, init: ApiRequestInit = {}): Promise<T
     throw new ApiError(response.status, problem);
   }
   return payload as T;
+}
+
+/**
+ * Fetch a binary resource — a PDF receipt — with the same credentials as `api()`.
+ * Errors still arrive as problem documents and are thrown as `ApiError`.
+ */
+export async function apiBlob(path: string, init: { headers?: HeadersInit; signal?: AbortSignal } = {}): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { headers: init.headers, signal: init.signal, credentials: "include" });
+  } catch {
+    throw new ApiError(0, {
+      code: "network_error",
+      title: "Could not reach Kuyash Place",
+      detail: "Check your connection and try again.",
+    });
+  }
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    throw new ApiError(
+      response.status,
+      payload && typeof payload === "object" && "code" in payload
+        ? (payload as ProblemDocument)
+        : { code: "unknown_error", title: response.statusText, status: response.status }
+    );
+  }
+  return response.blob();
+}
+
+/** Turn an absolute `next` link from a paginated response into a path for `api()`. */
+export function pathFromApiUrl(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.pathname.replace(/^\/api\/v1/, "")}${parsed.search}`;
 }
 
 /** A fresh key per *attempt* to place an order — reused only when retrying that attempt. */

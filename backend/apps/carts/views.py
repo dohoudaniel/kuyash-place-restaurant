@@ -22,8 +22,11 @@ from apps.carts.serializers import (
     AddItemSerializer,
     CartResponseSerializer,
     FulfilmentSerializer,
+    ItemQuoteInputSerializer,
+    ItemQuoteSerializer,
     PromoSerializer,
     UpdateItemSerializer,
+    money,
     serialise_cart,
 )
 from apps.carts.services import cart as cart_services
@@ -188,6 +191,47 @@ class CartFulfilmentView(CartBaseView):
             tip=data.get("tip"),
         )
         return self.render(cart)
+
+
+class ItemQuoteView(APIView):
+    """Price a configured dish without adding it to a cart.
+
+    The item dialog shows a live total while options are chosen. Computing that
+    in the browser would duplicate — and eventually contradict — the pricing
+    rules, so the dialog asks here, and gets the figure the cart will charge.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Quote a configured item",
+        request=ItemQuoteInputSerializer,
+        responses={200: ItemQuoteSerializer},
+        tags=["cart"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ItemQuoteInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        configured = cart_services.configure_line(
+            branch=get_current_branch(),
+            item_slug=data["menu_item"],
+            quantity=data["quantity"],
+            variant_id=str(data["variant"]) if data.get("variant") else None,
+            modifiers=data["modifiers"],
+            require_available=False,
+        )
+        currency = configured.menu_item.branch.currency
+        return Response(
+            {
+                "menu_item": configured.menu_item.slug,
+                "quantity": data["quantity"],
+                "unit_price": money(configured.unit_price, currency),
+                "line_total": money(configured.unit_price * data["quantity"], currency),
+                "is_available_now": configured.menu_item.available_at(),
+            }
+        )
 
 
 class CartMergeView(CartBaseView):

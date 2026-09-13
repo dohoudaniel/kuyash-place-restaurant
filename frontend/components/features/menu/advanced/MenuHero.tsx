@@ -1,17 +1,23 @@
 "use client";
 
-import { Utensils, TrendingUp, Award, Clock } from "lucide-react";
+import { Utensils, LayoutGrid, Award, Leaf } from "lucide-react";
 
 interface MenuHeroProps {
-  totalItems: number;
+  /** Null while loading. */
+  totalItems: number | null;
+  categoryCount: number;
+  dietaryCount: number;
+  topRatedCount: number | null;
 }
 
-export default function MenuHero({ totalItems }: MenuHeroProps) {
+export default function MenuHero({ totalItems, categoryCount, dietaryCount, topRatedCount }: MenuHeroProps) {
+  // Real counts. The previous hero claimed "50+ Popular", "100+ Rated 5★" and
+  // "30 min Fast Delivery" as fixed strings.
   const stats = [
-    { icon: Utensils, label: "Menu Items", value: totalItems.toString(), color: "var(--red)" },
-    { icon: TrendingUp, label: "Popular", value: "50+", color: "#10b981" },
-    { icon: Award, label: "Rated 5★", value: "100+", color: "#f59e0b" },
-    { icon: Clock, label: "Fast Delivery", value: "30 min", color: "#3b82f6" },
+    { icon: Utensils, label: "Dishes", value: totalItems === null ? "–" : String(totalItems), color: "var(--red)" },
+    { icon: LayoutGrid, label: "Categories", value: categoryCount ? String(categoryCount) : "–", color: "#10b981" },
+    { icon: Award, label: "Rated 4★+", value: topRatedCount === null ? "–" : String(topRatedCount), color: "#f59e0b" },
+    { icon: Leaf, label: "Dietary Options", value: dietaryCount ? String(dietaryCount) : "–", color: "#3b82f6" },
   ];
 
   return (
@@ -36,11 +42,11 @@ export default function MenuHero({ totalItems }: MenuHeroProps) {
 
           {/* Stats - Horizontal on all screens */}
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto pb-2 lg:pb-0">
-            {stats.map((stat, idx) => {
+            {stats.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
-                  key={idx}
+                  key={stat.label}
                   className="bg-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3 min-w-fit transition-all hover:shadow-md"
                   style={{ border: "1px solid var(--gray-mid)" }}
                 >

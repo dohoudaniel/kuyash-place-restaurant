@@ -199,3 +199,30 @@ def test_site_settings_admin_keeps_the_singleton_single(db) -> None:  # type: ig
     SiteSettings.load()
     assert admin_instance.has_add_permission(request) is False
     assert admin_instance.has_delete_permission(request) is False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Bank transfer details
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_bank_transfer_is_off_until_every_detail_is_entered(api_client, branch: Branch) -> None:
+    branch.bank_name = "Example Bank"
+    branch.bank_account_name = "Kuyash Place Ltd"
+    branch.save()
+    assert api_client.get(reverse("v1:core:branch")).json()["bank_transfer"] is None
+
+
+def test_bank_transfer_details_are_published_once_complete(api_client, branch: Branch) -> None:
+    branch.bank_name = "Example Bank"
+    branch.bank_account_name = "Kuyash Place Ltd"
+    branch.bank_account_number = "0123456789"
+    branch.save()
+
+    details = api_client.get(reverse("v1:core:branch")).json()["bank_transfer"]
+
+    assert details == {
+        "bank_name": "Example Bank",
+        "account_name": "Kuyash Place Ltd",
+        "account_number": "0123456789",
+    }
