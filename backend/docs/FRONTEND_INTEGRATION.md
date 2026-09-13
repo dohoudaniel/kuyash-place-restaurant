@@ -263,8 +263,8 @@ Replace the 18 hardcoded slots with `GET /reservations/availability/?date=&party
 | `app/catering/page.tsx:89` | `alert(...)` + `console.log` → `POST /catering/enquiries/` |
 | `components/features/contact/ContactForm.tsx:17` | local state → `POST /support/contact/` |
 | `components/features/reviews/ReviewModal.tsx:50` | ✅ `alert(...)` → `POST /reviews/` (Phase 3.1, see §5.5) |
-| `app/academy/page.tsx:28` | inline `COURSES` array → `GET /academy/courses/` |
-| `components/features/academy/EnrollmentModal.tsx:24` | `alert(...)` → `POST /academy/enrolments/` with cohort selection. **Remove the "installment" option** unless a payment-plan model is built (ACA-6) |
+| `app/academy/page.tsx:28` | ✅ inline `COURSES` array → `GET /academy/courses/` (Phase 3.2, see §5.8) |
+| `components/features/academy/EnrollmentModal.tsx:24` | ✅ `alert(...)` → `POST /academy/enrolments/` with cohort selection. The "installment" option is removed (ACA-6, OD-5) |
 | `app/rewards/page.tsx:22` | `useState(false)` → `GET /loyalty/account/` |
 | `app/gallery/page.tsx:20` | ✅ 20 items with broken image keys → `GET /gallery/` (Phase 3.4, see §5.6) |
 | `components/features/chat/*` | ✅ local echo → `/support/chat/…` (Phase 3.5, see §5.7) |
@@ -690,6 +690,38 @@ schema synced; `tsc` clean; `next build` passes; ESLint unchanged at 25 errors
 and 1 warning with no new findings; a live run covers CORS, CSRF, token access,
 seeded FAQ answers, the refusal to guess, hours, guest and owner order lookup,
 handoff, idempotent escalation, ended sessions and the message rate limit (22/22).
+
+### 5.8 Phase 3.2 academy delivered
+
+**Backend.** New `apps/academy` (API_SPEC §12, DATA_MODEL §14, PAYMENTS §5.2.1):
+instructors, courses, cohorts with real capacity, enrolments that hold a seat
+under a lock, card fees through the order payment system (a transaction now
+belongs to an order *or* an enrolment), staff-confirmed transfers, completion
+with a PDF certificate, and three emails. Seeded courses start inactive.
+
+**Frontend.**
+- `lib/api/academy.ts`, `lib/academy/tokens.ts` (guest tokens per reference).
+- `/academy` loads published courses. Cards show the real fee, the next class
+  date, seats left and counted students. "Enroll Now" is disabled for full or
+  unscheduled courses. The invented 4.9 ratings and "1000+ students / 500+
+  graduates / 95% success rate" are gone.
+- `EnrollmentModal` (shared Dialog primitives, original markup) makes the
+  student pick a scheduled class instead of typing a date, prefills from the
+  account, pays by card via the provider or reserves by transfer (only when the
+  branch has bank details), guards the fee with `expected_amount`, and uses an
+  Idempotency-Key. **"Pay in Installments" is removed.**
+- `/academy/enrolment/complete` verifies the payment with the backend.
+- `/academy/enrolments/[reference]` shows status, class, fee, transfer details,
+  "Pay now" while the hold lasts and "Download certificate" once issued. An
+  emailed `?token=` link is stored and stripped from the address bar.
+
+Verified: backend 1088 passed, academy and payment services at 100% coverage,
+ruff/mypy clean, card-field gate clean, schema synced; `tsc` clean;
+`next build` passes; ESLint 25 → 22 errors and 1 → 0 warnings, no new findings;
+a live run (20 checks) covers CORS, CSRF, idempotency, the fee guard, seat
+holds, the last seat, token access, provider verification, counted students and
+transfer enrolment, plus completion, certificate and transfer confirmation
+through the services.
 
 ---
 

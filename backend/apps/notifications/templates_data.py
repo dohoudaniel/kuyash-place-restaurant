@@ -261,6 +261,68 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
             "manage_url",
         ],
     },
+    "enrolment_confirmed": {
+        "description": "Sent when a course enrolment is paid (ACA-7).",
+        "subject": "You're enrolled — {course}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Your place is confirmed. We look forward to cooking with you.\n\n"
+            "Reference:  {reference}\n"
+            "Course:     {course}\n"
+            "Instructor: {instructor}\n"
+            "Dates:      {starts_on} to {ends_on}\n"
+            "{schedule_line}"
+            "Paid:       {amount}\n\n"
+            "Your enrolment: {manage_url}" + SIGN_OFF
+        ),
+        "available_context": [
+            "name",
+            "reference",
+            "course",
+            "instructor",
+            "starts_on",
+            "ends_on",
+            "schedule_line",
+            "amount",
+            "manage_url",
+        ],
+    },
+    "enrolment_transfer_details": {
+        "description": "Sent when a student chooses to pay a course fee by bank transfer.",
+        "subject": "How to pay for {course}",
+        "text_body": (
+            "Hello {name},\n\n"
+            "Thanks for enrolling. Your seat is held until {hold_until}. To confirm it, "
+            "transfer {amount} to:\n\n"
+            "Bank:           {bank_name}\n"
+            "Account name:   {account_name}\n"
+            "Account number: {account_number}\n"
+            "Narration:      {reference}\n\n"
+            "We'll email you as soon as the payment is received.\n\n"
+            "Your enrolment: {manage_url}" + SIGN_OFF
+        ),
+        "available_context": [
+            "name",
+            "course",
+            "reference",
+            "amount",
+            "bank_name",
+            "account_name",
+            "account_number",
+            "hold_until",
+            "manage_url",
+        ],
+    },
+    "enrolment_certificate": {
+        "description": "Sent when a student completes a course.",
+        "subject": "Your certificate — {course}",
+        "text_body": (
+            "Congratulations, {name}!\n\n"
+            "You have completed {course}. Your certificate is ready to download:\n\n"
+            "{manage_url}" + SIGN_OFF
+        ),
+        "available_context": ["name", "course", "manage_url"],
+    },
     "refund_issued": {
         "description": "Sent when a refund is processed.",
         "subject": "Refund for order {reference}",

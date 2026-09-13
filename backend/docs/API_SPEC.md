@@ -638,13 +638,21 @@ Transcripts are in the admin (read-only), which is where to see what the FAQ fai
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/academy/courses/` | — | `?level=&type=&search=` |
-| GET | `/academy/courses/{slug}/` | — | + open cohorts |
-| GET | `/academy/courses/{slug}/cohorts/` | — | With `seats_left` |
-| POST | `/academy/enrolments/` | optional | Idempotency-Key required; returns payment init |
-| GET | `/academy/enrolments/mine/` | ✓ | |
+| GET | `/academy/courses/` | — | ✅ Published courses, unpaginated. `?level=&type=&search=` (unknown level/type → 400). Each carries `price` (Money), `student_count` (computed), `instructor {name, photo_url}` and `next_cohort` (the soonest class with a free seat, else the soonest class, else null). No rating field |
+| GET | `/academy/courses/{slug}/` | — | ✅ + instructor bio/specialities and upcoming `cohorts` |
+| GET | `/academy/courses/{slug}/cohorts/` | — | ✅ Upcoming classes with `seats_left` |
+| POST | `/academy/enrolments/` | optional | ✅ Idempotency-Key required; CSRF enforced. `{cohort, name, email, phone, experience_level, payment_method: card\|transfer, expected_amount}` → `{enrolment, payment: {reference, authorization_url} \| null, payment_error, guest_token?}`. 409 `cohort_full` · `cohort_unavailable` · `already_enrolled` · `transfer_unavailable` · `price_changed` |
+| GET | `/academy/enrolments/mine/` | ✓ | ✅ |
+| GET | `/academy/enrolments/{ref}/` | owner / `X-Enrolment-Token` / manager | ✅ Status, class, fee, `can_pay`, `bank_transfer` while unpaid, `certificate_available` |
+| POST | `/academy/enrolments/{ref}/pay/` | owner / token | ✅ Start or retry the card payment. 409 `enrolment_not_payable` · `enrolment_expired` |
+| GET | `/academy/payments/verify/{payment_ref}/` | — | ✅ Where the provider returns the student (`ACADEMY_PAYMENT_CALLBACK_URL`, default `/academy/enrolment/complete`). Asks the provider; `/payments/verify/` returns 404 for course payments |
+| GET | `/academy/enrolments/{ref}/certificate/` | owner / token | ✅ PDF once issued; 409 `certificate_not_available` before |
 
-> Cohorts turn "start date" from a free-text field into a bounded, capacity-checked choice. Per ACA-6, the **installment** option must gain a payment-plan model or be removed from the UI.
+- Seats are held on enrolment (card 30 min, transfer 48 h) and counted under a lock. Card fees go through the same payment providers and records as orders; transfers are confirmed by staff in the admin ("Record bank transfer received").
+- Emails: `enrolment_confirmed` (ACA-7, with dates and schedule), `enrolment_transfer_details`, `enrolment_certificate`. Guests' links carry their token.
+- Staff complete a student ("Mark completed and issue certificate") or cancel (any paid fee is refunded offline) in the admin.
+- **No installments** (ACA-6): removed from the UI; OD-5 stays open.
+- Seeded courses are **inactive** until staff confirm the instructor and fee and schedule a class.
 
 ---
 
@@ -702,6 +710,7 @@ Photos are uploaded in the Django admin (branch preselected, thumbnails in the l
 | `POST /support/chat/sessions/` | 20/hour per user or IP |
 | `POST /support/chat/sessions/{id}/messages/` | 30/min per user or IP |
 | `POST /support/chat/sessions/{id}/escalate/` | 3/hour per user or IP |
+| `POST /academy/enrolments/` | 10/hour per user or IP |
 | Webhooks | unlimited, signature-gated |
 
 429 responses carry `Retry-After`.

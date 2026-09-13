@@ -214,6 +214,11 @@ class Command(BaseCommand):
         self.stdout.write("Catalogue:")
         seed_catalogue(branch, stdout=self.stdout)
 
+        from apps.academy.seed import seed_academy
+
+        self.stdout.write("Academy:")
+        seed_academy(branch, stdout=self.stdout)
+
         settings_obj = SiteSettings.load()
         if not settings_obj.tagline:
             settings_obj.tagline = "Tastefully Classy"
@@ -242,6 +247,17 @@ class Command(BaseCommand):
                     f"{inactive_promos} promo code(s) seeded INACTIVE. Their values were "
                     "converted from the frontend's dollar figures; review each one in the "
                     "admin before enabling it."
+                )
+            )
+
+        from apps.academy.models import Course
+
+        draft_courses = Course.objects.filter(branch=branch, is_active=False).count()
+        if draft_courses:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"{draft_courses} academy course(s) seeded INACTIVE. Confirm each instructor "
+                    "and fee, schedule a cohort, then publish it in the admin."
                 )
             )
 

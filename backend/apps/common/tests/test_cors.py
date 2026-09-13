@@ -32,6 +32,7 @@ def preflight(path: str, headers: str) -> dict[str, str]:
         "x-cart-token",
         "x-guest-token",
         "x-chat-token",
+        "x-enrolment-token",
         "idempotency-key",
         "x-csrftoken",
         "content-type",

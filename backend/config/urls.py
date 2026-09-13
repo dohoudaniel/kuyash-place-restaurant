@@ -40,6 +40,7 @@ api_v1 = [
     path("support/", include("apps.support.urls")),
     path("reviews/", include("apps.reviews.urls")),
     path("gallery/", include("apps.gallery.urls")),
+    path("academy/", include("apps.academy.urls")),
     path("wishlist/", include((wishlist_urlpatterns, "wishlist"))),
     path("webhooks/", include((webhook_urlpatterns, "webhooks"))),
     path("accounts/", include((account_urlpatterns, "accounts"))),

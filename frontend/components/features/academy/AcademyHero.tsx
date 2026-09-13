@@ -1,17 +1,23 @@
 "use client";
 
-import { GraduationCap, Award, Users, BookOpen } from "lucide-react";
+import { Award, Users, BookOpen, type LucideIcon } from "lucide-react";
+import type { Course } from "@/lib/api/types";
 
 interface AcademyHeroProps {
-  totalCourses: number;
+  courses: Course[];
 }
 
-export default function AcademyHero({ totalCourses }: AcademyHeroProps) {
-  const stats = [
-    { icon: BookOpen, label: "Courses", value: totalCourses.toString(), color: "var(--red)" },
-    { icon: Users, label: "Students", value: "1000+", color: "#10b981" },
-    { icon: GraduationCap, label: "Graduates", value: "500+", color: "#3b82f6" },
-    { icon: Award, label: "Success Rate", value: "95%", color: "#f59e0b" },
+/**
+ * Counted from the catalogue. "1000+ students", "500+ graduates" and "95%
+ * success rate" were typed in with nothing behind them.
+ */
+export default function AcademyHero({ courses }: AcademyHeroProps) {
+  const students = courses.reduce((sum, course) => sum + course.student_count, 0);
+  const openClasses = courses.filter((course) => (course.next_cohort?.seats_left ?? 0) > 0).length;
+  const stats: { icon: LucideIcon; label: string; value: number; color: string }[] = [
+    { icon: BookOpen, label: "Courses", value: courses.length, color: "var(--red)" },
+    { icon: Award, label: "Open for Enrolment", value: openClasses, color: "#f59e0b" },
+    { icon: Users, label: "Students", value: students, color: "#10b981" },
   ];
 
   return (
@@ -27,16 +33,16 @@ export default function AcademyHero({ totalCourses }: AcademyHeroProps) {
               Kuyash Academy
             </h1>
             <p className="text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
-              Learn from award-winning chefs and industry experts
+              Learn to cook with the Kuyash Place team
             </p>
           </div>
 
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto pb-2 lg:pb-0">
-            {stats.map((stat, idx) => {
+            {stats.filter((stat) => stat.value > 0 || stat.label === "Courses").map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
-                  key={idx}
+                  key={stat.label}
                   className="bg-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3 min-w-fit transition-all hover:shadow-md"
                   style={{ border: "1px solid var(--gray-mid)" }}
                 >
@@ -48,7 +54,7 @@ export default function AcademyHero({ totalCourses }: AcademyHeroProps) {
                   </div>
                   <div className="text-left">
                     <p className="font-black text-lg sm:text-xl leading-none mb-0.5" style={{ fontFamily: "var(--font-playfair)", color: "var(--black)" }}>
-                      {stat.value}
+                      {stat.value.toLocaleString("en-NG")}
                     </p>
                     <p className="text-[10px] sm:text-xs font-semibold whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
                       {stat.label}

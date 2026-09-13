@@ -1507,6 +1507,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/academy/courses/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List courses
+         * @description Published courses. Not paginated: an academy offers a handful.
+         */
+        get: operations["academy_courses_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/courses/{slug}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve a course with its upcoming classes */
+        get: operations["academy_courses_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/courses/{slug}/cohorts/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Upcoming classes for a course, with seats left */
+        get: operations["academy_courses_cohorts_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/enrolments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrol in a class
+         * @description Requires an Idempotency-Key. Holds a seat, then for card payments returns the provider's checkout URL. 409 `cohort_full`, `cohort_unavailable`, `already_enrolled`, `transfer_unavailable`, `price_changed`.
+         */
+        post: operations["academy_enrolments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/enrolments/mine/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My enrolments */
+        get: operations["academy_enrolments_mine_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/enrolments/{reference}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve an enrolment */
+        get: operations["academy_enrolments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/enrolments/{reference}/pay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start (or retry) the card payment for an enrolment
+         * @description Require a CSRF token even when nobody is signed in.
+         *
+         *     DRF only checks CSRF for requests it has authenticated from a session, and
+         *     marks every other view CSRF-exempt. That leaves the sign-in endpoints — the
+         *     ones a signed-out visitor posts to — unprotected, and they also accept
+         *     form-encoded bodies. A page on any other site could then post a login form
+         *     and sign the visitor into an attacker's account (login CSRF), so every
+         *     purchase and address they enter afterwards lands in that account.
+         *
+         *     The frontend already sends ``X-CSRFToken`` on every unsafe request, so this
+         *     costs it nothing.
+         */
+        post: operations["academy_enrolments_pay_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/enrolments/{reference}/certificate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a certificate (PDF) */
+        get: operations["academy_enrolments_certificate_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/academy/payments/verify/{reference}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verify a course payment
+         * @description Where the browser lands after paying. Asks the provider; trusts nothing sent.
+         */
+        get: operations["academy_payments_verify_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wishlist/": {
         parameters: {
             query?: never;
@@ -2039,6 +2214,28 @@ export interface components {
             /** @description Send as X-Chat-Token on every later request for this conversation. */
             readonly token: string;
         };
+        Cohort: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date */
+            readonly starts_on: string;
+            /** Format: date */
+            readonly ends_on: string;
+            /** @description e.g. "Saturdays, 10:00–14:00". */
+            readonly schedule_note: string;
+            readonly capacity: number;
+            readonly seats_left: number;
+            readonly status: components["schemas"]["CohortStatusEnum"];
+        };
+        /**
+         * @description * `open` - Open for enrolment
+         *     * `full` - Full
+         *     * `running` - Running
+         *     * `completed` - Completed
+         *     * `cancelled` - Cancelled
+         * @enum {string}
+         */
+        CohortStatusEnum: "open" | "full" | "running" | "completed" | "cancelled";
         ContactAcknowledgement: {
             reference: string;
             detail: string;
@@ -2067,6 +2264,64 @@ export interface components {
             /** @default  */
             website: string;
         };
+        Course: {
+            readonly slug: string;
+            readonly title: string;
+            readonly description: string;
+            readonly level: components["schemas"]["CourseLevelEnum"];
+            readonly level_display: string;
+            readonly type: components["schemas"]["CourseTypeEnum"];
+            readonly type_display: string;
+            /** @description e.g. "4 weeks". */
+            readonly duration_label: string;
+            readonly session_count: number;
+            readonly price: components["schemas"]["Money"];
+            readonly features: string[];
+            /** Format: uri */
+            readonly thumbnail_url: string | null;
+            readonly instructor: components["schemas"]["InstructorSummary"];
+            /** @description Counted from paid enrolments (ACA-8), never typed in. */
+            readonly student_count: number;
+            readonly next_cohort: components["schemas"]["Cohort"] | null;
+        };
+        CourseDetail: {
+            readonly slug: string;
+            readonly title: string;
+            readonly description: string;
+            readonly level: components["schemas"]["CourseLevelEnum"];
+            readonly level_display: string;
+            readonly type: components["schemas"]["CourseTypeEnum"];
+            readonly type_display: string;
+            /** @description e.g. "4 weeks". */
+            readonly duration_label: string;
+            readonly session_count: number;
+            readonly price: components["schemas"]["Money"];
+            readonly features: string[];
+            /** Format: uri */
+            readonly thumbnail_url: string | null;
+            readonly instructor: components["schemas"]["Instructor"];
+            /** @description Counted from paid enrolments (ACA-8), never typed in. */
+            readonly student_count: number;
+            readonly next_cohort: components["schemas"]["Cohort"] | null;
+            readonly cohorts: components["schemas"]["Cohort"][];
+        };
+        /**
+         * @description * `beginner` - Beginner
+         *     * `intermediate` - Intermediate
+         *     * `advanced` - Advanced
+         *     * `masterclass` - Masterclass
+         * @enum {string}
+         */
+        CourseLevelEnum: "beginner" | "intermediate" | "advanced" | "masterclass";
+        /**
+         * @description * `cooking` - Cooking
+         *     * `baking` - Baking
+         *     * `plating` - Plating
+         *     * `business` - Business
+         *     * `nutrition` - Nutrition
+         * @enum {string}
+         */
+        CourseTypeEnum: "cooking" | "baking" | "plating" | "business" | "nutrition";
         /** @description Exactly the fields the existing form collects.
          *
          *     Note what is absent: any price. The indicative total is computed server-side
@@ -2238,6 +2493,91 @@ export interface components {
          * @enum {string}
          */
         EnquiryStatusEnum: "new" | "contacted" | "quoted" | "won" | "lost";
+        Enrolment: {
+            readonly reference: string;
+            readonly status: components["schemas"]["EnrolmentStatusEnum"];
+            readonly status_display: string;
+            readonly course: components["schemas"]["EnrolmentCourse"];
+            readonly cohort: components["schemas"]["Cohort"];
+            readonly name: string;
+            /** Format: email */
+            readonly email: string;
+            readonly phone: string;
+            readonly experience_level: components["schemas"]["ExperienceLevelEnum"];
+            readonly payment_method: components["schemas"]["EnrolmentPaymentMethodEnum"];
+            readonly amount: components["schemas"]["Money"];
+            readonly amount_paid: components["schemas"]["Money"];
+            /**
+             * Format: date-time
+             * @description An unpaid enrolment holds its seat until this moment.
+             */
+            readonly hold_expires_at: string | null;
+            /** Format: date-time */
+            readonly paid_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+            readonly can_pay: boolean;
+            readonly certificate_available: boolean;
+            readonly bank_transfer: components["schemas"]["BankTransferDetails"] | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        EnrolmentCourse: {
+            slug: string;
+            title: string;
+            instructor: string;
+        };
+        EnrolmentCreateRequest: {
+            /** Format: uuid */
+            cohort: string;
+            name: string;
+            /** Format: email */
+            email: string;
+            phone: string;
+            experience_level: components["schemas"]["ExperienceLevelEnum"];
+            payment_method: components["schemas"]["EnrolmentPaymentMethodEnum"];
+            /** @description The course fee the student was shown, in kobo. A guard, not a price. */
+            expected_amount?: number | null;
+        };
+        EnrolmentCreated: {
+            enrolment: components["schemas"]["Enrolment"];
+            payment: components["schemas"]["EnrolmentPaymentStart"] | null;
+            /** @description Why the card payment could not be started; retry with /pay/. */
+            payment_error: string;
+            /** @description Guests only. Send as X-Enrolment-Token. */
+            guest_token?: string;
+        };
+        /**
+         * @description * `card` - Card
+         *     * `transfer` - Bank transfer
+         * @enum {string}
+         */
+        EnrolmentPaymentMethodEnum: "card" | "transfer";
+        EnrolmentPaymentStart: {
+            reference: string;
+            /** Format: uri */
+            authorization_url: string;
+        };
+        EnrolmentPaymentVerification: {
+            status: string;
+            enrolment_reference: string;
+            enrolment_status: components["schemas"]["EnrolmentStatusEnum"];
+        };
+        /**
+         * @description * `pending_payment` - Awaiting payment
+         *     * `confirmed` - Confirmed
+         *     * `cancelled` - Cancelled
+         *     * `completed` - Completed
+         * @enum {string}
+         */
+        EnrolmentStatusEnum: "pending_payment" | "confirmed" | "cancelled" | "completed";
+        /**
+         * @description * `beginner` - Beginner
+         *     * `intermediate` - Intermediate
+         *     * `advanced` - Advanced
+         * @enum {string}
+         */
+        ExperienceLevelEnum: "beginner" | "intermediate" | "advanced";
         Faq: {
             /** Format: uuid */
             readonly id: string;
@@ -2322,6 +2662,18 @@ export interface components {
              * @default false
              */
             save_card: boolean;
+        };
+        Instructor: {
+            readonly name: string;
+            /** Format: uri */
+            readonly photo_url: string | null;
+            readonly bio: string;
+            readonly specialities: string[];
+        };
+        InstructorSummary: {
+            readonly name: string;
+            /** Format: uri */
+            readonly photo_url: string | null;
         };
         ItemAvailability: {
             slug: string;
@@ -2903,13 +3255,6 @@ export interface components {
             order: string;
         };
         /**
-         * @description * `card` - card
-         *     * `transfer` - transfer
-         *     * `cash` - cash
-         * @enum {string}
-         */
-        PaymentMethodEnum: "card" | "transfer" | "cash";
-        /**
          * @description * `unpaid` - Unpaid
          *     * `pending` - Pending
          *     * `paid` - Paid
@@ -2926,13 +3271,20 @@ export interface components {
             payment_status: string;
             amount: components["schemas"]["Money"];
         };
+        /**
+         * @description * `card` - card
+         *     * `transfer` - transfer
+         *     * `cash` - cash
+         * @enum {string}
+         */
+        PlaceOrderPaymentMethodEnum: "card" | "transfer" | "cash";
         /** @description Input for placing an order.
          *
          *     Contains no price field of any kind. ``expected_total`` is a *guard*, not an
          *     instruction: if it disagrees with the server's figure the order is refused
          *     rather than silently charged at a different amount. */
         PlaceOrderRequest: {
-            payment_method: components["schemas"]["PaymentMethodEnum"];
+            payment_method: components["schemas"]["PlaceOrderPaymentMethodEnum"];
             /** @default  */
             payment_provider: string;
             /** @default  */
@@ -5144,6 +5496,208 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GalleryImageDetail"];
+                };
+            };
+        };
+    };
+    academy_courses_list: {
+        parameters: {
+            query?: {
+                level?: "advanced" | "beginner" | "intermediate" | "masterclass";
+                search?: string;
+                type?: "baking" | "business" | "cooking" | "nutrition" | "plating";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Course"][];
+                };
+            };
+        };
+    };
+    academy_courses_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDetail"];
+                };
+            };
+        };
+    };
+    academy_courses_cohorts_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cohort"][];
+                };
+            };
+        };
+    };
+    academy_enrolments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrolmentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EnrolmentCreateRequest"];
+                "multipart/form-data": components["schemas"]["EnrolmentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrolmentCreated"];
+                };
+            };
+        };
+    };
+    academy_enrolments_mine_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Enrolment"][];
+                };
+            };
+        };
+    };
+    academy_enrolments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Guests only: the token returned when they enrolled. */
+                "X-Enrolment-Token"?: string;
+            };
+            path: {
+                reference: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Enrolment"];
+                };
+            };
+        };
+    };
+    academy_enrolments_pay_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Guests only: the token returned when they enrolled. */
+                "X-Enrolment-Token"?: string;
+            };
+            path: {
+                reference: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrolmentPaymentStart"];
+                };
+            };
+        };
+    };
+    academy_enrolments_certificate_retrieve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Guests only: the token returned when they enrolled. */
+                "X-Enrolment-Token"?: string;
+            };
+            path: {
+                reference: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+        };
+    };
+    academy_payments_verify_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reference: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrolmentPaymentVerification"];
                 };
             };
         };

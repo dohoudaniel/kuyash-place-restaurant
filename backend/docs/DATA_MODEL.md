@@ -534,25 +534,26 @@ Message: `session` FK · `sender` (`user`/`bot`) · `body` · `matched_faq` FK n
 
 ---
 
-## 14. `academy`  *(Phase 3)*
+## 14. `academy`  *(Phase 3 — ✅ delivered in 3.2)*
 
 ### Instructor
-`user` FK null · `name` · `bio` · `photo` · `specialities` JSON · `is_active`.
-> Currently a free-text string on each course.
+`user` FK null · `name` · `bio` · `photo` (jpg/png/webp ≤ 10 MB) · `specialities` JSON list · `is_active`.
 
 ### Course
-`title` · `slug` · `description` · `instructor` FK · `level` (`beginner`/`intermediate`/`advanced`/`masterclass`) · `type` (`cooking`/`baking`/`plating`/`business`/`nutrition`) · `duration_label` · `session_count` · `price` Money · `features` JSON · `thumbnail` · `average_rating` · `student_count` (**computed**) · `is_active`.
+`branch` FK · `title` · `slug` · `description` · `instructor` FK (PROTECT) · `level` (`beginner`/`intermediate`/`advanced`/`masterclass`) · `course_type` (`cooking`/`baking`/`plating`/`business`/`nutrition`; `type` on the wire) · `duration_label` · `session_count` · `price` Money · `features` JSON list · `thumbnail` · `display_order` · `is_active`.
+`student_count` is **computed** from confirmed and completed enrolments (ACA-8). There is **no** `average_rating`: courses have no reviews, so there is nothing honest to average and the UI shows none.
 
 ### Cohort
-`course` FK · `starts_on` · `ends_on` · `capacity` · `enrolled_count` · `schedule_note` · `status` (`open`/`full`/`running`/`completed`/`cancelled`).
-> Makes "start date" a bounded choice instead of a free-text field.
+`course` FK · `starts_on` · `ends_on` (`CheckConstraint` ≥ `starts_on`) · `capacity` · `enrolled_count` (paid seats, maintained by the service) · `schedule_note` · `status` (`open`/`full`/`running`/`completed`/`cancelled`). `open` ↔ `full` moves automatically as seats are paid for or released; the rest are set by staff.
 
 ### Enrolment
-`reference` · `course` FK · `cohort` FK · `user` FK null · `name`/`email`/`phone` · `experience_level` · `status` (`pending_payment`/`confirmed`/`cancelled`/`completed`) · `amount_paid` Money · `payment_method` · `certificate_issued_at` null.
+`reference` (`ACA-XXXXXX`) · `course` FK · `cohort` FK · `user` FK null · `name`/`email`/`phone` · `experience_level` · `status` (`pending_payment`/`confirmed`/`cancelled`/`completed`) · `payment_method` (`card`/`transfer`) · `amount` Money (fee snapshot) · `amount_paid` Money · `currency` · `hold_expires_at` · `paid_at` · `cancelled_at` · `cancellation_reason` · `completed_at` · `certificate_issued_at` · `guest_token` · `idempotency_key`.
 
-Capacity is decremented inside `select_for_update()` on the cohort.
+**Seats.** A seat is taken by a paid enrolment, or by an unpaid one whose hold has not lapsed (30 minutes for card, 48 hours for transfer; `ACADEMY_CARD_HOLD_MINUTES` / `ACADEMY_TRANSFER_HOLD_HOURS`). Seats are counted with the cohort row locked (`select_for_update()`), so the last seat cannot be sold twice. Lapsed holds free their seat without any job — they simply stop counting. A card payment that settles after its hold lapsed, into a cohort that filled meanwhile, is still honoured and logged `cohort_overbooked` for a person to resolve.
 
-> **The "installment" payment option currently in the UI is not represented here.** Per ACA-6 it must either gain a `PaymentPlan` + `Installment` model pair or be removed from the frontend. It must not ship as unbacked copy.
+**Payment** uses `payments.PaymentTransaction`, which now points at exactly one of `order` / `enrolment` (`CheckConstraint`). Same providers, verification, webhooks and reconciliation task as orders (ACA-5).
+
+> **Installments (ACA-6 / OD-5):** not represented. The option was removed from the UI rather than shipped as unbacked copy. Adding it later means a `PaymentPlan` + `Installment` pair; OD-5 remains the owner's call.
 
 ---
 

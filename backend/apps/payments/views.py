@@ -89,7 +89,8 @@ class VerifyPaymentView(APIView):
     )
     def get(self, request: Request, reference: str) -> Response:
         record = payment_services.verify_by_reference(reference)
-        if record is None:
+        # Course payments are verified at /academy/payments/verify/.
+        if record is None or record.order is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         # Re-read: settlement updates the order through its own query, so the

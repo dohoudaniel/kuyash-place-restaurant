@@ -72,6 +72,18 @@ export type ChatSession = Schemas["ChatSession"];
 export type ChatSessionCreated = Schemas["ChatSessionCreated"];
 export type ChatExchange = Schemas["ChatExchange"];
 export type ChatEscalated = Schemas["ChatEscalated"];
+
+// Academy
+export type Course = Schemas["Course"];
+export type CourseDetail = Schemas["CourseDetail"];
+export type Cohort = Schemas["Cohort"];
+export type CourseLevel = Schemas["CourseLevelEnum"];
+export type CourseType = Schemas["CourseTypeEnum"];
+export type ExperienceLevel = Schemas["ExperienceLevelEnum"];
+export type Enrolment = Schemas["Enrolment"];
+export type EnrolmentCreated = Schemas["EnrolmentCreated"];
+export type EnrolmentPaymentStart = Schemas["EnrolmentPaymentStart"];
+export type EnrolmentPaymentVerification = Schemas["EnrolmentPaymentVerification"];
 export type PaymentVerification = Schemas["PaymentVerification"];
 export type Address = Schemas["Address"];
 

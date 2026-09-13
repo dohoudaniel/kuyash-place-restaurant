@@ -260,6 +260,16 @@ Order created `pending_payment`; API returns the account details that were hardc
 
 > Phase 3 upgrade: a dedicated virtual account per order (both providers support this) for automatic reconciliation.
 
+### 5.2.1 Course fees (Phase 3.2)
+
+A `PaymentTransaction` belongs to **exactly one** of an order or an academy enrolment (database `CheckConstraint`). Course fees reuse everything above — provider fallback, server-to-server verification, the amount-mismatch refusal, webhooks and the reconciliation task — through `initialise_enrolment_payment`. Settlement confirms the enrolment instead of transitioning an order. Differences:
+
+- The provider returns the student to `ACADEMY_PAYMENT_CALLBACK_URL`, verified at `/academy/payments/verify/{ref}/`; the order verify endpoint returns 404 for course payments.
+- Cards are never saved from a course payment.
+- Transfers are confirmed by staff in the enrolment admin, which writes a `bank_transfer` transaction.
+- Refunds for course fees are offline for now: cancelling a paid enrolment releases the seat and a person refunds the fee. `refund_order` handles orders only.
+- No installments (ACA-6, OD-5).
+
 ### 5.3 Cash on delivery
 
 > **Status:** the cap and the verified-account requirement below are **not enforced**

@@ -1,13 +1,16 @@
 "use client";
 
-import { GraduationCap, ChefHat, Cake, Image, Briefcase, Apple } from "lucide-react";
-import type { CourseCategory, CourseType } from "@/app/academy/page";
+import { GraduationCap, ChefHat, Cake, Image, Briefcase, Apple, type LucideIcon } from "lucide-react";
+import type { CourseLevel, CourseType } from "@/lib/api/types";
+
+export type LevelFilter = "all" | CourseLevel;
+export type TypeFilter = "all" | CourseType;
 
 interface CourseFiltersProps {
-  selectedCategory: CourseCategory;
-  selectedType: CourseType | "all";
-  onSelectCategory: (category: CourseCategory) => void;
-  onSelectType: (type: CourseType | "all") => void;
+  selectedCategory: LevelFilter;
+  selectedType: TypeFilter;
+  onSelectCategory: (category: LevelFilter) => void;
+  onSelectType: (type: TypeFilter) => void;
 }
 
 export default function CourseFilters({
@@ -16,7 +19,7 @@ export default function CourseFilters({
   onSelectCategory,
   onSelectType,
 }: CourseFiltersProps) {
-  const categories: { id: CourseCategory; label: string }[] = [
+  const categories: { id: LevelFilter; label: string }[] = [
     { id: "all", label: "All Levels" },
     { id: "beginner", label: "Beginner" },
     { id: "intermediate", label: "Intermediate" },
@@ -24,7 +27,7 @@ export default function CourseFilters({
     { id: "masterclass", label: "Masterclass" },
   ];
 
-  const types: { id: CourseType | "all"; label: string; icon: any; color: string }[] = [
+  const types: { id: TypeFilter; label: string; icon: LucideIcon; color: string }[] = [
     { id: "all", label: "All Types", icon: GraduationCap, color: "var(--red)" },
     { id: "cooking", label: "Cooking", icon: ChefHat, color: "#f59e0b" },
     { id: "baking", label: "Baking", icon: Cake, color: "#ec4899" },
@@ -47,6 +50,7 @@ export default function CourseFilters({
               <button
                 key={cat.id}
                 onClick={() => onSelectCategory(cat.id)}
+                aria-pressed={isActive}
                 className="px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap transition-all hover:shadow-md"
                 style={{
                   background: isActive ? "var(--red)" : "white",
@@ -74,6 +78,7 @@ export default function CourseFilters({
               <button
                 key={type.id}
                 onClick={() => onSelectType(type.id)}
+                aria-pressed={isActive}
                 className="px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 whitespace-nowrap transition-all hover:shadow-md"
                 style={{
                   background: isActive ? type.color : "white",

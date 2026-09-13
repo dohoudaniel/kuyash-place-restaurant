@@ -43,13 +43,13 @@ class PaymentAmountMismatch(DomainError):
     status_code = 402
 
 
-def build_reference(order: Order) -> str:
-    """A unique provider reference per attempt.
+def build_reference(payable: Any) -> str:
+    """A unique provider reference per attempt, for an order or an enrolment.
 
     Per attempt, not per order: a customer who abandons a payment and retries
     needs a fresh reference, and providers reject reused ones.
     """
-    return f"{order.reference}-{secrets.token_hex(4)}"
+    return f"{payable.reference}-{secrets.token_hex(4)}"
 
 
 def initialise_payment(
@@ -67,7 +67,51 @@ def initialise_payment(
         raise PaymentFailed("Cash orders are settled on delivery, not online.")
     if order.is_paid:
         raise PaymentFailed("This order has already been paid.")
+    return _start_payment(
+        payable=order,
+        link={"order": order},
+        amount=order.grand_total,
+        currency=order.currency,
+        email=order.contact_email,
+        callback_url=settings.PAYMENT_CALLBACK_URL,
+        provider_name=provider_name,
+        save_method=save_method,
+    )
 
+
+def initialise_enrolment_payment(*, enrolment: Any, provider_name: str = "") -> PaymentTransaction:
+    """Start a card payment for a course enrolment (ACA-5).
+
+    Same providers, same records, same verification and webhooks as an order.
+    """
+    from apps.academy.services import ensure_payable
+
+    ensure_payable(enrolment)
+    return _start_payment(
+        payable=enrolment,
+        link={"enrolment": enrolment},
+        amount=enrolment.amount,
+        currency=enrolment.currency,
+        email=enrolment.email,
+        callback_url=settings.ACADEMY_PAYMENT_CALLBACK_URL,
+        provider_name=provider_name,
+        save_method=False,
+    )
+
+
+def _start_payment(
+    *,
+    payable: Any,
+    link: dict[str, Any],
+    amount: int,
+    currency: str,
+    email: str,
+    callback_url: str,
+    provider_name: str,
+    save_method: bool,
+) -> PaymentTransaction:
+    """Try each provider in turn until one hands back a checkout URL."""
+    kind = next(iter(link))
     last_error = ""
     for candidate in fallback_order(provider_name):
         try:
@@ -76,23 +120,23 @@ def initialise_payment(
             last_error = str(exc)
             continue
 
-        reference = build_reference(order)
+        reference = build_reference(payable)
         record = PaymentTransaction.objects.create(
-            order=order,
+            **link,
             provider=candidate,
             our_reference=reference,
-            amount=order.grand_total,
-            currency=order.currency,
+            amount=amount,
+            currency=currency,
             status=TransactionStatus.INITIALISED,
             initialised_at=timezone.now(),
             save_method=save_method,
         )
         result = provider.initialise(
-            amount_kobo=order.grand_total,
-            email=order.contact_email,
+            amount_kobo=amount,
+            email=email,
             reference=reference,
-            callback_url=settings.PAYMENT_CALLBACK_URL,
-            metadata={"order": order.reference},
+            callback_url=callback_url,
+            metadata={kind: payable.reference},
         )
         if result.ok:
             record.status = TransactionStatus.PENDING
@@ -108,7 +152,7 @@ def initialise_payment(
         last_error = result.error
         logger.warning(
             "payment_initialise_failed",
-            extra={"order": order.reference, "provider": candidate},
+            extra={"payable": payable.reference, "provider": candidate},
         )
 
     raise PaymentFailed(last_error or "No payment provider is available right now.")
@@ -135,8 +179,13 @@ def _settle(record: PaymentTransaction, result: VerifyResult, *, source: str) ->
     record.save()
 
     order = record.order
-    if order.status == OrderStatus.PENDING_PAYMENT:
-        transition(order, OrderStatus.PAID, source=source)
+    if order is not None:
+        if order.status == OrderStatus.PENDING_PAYMENT:
+            transition(order, OrderStatus.PAID, source=source)
+    elif record.enrolment is not None:
+        from apps.academy.services import confirm_payment
+
+        confirm_payment(record.enrolment, record)
 
     _remember_card(record)
     return record
@@ -149,7 +198,7 @@ def _remember_card(record: PaymentTransaction) -> None:
     the customer wanted their card kept, and storing one regardless would be
     collecting a payment credential nobody agreed to.
     """
-    user = record.order.user
+    user = record.order.user if record.order is not None else None
     if not (record.save_method and user and record.authorization_code):
         return
 
@@ -213,7 +262,7 @@ def verify_and_settle(record: PaymentTransaction, *, source: str = "system") -> 
             "payment_amount_mismatch",
             extra={
                 "transaction": str(record.pk),
-                "order": record.order.reference,
+                "payable": record.payable_reference,
                 "expected": record.amount,
                 "received": result.amount_kobo,
                 "currency": result.currency,

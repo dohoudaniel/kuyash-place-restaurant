@@ -38,9 +38,26 @@ class RefundStatus(models.TextChoices):
 
 
 class PaymentTransaction(TimeStampedModel):
-    """One attempt to collect money for an order."""
+    """One attempt to collect money — for an order, or for a course enrolment.
 
-    order = models.ForeignKey("orders.Order", on_delete=models.PROTECT, related_name="transactions")
+    Exactly one of ``order`` and ``enrolment`` is set (ACA-5: courses use the
+    same payment infrastructure as orders, not a second one).
+    """
+
+    order = models.ForeignKey(
+        "orders.Order",
+        on_delete=models.PROTECT,
+        related_name="transactions",
+        null=True,
+        blank=True,
+    )
+    enrolment = models.ForeignKey(
+        "academy.Enrolment",
+        on_delete=models.PROTECT,
+        related_name="transactions",
+        null=True,
+        blank=True,
+    )
     provider = models.CharField(max_length=20, choices=Provider.choices)
 
     our_reference = models.CharField(
@@ -96,9 +113,23 @@ class PaymentTransaction(TimeStampedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["status", "initialised_at"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(order__isnull=False, enrolment__isnull=True)
+                    | models.Q(order__isnull=True, enrolment__isnull=False)
+                ),
+                name="transaction_pays_for_exactly_one_thing",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.our_reference} ({self.status})"
+
+    @property
+    def payable_reference(self) -> str:
+        payable = self.order or self.enrolment
+        return payable.reference if payable else ""
 
     @property
     def is_settled(self) -> bool:

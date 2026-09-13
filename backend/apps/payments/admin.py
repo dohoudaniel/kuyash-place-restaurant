@@ -14,6 +14,7 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
     list_display = (
         "our_reference",
         "order",
+        "enrolment",
         "provider",
         "status",
         "amount_display",
@@ -21,7 +22,12 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
         "verified_at",
     )
     list_filter = ("provider", "status", "channel")
-    search_fields = ("our_reference", "provider_reference", "order__reference")
+    search_fields = (
+        "our_reference",
+        "provider_reference",
+        "order__reference",
+        "enrolment__reference",
+    )
     date_hierarchy = "created_at"
     readonly_fields = tuple(field.name for field in PaymentTransaction._meta.fields)
 

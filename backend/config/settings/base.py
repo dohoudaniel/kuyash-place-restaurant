@@ -64,6 +64,7 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.reviews",
     "apps.gallery",
+    "apps.academy",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -262,6 +263,7 @@ REST_FRAMEWORK = {
         "chat_session": "20/hour",
         "chat_message": "30/min",
         "chat_escalate": "3/hour",
+        "enrolment_create": "10/hour",
     },
     "UNAUTHENTICATED_USER": "django.contrib.auth.models.AnonymousUser",
 }
@@ -296,6 +298,12 @@ SPECTACULAR_SETTINGS = {
         "ReviewStatusEnum": "apps.reviews.models.ReviewStatus",
         "GalleryCategoryEnum": "apps.gallery.models.GalleryCategory",
         "ChatSenderEnum": "apps.support.models.ChatSender",
+        "CourseLevelEnum": "apps.academy.models.CourseLevel",
+        "CourseTypeEnum": "apps.academy.models.CourseType",
+        "CohortStatusEnum": "apps.academy.models.CohortStatus",
+        "EnrolmentStatusEnum": "apps.academy.models.EnrolmentStatus",
+        "ExperienceLevelEnum": "apps.academy.models.ExperienceLevel",
+        "EnrolmentPaymentMethodEnum": "apps.academy.models.EnrolmentPaymentMethod",
     },
 }
 
@@ -410,6 +418,7 @@ CORS_ALLOW_HEADERS = (
     "x-cart-token",
     "x-guest-token",
     "x-chat-token",
+    "x-enrolment-token",
     "idempotency-key",
 )
 
@@ -444,6 +453,13 @@ FLUTTERWAVE_PUBLIC_KEY = env("FLUTTERWAVE_PUBLIC_KEY", default="")
 FLUTTERWAVE_WEBHOOK_SECRET_HASH = env("FLUTTERWAVE_WEBHOOK_SECRET_HASH", default="")
 DEFAULT_PAYMENT_PROVIDER = env("DEFAULT_PAYMENT_PROVIDER", default="paystack")
 PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default=f"{FRONTEND_URL}/checkout/complete")
+ACADEMY_PAYMENT_CALLBACK_URL = env(
+    "ACADEMY_PAYMENT_CALLBACK_URL", default=f"{FRONTEND_URL}/academy/enrolment/complete"
+)
+# An unpaid enrolment holds its seat this long, so a cohort cannot be filled by
+# people who never pay.
+ACADEMY_CARD_HOLD_MINUTES = env.int("ACADEMY_CARD_HOLD_MINUTES", default=30)
+ACADEMY_TRANSFER_HOLD_HOURS = env.int("ACADEMY_TRANSFER_HOLD_HOURS", default=48)
 
 # ── Domain defaults ───────────────────────────────────────────────────────────
 DEFAULT_CURRENCY = "NGN"
