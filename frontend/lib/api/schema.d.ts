@@ -1194,6 +1194,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support/chat/sessions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a conversation
+         * @description Require a CSRF token even when nobody is signed in.
+         *
+         *     DRF only checks CSRF for requests it has authenticated from a session, and
+         *     marks every other view CSRF-exempt. That leaves the sign-in endpoints — the
+         *     ones a signed-out visitor posts to — unprotected, and they also accept
+         *     form-encoded bodies. A page on any other site could then post a login form
+         *     and sign the visitor into an attacker's account (login CSRF), so every
+         *     purchase and address they enter afterwards lands in that account.
+         *
+         *     The frontend already sends ``X-CSRFToken`` on every unsafe request, so this
+         *     costs it nothing.
+         */
+        post: operations["support_chat_sessions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/chat/sessions/{session_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reopen a conversation */
+        get: operations["support_chat_sessions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/chat/sessions/{session_id}/messages/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a message and get the assistant's reply
+         * @description The assistant answers only from FAQ entries, an order lookup and opening hours. 409 `chat_ended`, `chat_expired` or `chat_limit` mean: start a new conversation.
+         */
+        post: operations["support_chat_sessions_messages_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support/chat/sessions/{session_id}/escalate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand the conversation to a person
+         * @description Opens a support ticket with the transcript. Calling it again returns the same ticket.
+         */
+        post: operations["support_chat_sessions_escalate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/support/tickets/": {
         parameters: {
             query?: never;
@@ -1878,6 +1965,79 @@ export interface components {
             } | null;
             readonly features: unknown;
             readonly is_popular: boolean;
+        };
+        ChatAction: {
+            type: components["schemas"]["ChatActionTypeEnum"];
+            url: string;
+            label: string;
+        };
+        /**
+         * @description * `order` - Order
+         *     * `link` - Link
+         * @enum {string}
+         */
+        ChatActionTypeEnum: "order" | "link";
+        /** @description Name and email are taken from the account when signed in. */
+        ChatEscalateRequest: {
+            /** @default  */
+            name: string;
+            /**
+             * Format: email
+             * @default
+             */
+            email: string;
+            /** @default  */
+            message: string;
+        };
+        ChatEscalated: {
+            reference: string;
+            reply: components["schemas"]["ChatMessage"] | null;
+        };
+        ChatExchange: {
+            message: components["schemas"]["ChatMessage"];
+            reply: components["schemas"]["ChatMessage"];
+        };
+        /** @description One line of the conversation.
+         *
+         *     ``suggestions``, ``can_escalate`` and ``action`` are set on assistant
+         *     messages only. */
+        ChatMessage: {
+            readonly sender: components["schemas"]["ChatSenderEnum"];
+            readonly body: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly suggestions: string[];
+            readonly can_escalate: boolean;
+            readonly action: components["schemas"]["ChatAction"] | null;
+        };
+        ChatSendRequest: {
+            body: string;
+        };
+        /**
+         * @description * `user` - Customer
+         *     * `bot` - Assistant
+         * @enum {string}
+         */
+        ChatSenderEnum: "user" | "bot";
+        ChatSession: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly messages: components["schemas"]["ChatMessage"][];
+            readonly is_ended: boolean;
+            readonly escalated_reference: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ChatSessionCreated: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly messages: components["schemas"]["ChatMessage"][];
+            readonly is_ended: boolean;
+            readonly escalated_reference: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** @description Send as X-Chat-Token on every later request for this conversation. */
+            readonly token: string;
         };
         ContactAcknowledgement: {
             reference: string;
@@ -2845,7 +3005,7 @@ export interface components {
         ReorderChange: {
             item: string;
             name: string;
-            type: components["schemas"]["TypeEnum"];
+            type: components["schemas"]["ReorderChangeTypeEnum"];
             detail?: string;
             /** @description {amount, display} — price changes only. */
             old?: {
@@ -2856,6 +3016,13 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * @description * `price_increased` - price_increased
+         *     * `price_reduced` - price_reduced
+         *     * `options_removed` - options_removed
+         * @enum {string}
+         */
+        ReorderChangeTypeEnum: "price_increased" | "price_reduced" | "options_removed";
         /** @description Input for a reorder.
          *
          *     ``replace`` is opt-in, and the endpoint answers 409 without it when the
@@ -3117,13 +3284,6 @@ export interface components {
             tip: components["schemas"]["Money"];
             grand_total: components["schemas"]["Money"];
         };
-        /**
-         * @description * `price_increased` - price_increased
-         *     * `price_reduced` - price_reduced
-         *     * `options_removed` - options_removed
-         * @enum {string}
-         */
-        TypeEnum: "price_increased" | "price_reduced" | "options_removed";
         Variant: {
             /** Format: uuid */
             readonly id: string;
@@ -4553,6 +4713,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Faq"][];
+                };
+            };
+        };
+    };
+    support_chat_sessions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSessionCreated"];
+                };
+            };
+        };
+    };
+    support_chat_sessions_retrieve: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The token returned when the conversation started. Not needed by its signed-in owner. */
+                "X-Chat-Token"?: string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSession"];
+                };
+            };
+        };
+    };
+    support_chat_sessions_messages_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The token returned when the conversation started. Not needed by its signed-in owner. */
+                "X-Chat-Token"?: string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatSendRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChatSendRequest"];
+                "multipart/form-data": components["schemas"]["ChatSendRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatExchange"];
+                };
+            };
+        };
+    };
+    support_chat_sessions_escalate_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The token returned when the conversation started. Not needed by its signed-in owner. */
+                "X-Chat-Token"?: string;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ChatEscalateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChatEscalateRequest"];
+                "multipart/form-data": components["schemas"]["ChatEscalateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatEscalated"];
                 };
             };
         };

@@ -583,21 +583,34 @@ All require `kitchen`, `managers` or `admin` group membership.
 | GET | `/support/faq/` | — | 🟡 Powers `/help` and the bot |
 | GET | `/support/tickets/` · `/{ref}/` | ✓ | 🟡 |
 | POST | `/support/tickets/{ref}/replies/` | ✓ | 🟡 |
-| POST | `/support/chat/sessions/` | optional | 🔵 Start |
-| POST | `/support/chat/sessions/{id}/messages/` | optional | 🔵 Send; returns the bot reply |
-| POST | `/support/chat/sessions/{id}/escalate/` | optional | 🔵 → ticket |
+| POST | `/support/chat/sessions/` | optional | ✅ Start. Returns `id`, the greeting and a `token` — send it as `X-Chat-Token` on every later call (a signed-in owner needs none). CSRF enforced for anonymous callers |
+| GET | `/support/chat/sessions/{id}/` | token / owner | ✅ Reopen the transcript: `messages`, `is_ended`, `escalated_reference`. Anyone else gets 404 |
+| POST | `/support/chat/sessions/{id}/messages/` | token / owner | ✅ `{body}` (≤ 500 chars) → `{message, reply}`. 409 `chat_ended` / `chat_expired` (12 h idle) → start again; 409 `chat_limit` (60 messages) → hand off |
+| POST | `/support/chat/sessions/{id}/escalate/` | token / owner | ✅ `{name, email, message}` (name/email from the account when signed in) → `{reference, reply}`. Opens a ticket carrying the transcript, acknowledges the customer and alerts the team. Idempotent. Spam gets the same 201 with an empty reference |
 
 **`POST /support/chat/sessions/{id}/messages/`**
 
 ```json
-{ "reply": { "sender": "bot",
-             "body": "We deliver to Victoria Island, Ikoyi and Lekki Phase 1. Delivery to VI is ₦1,500 and takes about 35 minutes.",
-             "matched_faq": "delivery-zones" },
-  "suggestions": ["Track my order", "Opening hours", "Talk to a human"],
-  "can_escalate": true }
+{ "message": { "sender": "user", "body": "Do you deliver to Ikoyi?", "created_at": "…",
+               "suggestions": [], "can_escalate": false, "action": null },
+  "reply":   { "sender": "bot",
+               "body": "We deliver across Victoria Island, Ikoyi and Lekki Phase 1. …",
+               "created_at": "…",
+               "suggestions": ["How long does delivery take?", "Talk to a human"],
+               "can_escalate": false,
+               "action": null } }
 ```
 
-The bot answers **only** from `FaqEntry` and an order-status lookup. Unmatched input returns a handoff offer — never an invented answer.
+The assistant (`apps/support/chat.py`, ADR-012) answers **only** from stored data, in this order:
+
+1. **Order lookup** — a `KYS-XXXXXX` reference (dash optional), or "track my order". A signed-in owner gets the status, the stored estimate and a link to the order page. Anyone else must also give the email used on the order; a wrong email and a non-existent reference get the same reply, so references cannot be probed. Signed-in customers with nothing in progress are pointed to `/orders`.
+2. **Handoff** — "human", "talk to", "complaint"… → `can_escalate: true` with no suggestions (the widget opens the form).
+3. **Opening hours** — from `OpeningHours` and `HolidayOverride`: "open now until 22:00" or "open again tomorrow at 11:00".
+4. **Greeting / thanks** — fixed text.
+5. **FAQ** — three points per matching keyword phrase, one per shared question word, both sides lightly stemmed (so the keyword "delivery" matches "do you deliver"); an answer needs 3. The stored answer is returned verbatim, with up to two related questions as suggestions.
+6. **Otherwise** — "I'd rather not guess", with a handoff offer. Never an invented answer.
+
+Transcripts are in the admin (read-only), which is where to see what the FAQ fails to answer. A customer's chats are deleted on account erasure.
 
 ---
 
@@ -686,6 +699,9 @@ Photos are uploaded in the Django admin (branch preselected, thumbnails in the l
 | `POST /catering/enquiries/` | 5/hour per IP |
 | `POST /reviews/` | 10/hour per user |
 | `POST /reviews/{id}/helpful/` | 60/hour per user or IP |
+| `POST /support/chat/sessions/` | 20/hour per user or IP |
+| `POST /support/chat/sessions/{id}/messages/` | 30/min per user or IP |
+| `POST /support/chat/sessions/{id}/escalate/` | 3/hour per user or IP |
 | Webhooks | unlimited, signature-gated |
 
 429 responses carry `Retry-After`.

@@ -15,6 +15,8 @@ from apps.common.fields import PhoneField
 from apps.common.models import SoftDeleteModel, TimeStampedModel
 from apps.core.models import Branch
 
+CHAT_TOKEN_BYTES = 32
+
 TICKET_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 
@@ -172,3 +174,72 @@ class FaqEntry(TimeStampedModel, SoftDeleteModel):
 
     def __str__(self) -> str:
         return self.question
+
+
+def generate_chat_token() -> str:
+    return secrets.token_urlsafe(CHAT_TOKEN_BYTES)
+
+
+class ChatSender(models.TextChoices):
+    USER = "user", "Customer"
+    BOT = "bot", "Assistant"
+
+
+class ChatSession(TimeStampedModel):
+    """One conversation with the chat assistant (ADR-012).
+
+    Replaces a widget that matched a handful of hardcoded words to hardcoded
+    replies — a US phone number, "dishes start from ₦6.90" — after a fake
+    600 ms delay. The assistant can only repeat stored answers, look up an order
+    the visitor can prove is theirs, or hand the conversation to a person.
+    """
+
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="chat_sessions")
+    session_token = models.CharField(
+        max_length=64, unique=True, default=generate_chat_token, editable=False
+    )
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="chat_sessions",
+    )
+    #: What the assistant asked for last, so "KYS-7Q2M4P" after "What's your
+    #: order reference?" is read as a reference.
+    awaiting = models.CharField(max_length=30, blank=True)
+    context = models.JSONField(default=dict, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    escalated_to_ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="chat_sessions",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Chat {str(self.pk)[:8]}"
+
+
+class ChatMessage(models.Model):
+    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="messages")
+    sender = models.CharField(max_length=10, choices=ChatSender.choices)
+    body = models.TextField()
+    matched_faq = models.ForeignKey(
+        FaqEntry, on_delete=models.SET_NULL, null=True, blank=True, related_name="chat_matches"
+    )
+    #: For assistant messages: suggested follow-ups, whether a handoff is
+    #: offered, and a link (e.g. to an order page). Kept so a reopened
+    #: conversation renders exactly as it did.
+    extra = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_sender_display()}: {self.body[:40]}"

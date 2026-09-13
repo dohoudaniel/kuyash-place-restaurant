@@ -27,7 +27,15 @@ def preflight(path: str, headers: str) -> dict[str, str]:
 
 @override_settings(CORS_ALLOWED_ORIGINS=[FRONTEND])
 @pytest.mark.parametrize(
-    "header", ["x-cart-token", "x-guest-token", "idempotency-key", "x-csrftoken", "content-type"]
+    "header",
+    [
+        "x-cart-token",
+        "x-guest-token",
+        "x-chat-token",
+        "idempotency-key",
+        "x-csrftoken",
+        "content-type",
+    ],
 )
 def test_preflight_allows_every_header_the_client_sends(header: str) -> None:
     allowed = preflight("/api/v1/orders/", header).get("access-control-allow-headers", "")

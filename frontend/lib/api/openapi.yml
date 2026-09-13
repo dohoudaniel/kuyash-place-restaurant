@@ -1601,6 +1601,149 @@ paths:
                 items:
                   $ref: '#/components/schemas/Faq'
           description: ''
+  /api/v1/support/chat/sessions/:
+    post:
+      operationId: support_chat_sessions_create
+      description: |-
+        Require a CSRF token even when nobody is signed in.
+
+        DRF only checks CSRF for requests it has authenticated from a session, and
+        marks every other view CSRF-exempt. That leaves the sign-in endpoints — the
+        ones a signed-out visitor posts to — unprotected, and they also accept
+        form-encoded bodies. A page on any other site could then post a login form
+        and sign the visitor into an attacker's account (login CSRF), so every
+        purchase and address they enter afterwards lands in that account.
+
+        The frontend already sends ``X-CSRFToken`` on every unsafe request, so this
+        costs it nothing.
+      summary: Start a conversation
+      tags:
+      - support
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionCreated'
+          description: ''
+  /api/v1/support/chat/sessions/{session_id}/:
+    get:
+      operationId: support_chat_sessions_retrieve
+      summary: Reopen a conversation
+      parameters:
+      - in: header
+        name: X-Chat-Token
+        schema:
+          type: string
+        description: The token returned when the conversation started. Not needed
+          by its signed-in owner.
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - support
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSession'
+          description: ''
+  /api/v1/support/chat/sessions/{session_id}/messages/:
+    post:
+      operationId: support_chat_sessions_messages_create
+      description: 'The assistant answers only from FAQ entries, an order lookup and
+        opening hours. 409 `chat_ended`, `chat_expired` or `chat_limit` mean: start
+        a new conversation.'
+      summary: Send a message and get the assistant's reply
+      parameters:
+      - in: header
+        name: X-Chat-Token
+        schema:
+          type: string
+        description: The token returned when the conversation started. Not needed
+          by its signed-in owner.
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSendRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatSendRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatSendRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatExchange'
+          description: ''
+  /api/v1/support/chat/sessions/{session_id}/escalate/:
+    post:
+      operationId: support_chat_sessions_escalate_create
+      description: Opens a support ticket with the transcript. Calling it again returns
+        the same ticket.
+      summary: Hand the conversation to a person
+      parameters:
+      - in: header
+        name: X-Chat-Token
+        schema:
+          type: string
+        description: The token returned when the conversation started. Not needed
+          by its signed-in owner.
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - support
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatEscalateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatEscalateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatEscalateRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatEscalated'
+          description: ''
   /api/v1/support/tickets/:
     get:
       operationId: support_tickets_list
@@ -3079,6 +3222,184 @@ components:
       - name
       - price_per_person
       - slug
+    ChatAction:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/ChatActionTypeEnum'
+        url:
+          type: string
+        label:
+          type: string
+      required:
+      - label
+      - type
+      - url
+    ChatActionTypeEnum:
+      enum:
+      - order
+      - link
+      type: string
+      description: |-
+        * `order` - Order
+        * `link` - Link
+    ChatEscalateRequest:
+      type: object
+      description: Name and email are taken from the account when signed in.
+      properties:
+        name:
+          type: string
+          default: ''
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          default: ''
+        message:
+          type: string
+          default: ''
+          maxLength: 2000
+    ChatEscalated:
+      type: object
+      properties:
+        reference:
+          type: string
+        reply:
+          allOf:
+          - $ref: '#/components/schemas/ChatMessage'
+          nullable: true
+      required:
+      - reference
+      - reply
+    ChatExchange:
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        reply:
+          $ref: '#/components/schemas/ChatMessage'
+      required:
+      - message
+      - reply
+    ChatMessage:
+      type: object
+      description: |-
+        One line of the conversation.
+
+        ``suggestions``, ``can_escalate`` and ``action`` are set on assistant
+        messages only.
+      properties:
+        sender:
+          allOf:
+          - $ref: '#/components/schemas/ChatSenderEnum'
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        suggestions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        can_escalate:
+          type: boolean
+          readOnly: true
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ChatAction'
+          nullable: true
+          readOnly: true
+      required:
+      - action
+      - body
+      - can_escalate
+      - created_at
+      - sender
+      - suggestions
+    ChatSendRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+      - body
+    ChatSenderEnum:
+      enum:
+      - user
+      - bot
+      type: string
+      description: |-
+        * `user` - Customer
+        * `bot` - Assistant
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+          readOnly: true
+        is_ended:
+          type: boolean
+          readOnly: true
+        escalated_reference:
+          type: string
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - escalated_reference
+      - id
+      - is_ended
+      - messages
+    ChatSessionCreated:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+          readOnly: true
+        is_ended:
+          type: boolean
+          readOnly: true
+        escalated_reference:
+          type: string
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        token:
+          type: string
+          readOnly: true
+          description: Send as X-Chat-Token on every later request for this conversation.
+      required:
+      - created_at
+      - escalated_reference
+      - id
+      - is_ended
+      - messages
+      - token
     ContactAcknowledgement:
       type: object
       properties:
@@ -5427,7 +5748,7 @@ components:
         name:
           type: string
         type:
-          $ref: '#/components/schemas/TypeEnum'
+          $ref: '#/components/schemas/ReorderChangeTypeEnum'
         detail:
           type: string
         old:
@@ -5442,6 +5763,16 @@ components:
       - item
       - name
       - type
+    ReorderChangeTypeEnum:
+      enum:
+      - price_increased
+      - price_reduced
+      - options_removed
+      type: string
+      description: |-
+        * `price_increased` - price_increased
+        * `price_reduced` - price_reduced
+        * `options_removed` - options_removed
     ReorderRequest:
       type: object
       description: |-
@@ -6064,16 +6395,6 @@ components:
       - subtotal
       - tip
       - vat
-    TypeEnum:
-      enum:
-      - price_increased
-      - price_reduced
-      - options_removed
-      type: string
-      description: |-
-        * `price_increased` - price_increased
-        * `price_reduced` - price_reduced
-        * `options_removed` - options_removed
     Variant:
       type: object
       properties:

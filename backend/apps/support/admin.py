@@ -7,7 +7,15 @@ from typing import Any
 from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponse
 
-from apps.support.models import ContactMessage, FaqEntry, Ticket, TicketReply, TicketStatus
+from apps.support.models import (
+    ChatMessage,
+    ChatSession,
+    ContactMessage,
+    FaqEntry,
+    Ticket,
+    TicketReply,
+    TicketStatus,
+)
 
 
 @admin.register(ContactMessage)
@@ -116,3 +124,40 @@ class FaqEntryAdmin(admin.ModelAdmin):
             {"fields": ("helpful_count", "created_at", "updated_at"), "classes": ("collapse",)},
         ),
     )
+
+
+class ChatMessageInline(admin.TabularInline):
+    model = ChatMessage
+    extra = 0
+    can_delete = False
+    fields = ("sender", "body", "matched_faq", "created_at")
+    readonly_fields = fields
+
+    def has_add_permission(self, request: HttpRequest, obj: Any = None) -> bool:
+        return False
+
+
+@admin.register(ChatSession)
+class ChatSessionAdmin(admin.ModelAdmin):
+    """Read-only transcripts. Shows which questions the FAQ is failing to answer."""
+
+    list_display = (
+        "__str__",
+        "user",
+        "message_count",
+        "escalated_to_ticket",
+        "created_at",
+        "ended_at",
+    )
+    list_filter = ("ended_at", "created_at")
+    date_hierarchy = "created_at"
+    inlines = [ChatMessageInline]
+    fields = ("branch", "user", "escalated_to_ticket", "created_at", "updated_at", "ended_at")
+    readonly_fields = fields
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    @admin.display(description="Messages")
+    def message_count(self, obj: ChatSession) -> int:
+        return obj.messages.count()

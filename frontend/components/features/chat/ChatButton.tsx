@@ -3,49 +3,140 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatPanel from "./ChatPanel";
+import ChatEscalationForm from "./ChatEscalationForm";
+import { ApiError } from "@/lib/api/client";
+import { escalateChat, fetchChat, sendChatMessage, startChat, type EscalationInput } from "@/lib/api/chat";
+import type { ChatMessage } from "@/lib/api/types";
+import { clearStoredChat, loadStoredChat, storeChat, type StoredChat } from "@/lib/chat/session";
+import { useAuthStore } from "@/lib/store/authStore";
 
-interface Message {
-  from: "user" | "bot";
-  text: string;
-}
+type Status = "idle" | "loading" | "ready" | "sending" | "ended" | "error";
 
-const BOT_REPLIES: Record<string, string> = {
-  default:      "Hi there! 👋 How can I help you today?",
-  menu:         "Our menu has burgers, grills, salads, tacos, breakfast and desserts. Type 'order' to get started!",
-  order:        "You can place an order by clicking the **Order Now** button at the top of the page, or call us on +1 555 96 36 36.",
-  hours:        "We're open Mon–Sat 09:00am–10:00pm and Sunday 09:00am–08:00pm.",
-  delivery:     "We deliver in an average of 30 minutes! 🚀 Fresh and hot to your door.",
-  reservation:  "To make a reservation please scroll to the Reservations section or call +1 555 96 36 36.",
-  hello:        "Hello! Welcome to Kuyash Place 👑 Tastefully Classy. How can I assist you?",
-  hi:           "Hello! Welcome to Kuyash Place 👑 Tastefully Classy. How can I assist you?",
-  price:        "Our dishes start from ₦6.90. Check out the full menu on this page for all prices.",
-};
+/** A conversation the server will no longer continue. */
+const CLOSED_CODES = new Set(["chat_ended", "chat_expired"]);
 
-function getBotReply(input: string): string {
-  const lower = input.toLowerCase();
-  for (const key of Object.keys(BOT_REPLIES)) {
-    if (key !== "default" && lower.includes(key)) return BOT_REPLIES[key];
-  }
-  return BOT_REPLIES.default;
-}
-
+/**
+ * The chat assistant.
+ *
+ * Previously a keyword table in this file answered with a US phone number,
+ * invented opening hours and "dishes start from ₦6.90", after a fake 600 ms
+ * delay. Replies now come from the server, which can only repeat FAQ answers
+ * the team wrote, look up an order, read the opening hours, or pass the
+ * conversation to a person.
+ */
 export default function ChatButton() {
-  const [open, setOpen]       = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [input, setInput]     = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    { from: "bot", text: "Hi! 👋 Welcome to Kuyash Place. Ask me anything — menu, hours, delivery, reservations!" },
-  ]);
+  const [input, setInput] = useState("");
+  const [session, setSession] = useState<StoredChat | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [status, setStatus] = useState<Status>("idle");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [escalating, setEscalating] = useState(false);
 
-  function send() {
-    const text = input.trim();
-    if (!text) return;
-    const userMsg: Message = { from: "user", text };
-    const botMsg: Message  = { from: "bot",  text: getBotReply(text) };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput("");
-    setTimeout(() => setMessages((prev) => [...prev, botMsg]), 600);
+  async function begin(fresh = false) {
+    setStatus("loading");
+    setNotice(null);
+    setEscalating(false);
+    try {
+      const stored = fresh ? null : loadStoredChat();
+      if (stored) {
+        try {
+          const existing = await fetchChat(stored.id, stored.token);
+          setSession(stored);
+          setMessages(existing.messages);
+          if (existing.is_ended) {
+            setStatus("ended");
+            setNotice(existing.escalated_reference ? `Passed to our team — reference ${existing.escalated_reference}.` : "This conversation has ended.");
+          } else {
+            setStatus("ready");
+          }
+          return;
+        } catch {
+          clearStoredChat();
+        }
+      }
+      const created = await startChat();
+      const next = { id: created.id, token: created.token };
+      storeChat(next);
+      setSession(next);
+      setMessages(created.messages);
+      setStatus("ready");
+    } catch {
+      setStatus("error");
+      setNotice("We couldn't reach our assistant. Please try again, or use the contact page.");
+    }
   }
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && (status === "idle" || status === "error")) void begin();
+  }
+
+  async function send(text?: string) {
+    const body = (text ?? input).trim();
+    if (!body || !session || status !== "ready") return;
+    setInput("");
+    setNotice(null);
+    setEscalating(false);
+    const optimistic: ChatMessage = { sender: "user", body, created_at: new Date().toISOString(), suggestions: [], can_escalate: false, action: null };
+    setMessages((current) => [...current, optimistic]);
+    setStatus("sending");
+    try {
+      const exchange = await sendChatMessage(session.id, session.token, body);
+      setMessages((current) => [...current.slice(0, -1), exchange.message, exchange.reply]);
+      setStatus("ready");
+      // Asked for a person outright: go straight to the handoff form.
+      if (exchange.reply.can_escalate && exchange.reply.suggestions.length === 0) setEscalating(true);
+    } catch (err) {
+      setMessages((current) => current.slice(0, -1));
+      if (err instanceof ApiError && CLOSED_CODES.has(err.code)) {
+        clearStoredChat();
+        setStatus("ended");
+        setNotice(err.message);
+        return;
+      }
+      setStatus("ready");
+      setInput(body);
+      if (err instanceof ApiError && err.code === "chat_limit") {
+        setNotice(err.message);
+        setEscalating(true);
+        return;
+      }
+      setNotice(err instanceof ApiError ? err.message : "Message not sent. Check your connection and try again.");
+    }
+  }
+
+  async function escalate(details: EscalationInput) {
+    if (!session) return;
+    const result = await escalateChat(session.id, session.token, details);
+    const reply = result.reply;
+    if (reply) setMessages((current) => [...current, reply]);
+    setEscalating(false);
+    setStatus("ended");
+    setNotice(result.reference ? null : "Thanks — our team will be in touch.");
+  }
+
+  const last = messages[messages.length - 1];
+  const lastFromBot = status === "ready" && !escalating && last?.sender === "bot";
+  const suggestions = lastFromBot ? last.suggestions : [];
+  const canEscalate = lastFromBot && last.can_escalate;
+
+  const footer = escalating ? (
+    <ChatEscalationForm signedInName={user ? user.full_name || user.email : null} onSubmit={escalate} onCancel={() => setEscalating(false)} />
+  ) : status === "ended" || status === "error" ? (
+    <div className="px-3 py-3" style={{ borderTop: "1px solid #F0F0F0" }}>
+      <button
+        onClick={() => void begin(true)}
+        className="w-full py-2 rounded-full text-xs font-bold text-white transition-all hover:opacity-90"
+        style={{ background: "var(--red)" }}
+      >
+        {status === "error" ? "Try again" : "Start a new conversation"}
+      </button>
+    </div>
+  ) : undefined;
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
@@ -54,10 +145,18 @@ export default function ChatButton() {
         {open && (
           <ChatPanel
             messages={messages}
+            pending={status === "sending"}
+            loading={status === "loading"}
+            notice={notice}
+            suggestions={suggestions}
+            onSuggestion={(text) => void send(text)}
+            canEscalate={canEscalate}
+            onEscalate={() => setEscalating(true)}
             input={input}
             onInputChange={setInput}
-            onSend={send}
+            onSend={() => void send()}
             onClose={() => setOpen(false)}
+            footer={footer}
           />
         )}
       </AnimatePresence>
@@ -90,7 +189,8 @@ export default function ChatButton() {
 
         <motion.button
           aria-label={open ? "Close chat" : "Open chat"}
-          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          onClick={toggle}
           onHoverStart={() => setHovered(true)}
           onHoverEnd={() => setHovered(false)}
           whileHover={{ scale: 1.08 }}

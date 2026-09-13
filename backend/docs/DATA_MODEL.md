@@ -506,9 +506,9 @@ Index `(status, created_at)` so managers can see enquiries breaching the promise
 ### FaqEntry  *(Phase 3)*
 `question` · `answer` · `category` · `keywords` `JSONField` · `display_order` · `is_active` · `helpful_count`. Serves both `/help` and the chat bot.
 
-### ChatSession / ChatMessage  *(Phase 3)*
-Session: `session_token` · `user` FK null · `started_at` · `ended_at` · `escalated_to_ticket` FK null.
-Message: `session` FK · `sender` (`user`/`bot`) · `body` · `matched_faq` FK null · `created_at`.
+### ChatSession / ChatMessage  *(Phase 3 — ✅ delivered in 3.5)*
+Session: `branch` FK · `session_token` (unique, 256-bit, compared in constant time) · `user` FK null (cascade — erased with the account) · `awaiting` (`order_reference` / `order_email` / blank) · `context` JSON · `created_at` (= started) · `updated_at` (idle expiry after 12 h) · `ended_at` · `escalated_to_ticket` FK null.
+Message: `session` FK · `sender` (`user`/`bot`) · `body` · `matched_faq` FK null · `extra` JSON (`suggestions`, `can_escalate`, `action`, so a reopened transcript renders as it did) · `created_at`. Integer key, never exposed.
 
 > The bot answers only from `FaqEntry` and an order-status lookup. It never generates prices, delivery promises or menu claims.
 

@@ -259,6 +259,9 @@ REST_FRAMEWORK = {
         "catering": "5/hour",
         "review_create": "10/hour",
         "review_vote": "60/hour",
+        "chat_session": "20/hour",
+        "chat_message": "30/min",
+        "chat_escalate": "3/hour",
     },
     "UNAUTHENTICATED_USER": "django.contrib.auth.models.AnonymousUser",
 }
@@ -292,6 +295,7 @@ SPECTACULAR_SETTINGS = {
         "NotificationStatusEnum": "apps.notifications.models.NotificationStatus",
         "ReviewStatusEnum": "apps.reviews.models.ReviewStatus",
         "GalleryCategoryEnum": "apps.gallery.models.GalleryCategory",
+        "ChatSenderEnum": "apps.support.models.ChatSender",
     },
 }
 
@@ -401,7 +405,13 @@ CORS_EXPOSE_HEADERS = ["X-Cart-Token", "X-Request-ID", "Idempotency-Replayed"]
 # them. Without this the browser blocks every request once a cart token exists,
 # and every order placement (Idempotency-Key) — found by the first live run of the
 # frontend client, not by any unit test.
-CORS_ALLOW_HEADERS = (*default_cors_headers, "x-cart-token", "x-guest-token", "idempotency-key")
+CORS_ALLOW_HEADERS = (
+    *default_cors_headers,
+    "x-cart-token",
+    "x-guest-token",
+    "x-chat-token",
+    "idempotency-key",
+)
 
 _SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", default="")
 if _SESSION_COOKIE_DOMAIN:

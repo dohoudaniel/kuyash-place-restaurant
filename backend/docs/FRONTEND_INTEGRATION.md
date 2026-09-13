@@ -267,7 +267,7 @@ Replace the 18 hardcoded slots with `GET /reservations/availability/?date=&party
 | `components/features/academy/EnrollmentModal.tsx:24` | `alert(...)` → `POST /academy/enrolments/` with cohort selection. **Remove the "installment" option** unless a payment-plan model is built (ACA-6) |
 | `app/rewards/page.tsx:22` | `useState(false)` → `GET /loyalty/account/` |
 | `app/gallery/page.tsx:20` | ✅ 20 items with broken image keys → `GET /gallery/` (Phase 3.4, see §5.6) |
-| `components/features/chat/*` | local echo → `/support/chat/…` |
+| `components/features/chat/*` | ✅ local echo → `/support/chat/…` (Phase 3.5, see §5.7) |
 
 ---
 
@@ -653,6 +653,43 @@ schema synced; `tsc` clean; `next build` passes; ESLint 26 → 25 errors and
 2 → 1 warnings, no new findings; a live run (16 checks) uploads photos through
 the admin, confirms SVG is refused, and checks the list, filters, neighbours,
 served files and CORS.
+
+### 5.7 Phase 3.5 chat delivered
+
+**Backend.** `ChatSession` / `ChatMessage` in `apps/support` and the assistant in
+`apps/support/chat.py` (API_SPEC §10, ADR-012). It answers only from FAQ
+entries, an ownership-checked order lookup and the opening-hours tables, and
+turns anything else into a ticket with the transcript. Sessions are reached by a
+per-conversation token or by their signed-in owner; CSRF is enforced; messages,
+sessions and handoffs have their own rate limits; `X-Chat-Token` is allowed by
+CORS. Erasure deletes a customer's chats.
+
+**Frontend.**
+- `lib/api/chat.ts`; `lib/chat/session.ts` keeps `{id, token}` in
+  sessionStorage, so a reload reopens the conversation but it doesn't outlive
+  the tab.
+- `ChatButton` starts or reopens a conversation when opened and renders server
+  messages. There is no keyword table and no fake delay; the typing dots show
+  only while a request is in flight.
+- `ChatPanel` gains suggestion chips, "Pass to our team", action links
+  (`ChatMessage`, e.g. "View order →"), notices, and a footer slot.
+- `ChatEscalationForm` asks guests for name and email; signed-in customers only
+  add a note. Asking for a person opens it directly. Ended or expired
+  conversations offer "Start a new conversation".
+
+`components/ui/ChatButton.tsx` is an unused older copy of the widget with the
+old hardcoded replies. It sits in the design-system folder, which is not
+touched; delete it when that folder is next reviewed.
+
+The live run caught a real miss: "Do you deliver to Ikoyi?" did not match the
+seeded answer, because its keyword is "delivery". Matching now stems both sides,
+and a test runs everyday phrasings against the real seed FAQ.
+
+Verified: backend 1036 passed, chat modules at 100% coverage, ruff/mypy clean,
+schema synced; `tsc` clean; `next build` passes; ESLint unchanged at 25 errors
+and 1 warning with no new findings; a live run covers CORS, CSRF, token access,
+seeded FAQ answers, the refusal to guess, hours, guest and owner order lookup,
+handoff, idempotent escalation, ended sessions and the message rate limit (22/22).
 
 ---
 

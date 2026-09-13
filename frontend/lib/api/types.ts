@@ -64,6 +64,14 @@ export type ReviewHelpful = Schemas["ReviewHelpful"];
 export type GalleryImage = Schemas["GalleryImage"];
 export type GalleryImageDetail = Schemas["GalleryImageDetail"];
 export type GalleryCategory = Schemas["GalleryCategoryEnum"];
+
+// Chat assistant
+export type ChatMessage = Schemas["ChatMessage"];
+export type ChatAction = Schemas["ChatAction"];
+export type ChatSession = Schemas["ChatSession"];
+export type ChatSessionCreated = Schemas["ChatSessionCreated"];
+export type ChatExchange = Schemas["ChatExchange"];
+export type ChatEscalated = Schemas["ChatEscalated"];
 export type PaymentVerification = Schemas["PaymentVerification"];
 export type Address = Schemas["Address"];
 
