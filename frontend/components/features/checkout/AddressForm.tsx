@@ -6,6 +6,8 @@ import { ApiError, api } from "@/lib/api/client";
 import type { Address } from "@/lib/api/types";
 
 interface AddressFormProps {
+  /** Edit this address instead of creating a new one. */
+  address?: Address;
   defaults?: { recipient_name?: string; phone?: string; city?: string; state?: string };
   onSaved: (address: Address) => void;
   onCancel?: () => void;
@@ -14,25 +16,26 @@ interface AddressFormProps {
 const inputClass = "w-full px-4 py-3 rounded-lg border outline-none transition-colors focus:border-red-500";
 
 type Field = "recipient_name" | "phone" | "street" | "area" | "city" | "state" | "landmark" | "delivery_notes";
+type Label = "home" | "work" | "other";
 
 /**
- * Adds a delivery address to the signed-in account.
+ * Adds or edits a delivery address on the signed-in account.
  *
- * Replaces the checkout's "Zip Code" field (Lagos addressing does not use it) with
- * `area`, which is what the backend uses to find the delivery zone, and
- * `landmark`, which riders otherwise phone to ask for.
+ * `area` is what the backend uses to find the delivery zone; `landmark` is what
+ * riders otherwise phone to ask for. There is no postcode field — Lagos
+ * addressing does not use one.
  */
-export default function AddressForm({ defaults, onSaved, onCancel }: AddressFormProps) {
-  const [form, setForm] = useState<Record<Field, string> & { label: "home" | "work" | "other" }>({
-    recipient_name: defaults?.recipient_name ?? "",
-    phone: defaults?.phone ?? "",
-    street: "",
-    area: "",
-    city: defaults?.city ?? "",
-    state: defaults?.state ?? "",
-    landmark: "",
-    delivery_notes: "",
-    label: "home",
+export default function AddressForm({ address, defaults, onSaved, onCancel }: AddressFormProps) {
+  const [form, setForm] = useState<Record<Field, string> & { label: Label }>({
+    recipient_name: address?.recipient_name ?? defaults?.recipient_name ?? "",
+    phone: address?.phone ?? defaults?.phone ?? "",
+    street: address?.street ?? "",
+    area: address?.area ?? "",
+    city: address?.city ?? defaults?.city ?? "",
+    state: address?.state ?? defaults?.state ?? "",
+    landmark: address?.landmark ?? "",
+    delivery_notes: address?.delivery_notes ?? "",
+    label: (address?.label as Label | undefined) ?? "home",
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -47,8 +50,10 @@ export default function AddressForm({ defaults, onSaved, onCancel }: AddressForm
     setErrors({});
     setFormError(null);
     try {
-      const address = await api<Address>("/accounts/addresses/", { method: "POST", body: form });
-      onSaved(address);
+      const saved = address
+        ? await api<Address>(`/accounts/addresses/${address.id}/`, { method: "PATCH", body: form })
+        : await api<Address>("/accounts/addresses/", { method: "POST", body: form });
+      onSaved(saved);
     } catch (err) {
       if (err instanceof ApiError && err.code === "validation_error") setErrors(err.fieldErrors);
       else setFormError(err instanceof ApiError ? err.message : "We couldn't save that address. Please try again.");

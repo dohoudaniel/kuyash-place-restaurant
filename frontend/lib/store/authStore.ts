@@ -40,6 +40,8 @@ interface AuthStore {
   requestPasswordReset: (email: string) => Promise<DetailResponse>;
   confirmPasswordReset: (payload: { uid: string; token: string; new_password: string }) => Promise<DetailResponse>;
   logout: () => Promise<void>;
+  /** The server has already ended the session (e.g. the account was erased). */
+  endSession: () => void;
 }
 
 export const useAuthStore = create<AuthStore>()((set, get) => ({
@@ -96,5 +98,10 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       clearCartToken();
       set({ user: null, status: "anonymous" });
     }
+  },
+
+  endSession: () => {
+    clearCartToken();
+    set({ user: null, status: "anonymous" });
   },
 }));

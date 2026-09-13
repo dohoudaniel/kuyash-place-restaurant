@@ -85,7 +85,9 @@ def submit_contact_message(
         is_spam=spam,
     )
     if spam:
-        logger.info("contact_message_quarantined", extra={"message": str(contact.pk)})
+        # Not `message`: that name is reserved on LogRecord, and passing it raises
+        # KeyError the moment INFO logging is enabled.
+        logger.info("contact_message_quarantined", extra={"contact_message": str(contact.pk)})
         return None
 
     ticket = Ticket.objects.create(

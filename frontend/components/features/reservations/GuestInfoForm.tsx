@@ -18,11 +18,14 @@ export default function GuestInfoForm({ reservation, updateReservation }: GuestI
         {/* Name & Email */}
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
+            <label htmlFor="guest-name" className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
               Full Name *
             </label>
             <input
+              id="guest-name"
               type="text"
+              required
+              autoComplete="name"
               value={reservation.name}
               onChange={(e) => updateReservation({ name: e.target.value })}
               placeholder="John Doe"
@@ -31,11 +34,14 @@ export default function GuestInfoForm({ reservation, updateReservation }: GuestI
             />
           </div>
           <div>
-            <label className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
+            <label htmlFor="guest-email" className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
               Email Address *
             </label>
             <input
+              id="guest-email"
               type="email"
+              required
+              autoComplete="email"
               value={reservation.email}
               onChange={(e) => updateReservation({ email: e.target.value })}
               placeholder="john@example.com"
@@ -47,11 +53,14 @@ export default function GuestInfoForm({ reservation, updateReservation }: GuestI
 
         {/* Phone */}
         <div>
-          <label className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
+          <label htmlFor="guest-phone" className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
             Phone Number *
           </label>
           <input
+            id="guest-phone"
             type="tel"
+            required
+            autoComplete="tel"
             value={reservation.phone}
             onChange={(e) => updateReservation({ phone: e.target.value })}
             placeholder="+234 123 456 7890"
@@ -62,10 +71,12 @@ export default function GuestInfoForm({ reservation, updateReservation }: GuestI
 
         {/* Special Requests */}
         <div>
-          <label className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
+          <label htmlFor="guest-requests" className="block text-sm font-bold mb-2" style={{ color: "var(--black)" }}>
             Special Requests (Optional)
           </label>
           <textarea
+            id="guest-requests"
+            maxLength={1000}
             value={reservation.specialRequests}
             onChange={(e) => updateReservation({ specialRequests: e.target.value })}
             placeholder="Dietary restrictions, allergies, special occasions, seating preferences..."
@@ -83,6 +94,7 @@ export default function GuestInfoForm({ reservation, updateReservation }: GuestI
               (tag) => (
                 <button
                   key={tag}
+                  type="button"
                   onClick={() => {
                     const current = reservation.specialRequests;
                     const newValue = current ? `${current}, ${tag}` : tag;
@@ -101,7 +113,7 @@ export default function GuestInfoForm({ reservation, updateReservation }: GuestI
         {/* Terms */}
         <div className="p-3 rounded-lg" style={{ background: "var(--gray-light)" }}>
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-            By confirming, you agree to our cancellation policy. Please inform us at least 2 hours in advance for any changes or cancellations.
+            By confirming, you agree to our <a href="/terms" className="underline">terms</a>. If your plans change, you can cancel from your confirmation email.
           </p>
         </div>
       </div>

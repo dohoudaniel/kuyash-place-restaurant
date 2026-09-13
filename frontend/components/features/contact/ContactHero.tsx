@@ -1,14 +1,25 @@
 "use client";
 
 import { Phone, Mail, MapPin, Clock } from "lucide-react";
+import { todaysHours } from "@/lib/site/hours";
+import { useSiteInfo } from "@/lib/site/useSiteInfo";
 
 export default function ContactHero() {
+  const { branch, settings, hours } = useSiteInfo();
+  const email = settings?.support_email || branch?.email || "";
+
   const quickInfo = [
-    { icon: Phone, label: "Call Us", value: "+234 123 456 7890", color: "var(--red)" },
-    { icon: Mail, label: "Email Us", value: "hello@kuyashplace.com", color: "#10b981" },
-    { icon: MapPin, label: "Visit Us", value: "Lagos, Nigeria", color: "#3b82f6" },
-    { icon: Clock, label: "Open Daily", value: "11AM - 10PM", color: "#f59e0b" },
-  ];
+    branch?.phone && { icon: Phone, label: "Call Us", value: branch.phone, href: `tel:${branch.phone}`, color: "var(--red)" },
+    email && { icon: Mail, label: "Email Us", value: email, href: `mailto:${email}`, color: "#10b981" },
+    branch?.city && { icon: MapPin, label: "Visit Us", value: [branch.city, branch.state].filter(Boolean).join(", "), href: undefined, color: "#3b82f6" },
+    hours && {
+      icon: Clock,
+      label: hours.is_open_now ? "Open Now" : "Today",
+      value: todaysHours(hours),
+      href: undefined,
+      color: "#f59e0b",
+    },
+  ].filter(Boolean) as { icon: typeof Phone; label: string; value: string; href?: string; color: string }[];
 
   return (
     <div className="relative overflow-hidden">
@@ -23,34 +34,29 @@ export default function ContactHero() {
               Get in Touch
             </h1>
             <p className="text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
-              We'd love to hear from you. Reach out anytime!
+              We&apos;d love to hear from you. Reach out anytime!
             </p>
           </div>
 
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto pb-2 lg:pb-0">
-            {quickInfo.map((info, idx) => {
+            {quickInfo.map((info) => {
               const Icon = info.icon;
-              return (
-                <div
-                  key={idx}
-                  className="bg-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3 min-w-fit transition-all hover:shadow-md"
-                  style={{ border: "1px solid var(--gray-mid)" }}
-                >
-                  <div
-                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${info.color}15` }}
-                  >
+              const body = (
+                <>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `color-mix(in srgb, ${info.color} 9%, white)` }}>
                     <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: info.color }} />
                   </div>
                   <div className="text-left">
-                    <p className="text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>
-                      {info.label}
-                    </p>
-                    <p className="font-black text-xs sm:text-sm leading-none whitespace-nowrap" style={{ color: "var(--black)" }}>
-                      {info.value}
-                    </p>
+                    <p className="text-[10px] sm:text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>{info.label}</p>
+                    <p className="font-black text-xs sm:text-sm leading-none whitespace-nowrap" style={{ color: "var(--black)" }}>{info.value}</p>
                   </div>
-                </div>
+                </>
+              );
+              const className = "bg-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3 min-w-fit transition-all hover:shadow-md";
+              return info.href ? (
+                <a key={info.label} href={info.href} className={className} style={{ border: "1px solid var(--gray-mid)" }}>{body}</a>
+              ) : (
+                <div key={info.label} className={className} style={{ border: "1px solid var(--gray-mid)" }}>{body}</div>
               );
             })}
           </div>

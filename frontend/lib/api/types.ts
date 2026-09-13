@@ -55,3 +55,20 @@ export type OrderRow = Schemas["OrderList"];
 export type PaymentVerification = Schemas["PaymentVerification"];
 export type Address = Schemas["Address"];
 
+// Wishlist
+export type Wishlist = Schemas["Wishlist"];
+
+// Site
+export type SiteSettings = Schemas["SiteSettings"];
+export type OpeningHours = Schemas["OpeningHours"];
+export type OpeningHoursResponse = Schemas["OpeningHoursResponse"];
+export type Faq = Schemas["Faq"];
+
+// Reservations & catering
+export type TableArea = Schemas["TableArea"];
+export type Reservation = Schemas["Reservation"];
+export type ReservationAvailability = Schemas["ReservationAvailability"];
+export type ReservationSlot = Schemas["ReservationSlot"];
+export type CateringPackage = Schemas["CateringPackage"];
+export type EnquiryCreated = Schemas["EnquiryCreated"];
+

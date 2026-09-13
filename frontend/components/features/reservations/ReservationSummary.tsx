@@ -1,25 +1,17 @@
 "use client";
 
-import { Calendar, Clock, Users, MapPin, Home, TreePine, Lock, Shield, Award } from "lucide-react";
+import { Calendar, Clock, Users, MapPin, Shield, Mail } from "lucide-react";
 import type { ReservationData } from "@/app/reservations/page";
+import type { Branch, TableArea } from "@/lib/api/types";
+import { formatClock } from "@/lib/site/hours";
 
 interface ReservationSummaryProps {
   reservation: ReservationData;
+  area?: TableArea;
+  branch: Branch | null;
 }
 
-export default function ReservationSummary({ reservation }: ReservationSummaryProps) {
-  const tableIcons = {
-    indoor: Home,
-    outdoor: TreePine,
-    private: Lock,
-  };
-
-  const tableLabels = {
-    indoor: "Indoor Seating",
-    outdoor: "Outdoor Patio",
-    private: "Private Room",
-  };
-
+export default function ReservationSummary({ reservation, area, branch }: ReservationSummaryProps) {
   return (
     <div className="bg-white rounded-xl border p-4 sm:p-6 lg:sticky lg:top-24" style={{ borderColor: "var(--gray-mid)" }}>
       <h3 className="font-black text-xl mb-4" style={{ fontFamily: "var(--font-playfair)", color: "var(--black)" }}>
@@ -34,7 +26,7 @@ export default function ReservationSummary({ reservation }: ReservationSummaryPr
             <div>
               <p className="text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>Date</p>
               <p className="font-bold" style={{ color: "var(--black)" }}>
-                {new Date(reservation.date).toLocaleDateString("en-US", {
+                {new Date(`${reservation.date}T00:00:00`).toLocaleDateString("en-NG", {
                   weekday: "long",
                   month: "long",
                   day: "numeric",
@@ -51,7 +43,7 @@ export default function ReservationSummary({ reservation }: ReservationSummaryPr
             <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: "var(--red)" }} />
             <div>
               <p className="text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>Time</p>
-              <p className="font-bold" style={{ color: "var(--black)" }}>{reservation.time}</p>
+              <p className="font-bold" style={{ color: "var(--black)" }}>{formatClock(reservation.time)}</p>
             </div>
           </div>
         )}
@@ -69,16 +61,13 @@ export default function ReservationSummary({ reservation }: ReservationSummaryPr
           </div>
         )}
 
-        {/* Table Type */}
-        {reservation.tableType && (
+        {/* Seating Area */}
+        {area && (
           <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: "var(--gray-light)" }}>
-            {(() => {
-              const Icon = tableIcons[reservation.tableType];
-              return <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: "var(--red)" }} />;
-            })()}
+            <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: "var(--red)" }} />
             <div>
-              <p className="text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>Table Type</p>
-              <p className="font-bold" style={{ color: "var(--black)" }}>{tableLabels[reservation.tableType]}</p>
+              <p className="text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>Seating</p>
+              <p className="font-bold" style={{ color: "var(--black)" }}>{area.name}</p>
             </div>
           </div>
         )}
@@ -90,12 +79,8 @@ export default function ReservationSummary({ reservation }: ReservationSummaryPr
             <div>
               <p className="text-xs font-bold mb-0.5" style={{ color: "var(--text-muted)" }}>Contact</p>
               <p className="font-bold text-sm" style={{ color: "var(--black)" }}>{reservation.name}</p>
-              {reservation.email && (
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{reservation.email}</p>
-              )}
-              {reservation.phone && (
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{reservation.phone}</p>
-              )}
+              {reservation.email && <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{reservation.email}</p>}
+              {reservation.phone && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{reservation.phone}</p>}
             </div>
           </div>
         )}
@@ -111,26 +96,30 @@ export default function ReservationSummary({ reservation }: ReservationSummaryPr
 
       {/* Restaurant Info */}
       <div className="border-t pt-4" style={{ borderColor: "var(--gray-mid)" }}>
-        <div className="flex items-start gap-3 mb-4">
-          <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: "var(--red)" }} />
-          <div>
-            <p className="font-bold text-sm mb-0.5" style={{ color: "var(--black)" }}>Kuyash Place</p>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              123 Gourmet Street, Lagos, Nigeria
-            </p>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>+234 123 456 7890</p>
+        {branch && (
+          <div className="flex items-start gap-3 mb-4">
+            <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: "var(--red)" }} />
+            <div>
+              <p className="font-bold text-sm mb-0.5" style={{ color: "var(--black)" }}>{branch.name}</p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {[branch.address_line, branch.city, branch.state].filter(Boolean).join(", ")}
+              </p>
+              {branch.phone && (
+                <a href={`tel:${branch.phone}`} className="text-xs" style={{ color: "var(--text-muted)" }}>{branch.phone}</a>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Trust Badges */}
         <div className="grid grid-cols-2 gap-2">
           <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: "var(--gray-light)" }}>
             <Shield className="w-4 h-4" style={{ color: "#10b981" }} />
-            <p className="text-[10px] font-bold" style={{ color: "var(--black)" }}>Secure Booking</p>
+            <p className="text-[10px] font-bold" style={{ color: "var(--black)" }}>Live Availability</p>
           </div>
           <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: "var(--gray-light)" }}>
-            <Award className="w-4 h-4" style={{ color: "#f59e0b" }} />
-            <p className="text-[10px] font-bold" style={{ color: "var(--black)" }}>Top Rated</p>
+            <Mail className="w-4 h-4" style={{ color: "#f59e0b" }} />
+            <p className="text-[10px] font-bold" style={{ color: "var(--black)" }}>Email Confirmation</p>
           </div>
         </div>
       </div>

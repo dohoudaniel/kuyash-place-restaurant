@@ -380,3 +380,29 @@ def test_string_representations(branch, site_settings, manager_user) -> None:  #
 
     entry = FaqEntry.objects.create(question="Why?", answer="Because")
     assert str(entry) == "Why?"
+
+
+def test_a_bot_gets_a_quiet_success_when_info_logging_is_on(
+    api_client, branch, site_settings, caplog
+) -> None:  # type: ignore[no-untyped-def]
+    """The quarantine log line passed `extra={"message": ...}` — a name reserved on
+    LogRecord. Test settings log above INFO, so the record was never built and this
+    passed; in development the same request raised KeyError and returned a 500."""
+    import logging
+
+    caplog.set_level(logging.INFO, logger="apps.support.services")
+
+    response = api_client.post(
+        reverse("v1:support:contact"),
+        {
+            "name": "Bot",
+            "email": "b@example.com",
+            "message": "Hi",
+            "website": "http://spam.example",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["reference"] == ""
+    assert any(record.getMessage() == "contact_message_quarantined" for record in caplog.records)

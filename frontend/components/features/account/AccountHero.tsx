@@ -1,13 +1,38 @@
 "use client";
 
-import { User, ShoppingBag, MapPin, CreditCard } from "lucide-react";
+import { useEffect, useState } from "react";
+import { User, Heart, MapPin, CreditCard } from "lucide-react";
+import { api } from "@/lib/api/client";
+import type { Address, Profile, SavedPaymentMethod } from "@/lib/api/types";
+import { useWishlistStore } from "@/lib/store/wishlistStore";
 
+/**
+ * Account overview with real counts. The previous hero showed "12 orders,
+ * 3 addresses, 2 cards, member since 2024" to everyone.
+ */
 export default function AccountHero() {
+  const wishlistCount = useWishlistStore((state) => state.items.length);
+  const [addresses, setAddresses] = useState<number | null>(null);
+  const [cards, setCards] = useState<number | null>(null);
+  const [memberSince, setMemberSince] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<Address[]>("/accounts/addresses/").then((list) => !cancelled && setAddresses(list.length)).catch(() => undefined);
+    api<SavedPaymentMethod[]>("/payments/methods/").then((list) => !cancelled && setCards(list.length)).catch(() => undefined);
+    api<Profile>("/accounts/me/")
+      .then((profile) => !cancelled && setMemberSince(String(new Date(profile.date_joined).getFullYear())))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stats = [
-    { icon: ShoppingBag, label: "Orders", value: "12", color: "var(--red)" },
-    { icon: MapPin, label: "Addresses", value: "3", color: "#10b981" },
-    { icon: CreditCard, label: "Cards", value: "2", color: "#3b82f6" },
-    { icon: User, label: "Member Since", value: "2024", color: "#f59e0b" },
+    { icon: MapPin, label: "Addresses", value: addresses === null ? "–" : String(addresses), color: "#10b981" },
+    { icon: CreditCard, label: "Saved Cards", value: cards === null ? "–" : String(cards), color: "#3b82f6" },
+    { icon: Heart, label: "Wishlist", value: String(wishlistCount), color: "var(--red)" },
+    { icon: User, label: "Member Since", value: memberSince ?? "–", color: "#f59e0b" },
   ];
 
   return (
@@ -28,17 +53,17 @@ export default function AccountHero() {
           </div>
 
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto pb-2 lg:pb-0">
-            {stats.map((stat, idx) => {
+            {stats.map((stat) => {
               const Icon = stat.icon;
               return (
                 <div
-                  key={idx}
+                  key={stat.label}
                   className="bg-white rounded-lg px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3 min-w-fit transition-all hover:shadow-md"
                   style={{ border: "1px solid var(--gray-mid)" }}
                 >
                   <div
                     className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${stat.color}15` }}
+                    style={{ background: `color-mix(in srgb, ${stat.color} 9%, transparent)` }}
                   >
                     <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: stat.color }} />
                   </div>

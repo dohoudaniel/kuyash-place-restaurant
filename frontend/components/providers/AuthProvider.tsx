@@ -5,6 +5,7 @@ import { AuthModal } from "@/components/features/auth";
 import { useAuthStore } from "@/lib/store/authStore";
 import AuthQueryOpener from "./AuthQueryOpener";
 import CartSync from "./CartSync";
+import WishlistSync from "./WishlistSync";
 
 /**
  * Reads the session once per page load and mounts the sign-in dialog once for
@@ -22,6 +23,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       {children}
       <AuthModal />
       <CartSync />
+      <WishlistSync />
       {/* useSearchParams needs a Suspense boundary so the rest of each page can still be prerendered. */}
       <Suspense fallback={null}>
         <AuthQueryOpener />

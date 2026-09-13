@@ -301,8 +301,8 @@ Deliberately **not** gated, correcting the earlier version of this section:
   would remove a feature the backend was built for.
 - `/orders/[id]` — guests track their order with the `guest_token` issued at
   checkout, and the API returns 404 to anyone else.
-- `/wishlist` — still the local store until step 10; it is gated when it moves to
-  `/api/v1/wishlist/`, which requires sign-in.
+- `/wishlist` — guests keep a browser wishlist; signing in merges it into the account
+  (step 10). Gating it would take a working feature away from guests.
 
 For the proxy to see the session cookie in production it must be scoped to the shared
 parent domain (`SESSION_COOKIE_DOMAIN`; the backend's `kuyash.E012` check enforces it).
@@ -328,9 +328,9 @@ Follow this sequence; each step is independently shippable.
 5. ✅ Cart: server cart, server totals, promo application
 6. ✅ Checkout + payments: order creation, hosted checkout, completion page
 7. ✅ Orders: tracking with polling, history
-8. Account: profile, addresses
+8. ✅ Account: profile, addresses
 9. — **Phase 1 ships here** —
-10. Reservations, catering, contact, wishlist sync
+10. ✅ Reservations, catering, contact, wishlist sync
 11. Academy, rewards, reviews, gallery, chat
 
 ---
@@ -524,6 +524,78 @@ and `PreferencesSection` still `alert()`, `AddressesSection` still shows two har
 Lagos addresses), wishlist server sync (step 10), reservations/catering/contact wiring,
 real menu photographs (none exist — `public/images/menu` is empty), and real prices
 (OD-2: 15 of 18 dishes are hidden until repriced).
+
+---
+
+### 5.4 Steps 8 and 10 delivered
+
+**Account (8).** Every tab now reads and writes the account. The old tabs were
+fiction shown to every visitor: "John Doe", 1,250 loyalty points, ₦45,600 spent,
+Gold tier, "12 orders / 3 addresses / 2 cards / member since 2024", two hardcoded
+Lagos addresses, and an "Add New" form whose fields were a code comment.
+
+- *Profile:* name, phone and birthday save to `PATCH /accounts/me/`. Email is shown
+  read-only — the backend refuses the change until an email re-verification flow
+  exists (AS-5). Password change lives in the sidebar and keeps this session signed
+  in. The loyalty card is gone: the programme is Phase 3.
+- *Addresses:* list, add, edit, delete, set default, in a Dialog, reusing checkout's
+  `AddressForm`. Each shows its delivery zone or "pickup only".
+- *Preferences:* only what exists. Marketing consent saves on toggle (withdrawable,
+  as NDPR requires); order emails are shown as always on, because they are part of
+  the order. The SMS, push, newsletter and four-language controls were removed —
+  none existed. Account erasure is here, behind a confirmation.
+- *Hero:* real counts of addresses, saved cards and wishlist items, and the real
+  join year.
+
+**Wishlist sync.** Signed out, the wishlist stays in this browser. Signing in merges
+it into the account (`POST /wishlist/sync/`), which also reports entries that no
+longer match a dish; after that, adds and removes are optimistic writes to the
+account. Only the signed-out list is persisted, so a shared device never keeps
+someone else's account wishlist. `/wishlist` stays open to guests.
+
+**Reservations.** Real availability for the chosen date and party size, replacing
+eighteen fixed times shown for every day. Step 2 checks the chosen time against
+each seating area and disables areas where it is taken — so the step order is
+unchanged and a booking does not fail at the last step. Booking sends an
+`Idempotency-Key`, keeps the guest's management token, and ends on a confirmation
+with the reference, table and a working cancel. A time taken while the customer
+was typing returns them to step 1 with fresh slots. "We'll contact you within
+1 hour to confirm" was removed: availability is live and confirmation is
+immediate.
+
+**Catering.** Packages, prices and features come from the API. The quote form
+submits a real enquiry and shows its reference, the reply-by time and an
+indicative total — it used to end in `alert()` and `console.log`. It flags a
+guest count outside the chosen package's range.
+
+**Contact.** The form opens a support ticket, carries a hidden honeypot field, and
+reports rate limiting in words. Phone, email, address, today's hours, the weekly
+schedule and social links come from the branch and site settings; blank social
+URLs are hidden rather than linking to `#`. Removed as unverified: a "24/7
+hotline: +234 800 KUYASH", directions ("BRT stop 2 minutes walk", "opposite
+Federal Palace Hotel"), and eight hardcoded FAQ answers promising valet parking
+and a 30-seat private room. The map is built from the branch's own coordinates or
+address, and the FAQ from the entries staff maintain in the admin.
+
+**Defect found by the live run:** a contact submission that tripped the honeypot
+returned a 500. The quarantine log line passed `extra={"message": ...}`, and
+`message` is reserved on Python's `LogRecord`, so building the record raised
+`KeyError`. The existing API test passed only because test settings log above INFO,
+so that record was never built. Fixed, with a regression test that turns INFO on,
+and a static guard (`apps/common/tests/test_logging_extra_keys.py`) that fails the
+suite if any log call passes a reserved key — independent of log levels. The bot
+now gets the same quiet 201 a person does.
+
+Verified: `tsc` clean; `next build` passes; ESLint 33 → 27 errors and 7 → 2
+warnings with no new findings; a live run of site data, reservations (including a
+full area refusing a booking rather than double-booking), catering, contact,
+profile, password change, addresses, wishlist merge and account erasure passes.
+
+**Still not wired — all Phase 3, with no backend yet:** reviews (`ReviewModal`
+still `alert()`s and `console.log`s), academy enrolment (`alert()`), gallery
+share/download (`alert()`), and chat (a scripted bot with a 600 ms fake delay;
+there are also two copies of `ChatButton`). Menu photographs and real prices are
+the restaurant's data to supply (OD-2).
 
 ---
 
