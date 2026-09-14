@@ -120,6 +120,8 @@ Most control, most complexity. ECS Fargate or EC2 + RDS Postgres + ElastiCache R
 # ── Core ────────────────────────────────────────────────────────────────
 DJANGO_SETTINGS_MODULE=config.settings.prod
 DJANGO_SECRET_KEY=<50+ random chars>
+# Admin two-factor step (default true). Rotating DJANGO_SECRET_KEY makes staff re-enrol their authenticator app.
+STAFF_MFA_REQUIRED=true
 DEBUG=False
 ALLOWED_HOSTS=api.kuyashplace.com
 FRONTEND_URL=https://kuyashplace.com

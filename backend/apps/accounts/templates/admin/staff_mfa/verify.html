@@ -1,0 +1,20 @@
+{% extends "admin/base_site.html" %}
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block content %}
+<div id="content-main" style="max-width:28rem">
+  <p>Enter the 6-digit code from your authenticator app. If you've lost your phone, enter one of your recovery codes instead.</p>
+  {% if error %}<p class="errornote">{{ error }}</p>{% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="form-row">
+      <label for="id_code" class="required">Code</label>
+      <input type="text" name="code" id="id_code" inputmode="numeric" autocomplete="one-time-code" autofocus required maxlength="20" style="font-size:1.4em;letter-spacing:.2em;width:12em">
+    </div>
+    <div class="submit-row" style="margin-top:1em"><input type="submit" value="Verify" class="default"></div>
+  </form>
+  <p style="margin-top:2em"><a href="{% url 'admin:logout' %}" onclick="event.preventDefault();document.getElementById('mfa-logout').submit();">Sign out</a></p>
+  <form id="mfa-logout" method="post" action="{% url 'admin:logout' %}" style="display:none">{% csrf_token %}</form>
+</div>
+{% endblock %}

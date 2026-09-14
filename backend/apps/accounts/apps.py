@@ -7,4 +7,7 @@ class AccountsConfig(AppConfig):
     verbose_name = "Accounts"
 
     def ready(self) -> None:
-        from apps.accounts import signals  # noqa: F401
+        from apps.accounts import (  # noqa: F401  (staff_mfa registers kuyash.W020)
+            signals,
+            staff_mfa,
+        )

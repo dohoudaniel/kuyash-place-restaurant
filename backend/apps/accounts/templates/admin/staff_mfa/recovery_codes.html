@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block content %}
+<div id="content-main" style="max-width:34rem">
+  <p><strong>Two-factor authentication is on.</strong> These recovery codes are shown only once. Store them somewhere safe — each one works a single time if you lose your phone.</p>
+  <pre style="font-size:1.2em;line-height:1.8;background:var(--darkened-bg);padding:12px 16px;border-radius:8px">{% for code in codes %}{{ code }}
+{% endfor %}</pre>
+  <p><a class="button default" href="{{ next }}" style="padding:10px 16px">I've saved them — continue</a></p>
+</div>
+{% endblock %}

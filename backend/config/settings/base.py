@@ -45,6 +45,7 @@ THIRD_PARTY_APPS = [
     "allauth.account",
     "allauth.headless",
     "allauth.socialaccount",
+    "allauth.mfa",
     "allauth.socialaccount.providers.google",
     "allauth.socialaccount.providers.facebook",
 ]
@@ -85,6 +86,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "apps.accounts.staff_mfa.StaffMFAMiddleware",
     "apps.common.middleware.RequestIDMiddleware",
 ]
 
@@ -472,6 +474,13 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 # ── Admin ─────────────────────────────────────────────────────────────────────
 # Non-default path in production (SECURITY.md AS-7).
 ADMIN_URL = env("ADMIN_URL", default="admin/")
+
+# ── Admin two-factor authentication (SECURITY.md §8) ──────────────────────────
+# Staff pass an authenticator-app code before any admin page (apps/accounts/staff_mfa.py).
+STAFF_MFA_REQUIRED = env.bool("STAFF_MFA_REQUIRED", default=True)
+MFA_ADAPTER = "apps.accounts.mfa_adapter.KuyashMFAAdapter"
+MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
+MFA_TOTP_ISSUER = "Kuyash Place"
 ADMIN_SITE_HEADER = "Kuyash Place"
 ADMIN_SITE_TITLE = "Kuyash Place admin"
 ADMIN_INDEX_TITLE = "Restaurant administration"

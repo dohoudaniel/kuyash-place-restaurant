@@ -29,6 +29,10 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
+# Admin tests sign staff in with force_login. The two-factor step has its own
+# suite (accounts/tests/test_staff_mfa.py), which switches it back on.
+STAFF_MFA_REQUIRED = False
+
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},

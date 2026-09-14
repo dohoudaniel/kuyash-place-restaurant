@@ -49,6 +49,8 @@ api_v1 = [
 ]
 
 urlpatterns = [
+    # Before the admin itself, so its catch-all never shadows these.
+    path(f"{settings.ADMIN_URL}two-factor/", include("apps.accounts.staff_mfa_urls")),
     path(settings.ADMIN_URL, admin.site.urls),
     path("health/", health_check, name="health-check"),
     path("api/v1/", include((api_v1, "v1"))),

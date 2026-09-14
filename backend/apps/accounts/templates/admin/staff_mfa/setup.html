@@ -1,0 +1,25 @@
+{% extends "admin/base_site.html" %}
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block content %}
+<div id="content-main" style="max-width:34rem">
+  <p>Admin accounts can refund money and read customer data, so they need a second step at sign-in.</p>
+  <ol>
+    <li>Open an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).</li>
+    <li>Scan this QR code, or type the key below.</li>
+    <li>Enter the 6-digit code the app shows.</li>
+  </ol>
+  <div style="background:#fff;padding:12px;display:inline-block;border-radius:8px">{{ qr_svg|safe }}</div>
+  <p>Key: <code style="font-size:1.1em;letter-spacing:.1em">{{ secret }}</code></p>
+  {% if error %}<p class="errornote">{{ error }}</p>{% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="form-row">
+      <label for="id_code" class="required">Code</label>
+      <input type="text" name="code" id="id_code" inputmode="numeric" autocomplete="one-time-code" required maxlength="6" style="font-size:1.4em;letter-spacing:.2em;width:8em">
+    </div>
+    <div class="submit-row" style="margin-top:1em"><input type="submit" value="Turn on two-factor authentication" class="default"></div>
+  </form>
+</div>
+{% endblock %}

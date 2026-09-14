@@ -154,6 +154,12 @@ jobs:
         # job. See backend/docs/PAYMENTS.md §1.1.
         run: ./scripts/check-no-card-fields.sh
 
+      - name: Money gate (frontend)
+        # The server prices everything; components render Money.display. Fails on
+        # arithmetic on `.amount`, Intl currency formatting or hand-built naira
+        # strings. See backend/docs/FRONTEND_INTEGRATION.md §6.
+        run: ./scripts/check-no-price-arithmetic.sh
+
       - name: Dependency audit
         run: |
           python -m pip install --upgrade pip

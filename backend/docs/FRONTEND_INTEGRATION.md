@@ -805,7 +805,7 @@ frontend; `ws/kds/` is ready for one.
 
 - [x] Zero `alert()` calls in any submission path (Gate 3 sweep, §5.10)
 - [x] Zero `setTimeout` faking network latency — the remaining timers only reset "copied"/"added" feedback
-- [ ] Zero price arithmetic in any component — CI grep gate. *No arithmetic remains (every figure renders `Money.display`), but there is no automated gate yet: a reliable grep for arithmetic is hard to write without false positives. Kept open.*
+- [x] Zero price arithmetic in any component — CI grep gate (`scripts/check-no-price-arithmetic.sh`: arithmetic on `.amount`, `Intl.NumberFormat`/`style: "currency"`, hand-built `₦` strings; self-tested against each shape, no false positives on the current code)
 - [x] Zero hardcoded prices, menu items or promo codes
 - [x] Zero card-data fields — CI grep gate (`scripts/check-no-card-fields.sh`, allowlist empty)
 - [x] Every mutation sends CSRF and `credentials: "include"` — enforced centrally in `lib/api/client.ts`
