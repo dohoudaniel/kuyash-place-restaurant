@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import NotFound
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.models import LegalPage, SiteSettings
+from apps.core.models import Award, LegalPage, SiteSettings, TeamMember
 from apps.core.selectors import get_current_branch
 from apps.core.serializers import (
+    AwardSerializer,
     BranchSerializer,
     HolidayOverrideSerializer,
     LegalPageSerializer,
@@ -20,6 +24,7 @@ from apps.core.serializers import (
     OpeningHoursResponseSerializer,
     OpeningHoursSerializer,
     SiteSettingsSerializer,
+    TeamMemberSerializer,
 )
 
 
@@ -121,3 +126,33 @@ class LegalPageDetailView(APIView):
         if page is None:
             raise NotFound("No such page.")
         return Response(LegalPageSerializer(page).data)
+
+
+class TeamListView(ListAPIView):
+    """People on the About page. Empty until staff publish someone."""
+
+    permission_classes = [AllowAny]
+    serializer_class = TeamMemberSerializer
+    pagination_class = None
+
+    def get_queryset(self) -> Any:
+        return TeamMember.objects.filter(is_active=True)
+
+    @extend_schema(summary="Team members", tags=["core"])
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return super().get(request, *args, **kwargs)
+
+
+class AwardListView(ListAPIView):
+    """Verified awards. Empty until staff add one."""
+
+    permission_classes = [AllowAny]
+    serializer_class = AwardSerializer
+    pagination_class = None
+
+    def get_queryset(self) -> Any:
+        return Award.objects.filter(is_active=True)
+
+    @extend_schema(summary="Awards and recognition", tags=["core"])
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return super().get(request, *args, **kwargs)

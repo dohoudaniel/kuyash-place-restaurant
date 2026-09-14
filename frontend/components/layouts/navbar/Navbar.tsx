@@ -45,7 +45,7 @@ export default function Navbar() {
       transition={{ duration: 0.6, ease: "easeOut" }}
     >
       {/* ── Logo — far left ── */}
-      <a href="/" className="shrink-0 relative z-10" style={{ width: "clamp(90px, 20vw, 140px)", height: "clamp(50px, 12vw, 72px)" }}>
+      <Link href="/" className="shrink-0 relative z-10" style={{ width: "clamp(90px, 20vw, 140px)", height: "clamp(50px, 12vw, 72px)" }}>
         <Image
           src={IMAGES.brand.logo}
           alt="Kuyash Place"
@@ -62,7 +62,7 @@ export default function Navbar() {
           }}
           priority
         />
-      </a>
+      </Link>
 
       {/* ── Nav links — true centre ── */}
       <NavLinks />

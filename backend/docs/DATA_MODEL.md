@@ -72,7 +72,13 @@ One row today; the FK target that makes a second outlet a data change rather tha
 
 ### SiteSettings *(singleton)*
 
-Social links, hero copy, homepage statistics (currently hardcoded in the frontend), contact emails, map embed. One row, enforced by `save()`.
+Social links, contact emails, `established_year` (null = hidden), headline statistics (`stat_*` strings, each hidden while blank). One row, enforced by `save()`.
+
+### TeamMember  *(Gate 3 — delivered)*
+`name` · `role` · `bio` · `photo` (jpg/png/webp ≤ 10 MB) · `display_order` · `is_active`. The frontend's four profiles are seeded **inactive**, name and role only.
+
+### Award  *(Gate 3 — delivered)*
+`title` · `awarded_by` · `year` null · `url` (where it can be verified) · `display_order` · `is_active`. **None seeded**: the About page credited the Michelin Guide, TripAdvisor and a "Lagos Food Awards" with honours nothing supports.
 
 ### LegalPage  *(Phase 2.6 — delivered)*
 

@@ -5,7 +5,7 @@
  * components, several of them inventing details ("24/7 hotline +234 800 KUYASH").
  */
 import { api } from "./client";
-import type { Branch, Faq, OpeningHoursResponse, SiteSettings } from "./types";
+import type { Award, Branch, Faq, LegalPage, OpeningHoursResponse, SiteSettings, TeamMember } from "./types";
 
 function cached<T>(load: () => Promise<T>): () => Promise<T> {
   let request: Promise<T> | null = null;
@@ -20,3 +20,8 @@ export const loadBranch = cached(() => api<Branch>("/core/branch/"));
 export const loadSiteSettings = cached(() => api<SiteSettings>("/core/settings/"));
 export const loadOpeningHours = cached(() => api<OpeningHoursResponse>("/core/opening-hours/"));
 export const loadFaq = cached(() => api<Faq[]>("/support/faq/"));
+export const loadTeam = cached(() => api<TeamMember[]>("/core/team/"));
+export const loadAwards = cached(() => api<Award[]>("/core/awards/"));
+
+/** The current published version of a policy page. */
+export const fetchLegalPage = (slug: string) => api<LegalPage>(`/core/legal/${encodeURIComponent(slug)}/`);

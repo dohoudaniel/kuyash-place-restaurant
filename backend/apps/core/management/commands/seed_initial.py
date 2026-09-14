@@ -219,6 +219,11 @@ class Command(BaseCommand):
         self.stdout.write("Academy:")
         seed_academy(branch, stdout=self.stdout)
 
+        from apps.core.about_seed import seed_team
+
+        self.stdout.write("About page:")
+        seed_team(stdout=self.stdout)
+
         from apps.loyalty.seed import seed_loyalty
 
         self.stdout.write("Loyalty:")

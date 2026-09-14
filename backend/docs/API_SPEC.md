@@ -96,7 +96,9 @@ GET /catalog/items/?limit=20&page=2&sort=price_asc
 |---|---|---|---|
 | GET | `/core/branch/` | — | Branch details, contact, coordinates, VAT policy, min order, free-delivery threshold |
 | GET | `/core/opening-hours/` | — | Week schedule + `is_open_now` + `next_opens_at` |
-| GET | `/core/settings/` | — | Social links, homepage stats, hero copy |
+| GET | `/core/settings/` | — | ✅ Social links, contact emails, `established_year`, headline stats (`stat_customers`/`stat_dishes`/`stat_years`/`stat_rating`) — each rendered only when set |
+| GET | `/core/team/` | — | ✅ Published team members: name, role, bio, photo_url. Empty until staff publish |
+| GET | `/core/awards/` | — | ✅ Published awards: title, awarded_by, year, url. None seeded |
 | GET | `/core/legal/` | — | ✅ index: slug, title, version, effective_from (no bodies) |
 | GET | `/core/legal/{slug}/` | — | ✅ terms / privacy / cookies / refunds / accessibility |
 

@@ -217,7 +217,12 @@ class SiteSettings(SingletonModel):
     support_email = models.EmailField(blank=True)
     orders_email = models.EmailField(blank=True)
 
-    # Homepage statistics — hardcoded in the frontend hero today.
+    established_year = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Shown on the About page. Leave blank to hide it."
+    )
+
+    # Headline figures. Each is shown only when filled in, so enter only what
+    # the restaurant can stand behind.
     stat_customers = models.CharField(max_length=20, blank=True)
     stat_dishes = models.CharField(max_length=20, blank=True)
     stat_years = models.CharField(max_length=20, blank=True)
@@ -291,3 +296,54 @@ class LegalPage(TimeStampedModel):
     def next_version_for(cls, slug: str) -> int:
         highest = cls.objects.filter(slug=slug).order_by("-version").first()
         return (highest.version + 1) if highest else 1
+
+
+def _image_validators() -> list:
+    from django.core.validators import FileExtensionValidator
+
+    from apps.gallery.models import IMAGE_EXTENSIONS, validate_image_size
+
+    return [FileExtensionValidator(IMAGE_EXTENSIONS), validate_image_size]
+
+
+class TeamMember(TimeStampedModel, SoftDeleteModel):
+    """A person on the About page.
+
+    Replaces four hardcoded profiles, including a founder "trained in Paris and
+    Lagos" and an "award-winning" pastry chef, that nobody had confirmed.
+    """
+
+    name = models.CharField(max_length=150)
+    role = models.CharField(max_length=120)
+    bio = models.CharField(max_length=300, blank=True)
+    photo = models.ImageField(
+        upload_to="team/", null=True, blank=True, validators=_image_validators()
+    )
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} — {self.role}"
+
+
+class Award(TimeStampedModel, SoftDeleteModel):
+    """A recognition the restaurant has actually received.
+
+    The About page used to credit the Michelin Guide, TripAdvisor and a "Lagos
+    Food Awards" with honours nothing supports. None are seeded: an award is
+    entered by someone who can point to it.
+    """
+
+    title = models.CharField(max_length=150)
+    awarded_by = models.CharField(max_length=150)
+    year = models.PositiveSmallIntegerField(null=True, blank=True)
+    url = models.URLField(blank=True, help_text="Where the award can be verified.")
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "-year"]
+
+    def __str__(self) -> str:
+        return f"{self.title} — {self.awarded_by}"

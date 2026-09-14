@@ -8,7 +8,15 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.common.serializers import MoneyField
-from apps.core.models import Branch, HolidayOverride, LegalPage, OpeningHours, SiteSettings
+from apps.core.models import (
+    Award,
+    Branch,
+    HolidayOverride,
+    LegalPage,
+    OpeningHours,
+    SiteSettings,
+    TeamMember,
+)
 from apps.core.selectors import next_opening
 
 
@@ -128,4 +136,24 @@ class LegalPageSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = LegalPage
         fields = ("slug", "title", "version", "effective_from")
+        read_only_fields = fields
+
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TeamMember
+        fields = ("name", "role", "bio", "photo_url")
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.URLField(allow_null=True))
+    def get_photo_url(self, obj: TeamMember) -> str | None:
+        return obj.photo.url if obj.photo else None
+
+
+class AwardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Award
+        fields = ("title", "awarded_by", "year", "url")
         read_only_fields = fields

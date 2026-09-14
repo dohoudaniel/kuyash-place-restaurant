@@ -87,6 +87,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/core/team/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Team members
+         * @description People on the About page. Empty until staff publish someone.
+         */
+        get: operations["core_team_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/core/awards/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Awards and recognition
+         * @description Verified awards. Empty until staff add one.
+         */
+        get: operations["core_awards_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/core/legal/{slug}/": {
         parameters: {
             query?: never;
@@ -2091,6 +2131,16 @@ export interface components {
         AuthUserResponse: {
             user: components["schemas"]["CurrentUser"];
         };
+        Award: {
+            readonly title: string;
+            readonly awarded_by: string;
+            readonly year: number | null;
+            /**
+             * Format: uri
+             * @description Where the award can be verified.
+             */
+            readonly url: string;
+        };
         BankTransferDetails: {
             bank_name: string;
             account_name: string;
@@ -3768,6 +3818,11 @@ export interface components {
             support_email?: string;
             /** Format: email */
             orders_email?: string;
+            /**
+             * Format: int64
+             * @description Shown on the About page. Leave blank to hide it.
+             */
+            established_year?: number | null;
             stat_customers?: string;
             stat_dishes?: string;
             stat_years?: string;
@@ -3802,6 +3857,13 @@ export interface components {
          * @enum {string}
          */
         TaxClassEnum: "standard" | "zero_rated" | "exempt";
+        TeamMember: {
+            readonly name: string;
+            readonly role: string;
+            readonly bio: string;
+            /** Format: uri */
+            readonly photo_url: string | null;
+        };
         Ticket: {
             readonly reference: string;
             readonly subject: string;
@@ -3987,6 +4049,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LegalPageSummary"][];
+                };
+            };
+        };
+    };
+    core_team_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamMember"][];
+                };
+            };
+        };
+    };
+    core_awards_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Award"][];
                 };
             };
         };

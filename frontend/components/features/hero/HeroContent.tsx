@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, type Transition } from "framer-motion";
+import { useSiteInfo } from "@/lib/site/useSiteInfo";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
@@ -9,6 +10,10 @@ const fadeUp = (delay = 0) => ({
 });
 
 export default function HeroContent() {
+  const { settings } = useSiteInfo();
+  // Shown only when the restaurant has entered a rating it can stand behind.
+  const rating = settings?.stat_rating;
+
   return (
     <div className="flex flex-col pt-8 lg:pt-12">
       {/* Tagline pill */}
@@ -72,6 +77,7 @@ export default function HeroContent() {
       </motion.p>
 
       {/* Star rating */}
+      {rating && (
       <motion.div {...fadeUp(0.4)} className="flex items-center gap-2 mb-7">
         <div className="flex items-center gap-0.5">
           {[...Array(5)].map((_, i) => (
@@ -81,9 +87,10 @@ export default function HeroContent() {
           ))}
         </div>
         <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>
-          Rated by Thousands of Satisfied Customers
+          Rated {rating} by our customers
         </span>
       </motion.div>
+      )}
 
       {/* CTAs */}
       <motion.div {...fadeUp(0.5)} className="flex items-center gap-3 flex-wrap mb-7">

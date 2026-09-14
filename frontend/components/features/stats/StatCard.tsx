@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
 
 interface StatCardProps {
-  value: number;
+  /** A whole number to count up to, or null to show `suffix` as written. */
+  value: number | null;
   suffix: string;
   label: string;
   index: number;
@@ -53,7 +54,7 @@ export default function StatCard({ value, suffix, label, index }: StatCardProps)
         className="font-black leading-none mb-2"
         style={{ fontFamily: "var(--font-playfair)", fontSize: "clamp(2.4rem, 5vw, 3.6rem)", color: "var(--red)" }}
       >
-        <Counter value={value} suffix={suffix} />
+        {value === null ? suffix : <Counter value={value} suffix={suffix} />}
       </p>
       <p className="text-sm font-medium tracking-wide" style={{ color: "rgba(255,255,255,0.55)" }}>
         {label}

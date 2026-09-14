@@ -752,6 +752,38 @@ live run (19 checks) places real orders over HTTP and follows the points through
 delivery, a reward applied and spent at checkout, expiry returning the points,
 and a refund reversing earned points.
 
+### 5.10 Gate 3 content sweep delivered
+
+A sweep for hardcoded arrays, `alert()`, placeholder phone numbers, `href="#"`
+and invented figures found the last screens not backed by the API:
+
+- **`/help`** — 25 hardcoded answers (a ₦2,500 minimum, "free delivery over
+  ₦10,000") → `GET /support/faq/`, the same answers the chat assistant gives;
+  categories come from the data; call and email links appear only when the
+  branch has a phone and an email.
+- **`/terms`, `/privacy`, `/cookies`, `/refunds`, `/accessibility`** — static
+  route files dated "January 2025" with a placeholder phone → one
+  `LegalDocument` rendering the version in force from `GET /core/legal/{slug}/`
+  through `lib/content/markdown.tsx` (headings, paragraphs, lists, bold, safe
+  links; React elements only, no HTML injection), with a contact block from the
+  branch.
+- **Homepage** — `StatsSection` ("250+ items, 15,000+ customers, 30 min") and
+  `HeroStats` (hours that contradicted `lib/data/hero.ts`) read site settings and
+  opening hours; the hero's "Rated by thousands" line shows only with a rating.
+  "Delivered in 30 minutes or less" no longer promises a time.
+- **Footer** — social links were all `#` → site settings and branch WhatsApp.
+- **About** — hero stats, `TeamSection` and `AchievementsSection` read settings,
+  `GET /core/team/` and `GET /core/awards/`, and hide when empty. Awards
+  crediting Michelin and TripAdvisor, "500 guests daily" and award milestones
+  are removed (OD-10).
+- Deleted: `components/ui/ChatButton.tsx` (dead copy of the chat widget with its
+  scripted replies), `lib/data/hero.ts` and the unused `HeroStat` type.
+- ESLint's last two findings fixed (`EmptyCart` apostrophe, `Navbar` home link).
+
+Verified: backend 1143 passed, ruff/mypy clean, schema synced; `tsc` clean;
+`next build` passes; ESLint 20 → 0 errors; the sweep is clean; a live check of
+the five legal pages, FAQ, team, awards and settings passes.
+
 ---
 
 ## 6. Definition of done for Phase 1 frontend

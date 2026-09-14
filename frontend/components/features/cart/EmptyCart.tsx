@@ -21,7 +21,7 @@ export default function EmptyCart() {
       </h2>
 
       <p className="text-sm sm:text-base text-center max-w-md mb-8" style={{ color: "var(--text-muted)" }}>
-        Looks like you haven't added anything to your cart yet. Explore our delicious menu and find something you love!
+        Looks like you haven&apos;t added anything to your cart yet. Explore our delicious menu and find something you love!
       </p>
 
       <Link

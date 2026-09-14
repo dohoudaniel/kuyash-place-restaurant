@@ -81,6 +81,44 @@ paths:
                 items:
                   $ref: '#/components/schemas/LegalPageSummary'
           description: ''
+  /api/v1/core/team/:
+    get:
+      operationId: core_team_list
+      description: People on the About page. Empty until staff publish someone.
+      summary: Team members
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamMember'
+          description: ''
+  /api/v1/core/awards/:
+    get:
+      operationId: core_awards_list
+      description: Verified awards. Empty until staff add one.
+      summary: Awards and recognition
+      tags:
+      - core
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Award'
+          description: ''
   /api/v1/core/legal/{slug}/:
     get:
       operationId: core_legal_retrieve
@@ -3120,6 +3158,29 @@ components:
           $ref: '#/components/schemas/CurrentUser'
       required:
       - user
+    Award:
+      type: object
+      properties:
+        title:
+          type: string
+          readOnly: true
+        awarded_by:
+          type: string
+          readOnly: true
+        year:
+          type: integer
+          readOnly: true
+          nullable: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+          description: Where the award can be verified.
+      required:
+      - awarded_by
+      - title
+      - url
+      - year
     BankTransferDetails:
       type: object
       properties:
@@ -7331,6 +7392,13 @@ components:
           type: string
           format: email
           maxLength: 254
+        established_year:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+          description: Shown on the About page. Leave blank to hide it.
         stat_customers:
           type: string
           maxLength: 20
@@ -7416,6 +7484,28 @@ components:
         * `standard` - Standard rated
         * `zero_rated` - Zero rated
         * `exempt` - Exempt
+    TeamMember:
+      type: object
+      properties:
+        name:
+          type: string
+          readOnly: true
+        role:
+          type: string
+          readOnly: true
+        bio:
+          type: string
+          readOnly: true
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+      required:
+      - bio
+      - name
+      - photo_url
+      - role
     Ticket:
       type: object
       properties:

@@ -104,6 +104,8 @@ export type SiteSettings = Schemas["SiteSettings"];
 export type OpeningHours = Schemas["OpeningHours"];
 export type OpeningHoursResponse = Schemas["OpeningHoursResponse"];
 export type Faq = Schemas["Faq"];
+export type TeamMember = Schemas["TeamMember"];
+export type Award = Schemas["Award"];
 
 // Reservations & catering
 export type TableArea = Schemas["TableArea"];

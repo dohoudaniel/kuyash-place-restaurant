@@ -7,7 +7,15 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from apps.common.admin import money_column
-from apps.core.models import Branch, HolidayOverride, LegalPage, OpeningHours, SiteSettings
+from apps.core.models import (
+    Award,
+    Branch,
+    HolidayOverride,
+    LegalPage,
+    OpeningHours,
+    SiteSettings,
+    TeamMember,
+)
 
 
 class OpeningHoursInline(admin.TabularInline):
@@ -179,3 +187,19 @@ class LegalPageAdmin(admin.ModelAdmin):
             f"Drafted {drafted} new version(s). They stay invisible to customers "
             "until you publish them.",
         )
+
+
+@admin.register(TeamMember)
+class TeamMemberAdmin(admin.ModelAdmin):
+    list_display = ("name", "role", "display_order", "is_active")
+    list_editable = ("display_order", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "role")
+
+
+@admin.register(Award)
+class AwardAdmin(admin.ModelAdmin):
+    list_display = ("title", "awarded_by", "year", "display_order", "is_active")
+    list_editable = ("display_order", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("title", "awarded_by")

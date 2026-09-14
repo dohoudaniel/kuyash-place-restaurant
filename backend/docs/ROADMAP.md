@@ -415,6 +415,8 @@ backend work:
 
 **Gate 3:** every screen in the frontend is backed by real data. No mock arrays remain anywhere in `frontend/`.
 
+> **Status:** the frontend side is met. Help reads the FAQ API; the five policy pages render the versioned legal pages; homepage stats, hero hours, footer social links and the About page read site settings, team and awards; the dead chat widget copy and `lib/data/hero.ts` are deleted. What remains is owner content — OD-2 (prices, photos), OD-9 (rewards terms) and OD-10 (About copy and figures) — plus 3.6 and 3.7.
+
 ---
 
 ## Deferred (explicitly not scheduled)

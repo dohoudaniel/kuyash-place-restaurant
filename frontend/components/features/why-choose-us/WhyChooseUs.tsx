@@ -17,7 +17,7 @@ const FEATURES = [
   {
     icon: "🚀",
     title: "Fast Delivery",
-    description: "Hot, fresh meals delivered to your door in 30 minutes or less.",
+    description: "Hot, fresh meals delivered to your door, with a live estimate you can follow on every order.",
   },
   {
     icon: "✨",
