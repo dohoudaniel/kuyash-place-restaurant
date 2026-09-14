@@ -803,15 +803,15 @@ frontend; `ws/kds/` is ready for one.
 
 ## 6. Definition of done for Phase 1 frontend
 
-- [ ] Zero `alert()` calls in any submission path
-- [ ] Zero `setTimeout` faking network latency
-- [ ] Zero price arithmetic in any component — CI grep gate
-- [ ] Zero hardcoded prices, menu items or promo codes
-- [ ] Zero card-data fields — CI grep gate
-- [ ] Every mutation sends CSRF and `credentials: "include"`
-- [ ] Every mutation has loading, error and success states
-- [ ] `Idempotency-Key` on order creation
-- [ ] Every money value rendered from `Money.display`
-- [ ] Auth state is real; protected routes are gated
-- [ ] Duplicate component families collapsed to one each
-- [ ] `loading.tsx` / `error.tsx` present per route segment
+- [x] Zero `alert()` calls in any submission path (Gate 3 sweep, §5.10)
+- [x] Zero `setTimeout` faking network latency — the remaining timers only reset "copied"/"added" feedback
+- [ ] Zero price arithmetic in any component — CI grep gate. *No arithmetic remains (every figure renders `Money.display`), but there is no automated gate yet: a reliable grep for arithmetic is hard to write without false positives. Kept open.*
+- [x] Zero hardcoded prices, menu items or promo codes
+- [x] Zero card-data fields — CI grep gate (`scripts/check-no-card-fields.sh`, allowlist empty)
+- [x] Every mutation sends CSRF and `credentials: "include"` — enforced centrally in `lib/api/client.ts`
+- [x] Every mutation has loading, error and success states
+- [x] `Idempotency-Key` on order creation (and on reservations and academy enrolment)
+- [x] Every money value rendered from `Money.display`
+- [x] Auth state is real; protected routes are gated (`proxy.ts` + `RequireAuth`)
+- [x] Duplicate component families collapsed to one each — legacy trees, unused Compact halves and the second `ChatButton` deleted
+- [x] `loading.tsx` / `error.tsx` present per route segment — root `error.tsx`, `global-error.tsx`, `not-found.tsx` and `loading.tsx`, which every nested segment inherits

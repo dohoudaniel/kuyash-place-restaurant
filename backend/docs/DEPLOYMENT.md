@@ -64,6 +64,10 @@ Monitoring  Sentry + the platform's metrics
 
 **Why:** one backend developer, no dedicated ops. Managed Postgres with point-in-time recovery is worth more than the monthly saving of self-hosting, and the DNS requirement below is trivial to satisfy.
 
+### 2.0 Frontend rendering and CSP
+
+The frontend sets a nonce-based Content Security Policy in `proxy.ts`, so every page renders per request (a prebuilt page cannot carry a per-request nonce). On Vercel this is automatic; elsewhere, run `next start` behind the proxy rather than exporting static files, and do not cache HTML at a CDN edge (static assets under `/_next/static` still cache normally). `NEXT_PUBLIC_API_URL` must be set at build time: the policy's `connect-src`, `img-src` and `form-action` are derived from it.
+
 ### 2.1 The DNS requirement (not optional)
 
 Session-cookie auth requires a shared parent domain:

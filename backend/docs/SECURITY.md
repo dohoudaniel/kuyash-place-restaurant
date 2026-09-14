@@ -15,7 +15,7 @@
 | **IDOR on orders** | **Total** — `/orders/{anything}` returns data | UUID PKs, opaque references, object-level permissions, guest tokens |
 | **Order enumeration** | **Total** — `Date.now()` references are guessable | Random 32⁶ reference space |
 | **Spam / bot submissions** | **Total** — no protection on any form | Rate limits, honeypot, optional Turnstile |
-| **XSS** | Moderate — React escapes by default, but no CSP | CSP headers; no `dangerouslySetInnerHTML`; HttpOnly session cookie |
+| **XSS** | Moderate — React escapes by default | Nonce-based CSP with `'strict-dynamic'` (frontend `proxy.ts`); no `dangerouslySetInnerHTML` (policy pages render admin Markdown to React elements); HttpOnly session cookie |
 | **CSRF** | N/A | Django CSRF + SameSite=Lax + explicit trusted origins |
 | **Mass assignment** | N/A | Explicit serializer fields; price fields ignored on input |
 | **DoS via expensive queries** | N/A | Pagination caps, query timeouts, Redis caching |
@@ -150,19 +150,19 @@ Phase 1 does not ship until every box is ticked:
 - [ ] `manage.py check --deploy` clean
 - [ ] `DEBUG = False`, `ALLOWED_HOSTS` explicit, HSTS on
 - [ ] All secrets in a secret manager; `gitleaks` clean on full history
-- [ ] Webhook signature verification tested against forged payloads
-- [ ] Amount-mismatch path tested — order stays unpaid
-- [ ] Idempotency verified under concurrent double-submit
-- [ ] Object-level permissions tested: user A cannot read user B's order
-- [ ] Rate limits verified on auth, promo and order endpoints
+- [x] Webhook signature verification tested against forged payloads — `payments/tests/test_webhooks.py` (forged, invalid and missing signatures rejected and recorded) and `test_webhook_edges.py` (replayed and concurrent duplicate deliveries)
+- [x] Amount-mismatch path tested — order stays unpaid — `payments/tests/test_payment_flows.py` (mismatch record survives the raise; reconciliation survives a mismatch) and `test_webhooks.py` (logged as critical)
+- [x] Idempotency verified under concurrent double-submit — `orders/tests/test_concurrency.py` (one Idempotency-Key admits one request; concurrent webhook deliveries settle once) and `test_orders_api.py` (double submit creates one order). The row-lock tests run in the CI Postgres job, which fails if any of them is skipped
+- [x] Object-level permissions tested: user A cannot read user B's order — `orders/tests/test_orders_api.py`, `test_receipt.py`, `payments/tests/test_payments_api.py` and `test_saved_methods.py`, `accounts/tests/test_profile_and_addresses.py`, `reservations/tests/test_api.py`, plus the enrolment, review, chat and WebSocket suites (a stranger gets 404, never the object)
+- [x] Rate limits verified on auth, promo and order endpoints — `accounts/tests/test_throttling.py` (login per IP and per email, registration, password reset, Retry-After) and `common/tests/test_scoped_throttles.py` (every scoped view installs the throttle; contact and order placement limited; reads don't spend the write allowance)
 - [x] CSRF enforced on sign-in endpoints for anonymous visitors — login CSRF (`test_auth_hardening.py`)
 - [x] Social sign-in failures and the takeover backstop return the browser to the frontend; no JSON or 500 on the provider callback
 - [x] `next` / `callback_url` redirects restricted to same-site paths and trusted origins (no open redirect)
-- [ ] 2FA enabled on all staff and admin accounts
-- [ ] Admin behind IP allowlist / VPN on a non-default path
-- [ ] CSP deployed and verified
+- [ ] 2FA enabled on all staff and admin accounts — *not built*. The API runs django-allauth headless-only, so the admin cannot use allauth's MFA login screens as-is; this needs either an allauth-rendered staff login in front of the admin or the identity provider's 2FA (e.g. staff sign in through Google Workspace with enforced 2FA)
+- [ ] Admin behind IP allowlist / VPN on a non-default path — the non-default path is enforced by `kuyash.W019` in the deploy check (CI runs it with a non-default `ADMIN_URL`); the allowlist is infrastructure
+- [ ] CSP deployed and verified — *implemented*: nonce-based policy with `'strict-dynamic'` in `frontend/proxy.ts`, verified against `next start` (header on every page, a fresh nonce per request, every `<script>` carrying it, no `unsafe-eval`/`unsafe-inline` scripts). Tick after checking a real browser session on staging (sign-in including social, checkout redirect, map, live tracking) with no CSP violations in the console
 - [ ] Automated backups running; **a restore actually tested**
-- [ ] Sentry live with PII scrubbing confirmed
+- [ ] Sentry live with PII scrubbing confirmed — *scrubbing implemented and tested* (`send_default_pii=False`, `apps/common/observability.scrub_event`, `common/tests/test_observability.py`). Tick once a real DSN is set and a test event is checked in Sentry
 - [x] `pip-audit` / `npm audit` clean of high and critical findings — clean of **all** known findings as of 2026-09-14: Django 5.2.6 → 5.2.17, DRF 3.16.1 → 3.17.2, django-allauth 65.11.2 → 65.14.1, Pillow 11.3.0 → 12.3.0, pytest 8.4.1 → 9.0.3; npm transitive fixes via `npm audit fix` (lockfile only). Re-run before launch — advisories keep arriving
 - [ ] Tax policy (`PRD.md` §7) decided and the published copy corrected — enforced by `kuyash.E002`
 - [ ] Terms, privacy and refund pages published — warned by `kuyash.W003`

@@ -62,11 +62,22 @@ jobs:
             --cov-fail-under=100
 
       - name: Deployment check
+        # A production-shaped environment. prod.py refuses to import without a
+        # payment key, and the project checks warn on a default admin path, a
+        # missing cookie domain, test payment keys and a non-https callback — so
+        # every one is set here the way a real deploy must set it. Values are
+        # placeholders; nothing here can take money or reach a real service.
         env:
-          DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+          DJANGO_SECRET_KEY: ci-only-not-a-real-secret-but-long-enough-for-the-deploy-check-0123456789
           ALLOWED_HOSTS: api.example.com
-          DATABASE_URL: postgres://user:pass@localhost:5432/db
+          DATABASE_URL: sqlite:///ci-deploy-check.sqlite3
           REDIS_URL: redis://localhost:6379/0
+          PAYSTACK_SECRET_KEY: sk_live_ci_placeholder
+          ADMIN_URL: ci-staff-console-7f3a/
+          SESSION_COOKIE_DOMAIN: .example.com
+          FRONTEND_URL: https://example.com
+          PAYMENT_CALLBACK_URL: https://example.com/checkout/complete
+          ACADEMY_PAYMENT_CALLBACK_URL: https://example.com/academy/enrolment/complete
         run: python manage.py check --deploy --fail-level WARNING --settings=config.settings.prod
 
   postgres:

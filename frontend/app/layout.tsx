@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Inter, Playfair_Display, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -29,11 +30,15 @@ export const metadata: Metadata = {
   description: "Feel confident in every bite — crafted meals you can trust. Delicious comfort for daily living.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Render per request: the Content Security Policy in proxy.ts uses a fresh
+  // nonce each time, and a page built ahead of time could not carry it.
+  await connection();
+
   return (
     <html lang="en" className={cn("h-full", "antialiased", inter.variable, playfair.variable, "font-sans", geist.variable)}>
       <body className="min-h-full flex flex-col font-[var(--font-inter)]">
