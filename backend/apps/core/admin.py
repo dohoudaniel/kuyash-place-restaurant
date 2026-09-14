@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from django.contrib import admin
+from django.db import models
 from django.http import HttpRequest
 from django.utils import timezone
 
@@ -16,6 +20,12 @@ from apps.core.models import (
     SiteSettings,
     TeamMember,
 )
+
+#: A link typed without a scheme is read as https:// — Django 6's default, and the
+#: only sensible one for a public link. Set per field, as Django 5.2 recommends.
+HTTPS_URL_FIELDS: Mapping[type[models.Field[Any, Any]], Mapping[str, Any]] = {
+    models.URLField: {"assume_scheme": "https"}
+}
 
 
 class OpeningHoursInline(admin.TabularInline):
@@ -99,6 +109,7 @@ class BranchAdmin(admin.ModelAdmin):
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
+    formfield_overrides = HTTPS_URL_FIELDS
     readonly_fields = ("created_at", "updated_at")
 
     def has_add_permission(self, request: HttpRequest) -> bool:
@@ -199,6 +210,7 @@ class TeamMemberAdmin(admin.ModelAdmin):
 
 @admin.register(Award)
 class AwardAdmin(admin.ModelAdmin):
+    formfield_overrides = HTTPS_URL_FIELDS
     list_display = ("title", "awarded_by", "year", "display_order", "is_active")
     list_editable = ("display_order", "is_active")
     list_filter = ("is_active",)

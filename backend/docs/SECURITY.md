@@ -163,7 +163,7 @@ Phase 1 does not ship until every box is ticked:
 - [ ] CSP deployed and verified
 - [ ] Automated backups running; **a restore actually tested**
 - [ ] Sentry live with PII scrubbing confirmed
-- [ ] `pip-audit` / `npm audit` clean of high and critical findings
+- [x] `pip-audit` / `npm audit` clean of high and critical findings — clean of **all** known findings as of 2026-09-14: Django 5.2.6 → 5.2.17, DRF 3.16.1 → 3.17.2, django-allauth 65.11.2 → 65.14.1, Pillow 11.3.0 → 12.3.0, pytest 8.4.1 → 9.0.3; npm transitive fixes via `npm audit fix` (lockfile only). Re-run before launch — advisories keep arriving
 - [ ] Tax policy (`PRD.md` §7) decided and the published copy corrected — enforced by `kuyash.E002`
 - [ ] Terms, privacy and refund pages published — warned by `kuyash.W003`
 - [ ] No menu item has `needs_repricing=True` — enforced by `kuyash.E001`
