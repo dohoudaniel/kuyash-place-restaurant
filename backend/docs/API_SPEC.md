@@ -446,6 +446,17 @@ For `cash` and `transfer` the order is created `confirmed`/`pending_payment` wit
 
 > The cart is **not** cleared here. It is cleared when payment is verified (`ORD-4`). The current frontend clears it before anything is persisted, making failure unrecoverable.
 
+### WebSockets  ✅ (Phase 3.6)
+
+Same payloads as the REST endpoints, pushed after each committed change. Connect to the API host with `ws://` / `wss://`; the handshake `Origin` must be in `CORS_ALLOWED_ORIGINS`.
+
+| Path | Who | Messages (server → client) |
+|---|---|---|
+| `ws/orders/{reference}/` | The signed-in owner or staff, on connect. A guest sends `{"type": "auth", "token": "<guest_token>"}` as the first message — never in the URL, which would put it in access logs | `{"type": "order", "order": <OrderDetail>}` on join and after every change. A wrong token or unknown order closes with code `4404` |
+| `ws/kds/` | Kitchen staff and managers | `{"type": "queue", "orders": [<KDSTicket>], "statuses": [...]}` on join, then `{"type": "ticket", "ticket": <KDSTicket>}` per change (drop tickets whose status is no longer in `statuses`). Others are refused with `4403` |
+
+Clients must treat the socket as an optimisation: if it cannot open or closes, poll the REST endpoint below.
+
 **`GET /orders/{reference}/`** — the polling endpoint
 
 ```json

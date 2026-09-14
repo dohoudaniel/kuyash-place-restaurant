@@ -35,6 +35,7 @@ What the defaults give you:
 | Database | SQLite (`db.sqlite3`) | `DATABASE_URL=postgres://…` |
 | Cache | In-memory `LocMemCache` | `REDIS_URL=redis://localhost:6379/0` |
 | Celery | Eager — tasks run in-process | Set `REDIS_URL`, then `celery -A config worker -l info` |
+| WebSockets | `make run` serves ASGI through Daphne; in-memory channel layer | Set `REDIS_URL` (the channel layer switches to Redis automatically) |
 | Email | Printed to the console | Set `EMAIL_BACKEND` and provider credentials |
 | Media | Local `media/` directory | Set `SUPABASE_S3_ENDPOINT` and keys |
 
@@ -53,7 +54,8 @@ build rather than reaching a customer.
 Frontend    Vercel (Next.js 16, already the natural home)
 Backend     Managed PaaS — Railway, Render or Fly.io
 Database    Managed Postgres 16 with PITR
-Cache/queue Managed Redis 7
+Cache/queue Managed Redis 7 (also the WebSocket channel layer)
+Web         daphne -b 0.0.0.0 -p $PORT config.asgi:application   (ASGI: HTTP + WebSockets)
 Workers     Separate Celery worker + beat services
 Media       Supabase Storage (decided)
 Email       Resend or Postmark
@@ -82,7 +84,7 @@ with `SESSION_COOKIE_DOMAIN = ".kuyashplace.com"`. If the backend ends up on a p
 Cheapest at scale; you own the ops.
 
 ```
-Nginx → Gunicorn (Django) + Celery worker + beat
+Nginx (with WebSocket upgrade headers) → Daphne (Django ASGI) + Celery worker + beat
 Postgres + Redis on the same box (or managed, recommended)
 Certbot for TLS · UFW · fail2ban · unattended-upgrades
 ```

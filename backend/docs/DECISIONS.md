@@ -44,13 +44,15 @@ Decisions taken for the Kuyash Place backend, with the reasoning preserved so th
 
 ## ADR-004 — Polling before WebSockets
 
-**Date:** 2026-09-11 · **Status:** Accepted
+**Date:** 2026-09-11 · **Status:** Accepted; extended by Phase 3.6 (2026-09-14) — WebSockets added, polling kept as the fallback
 
 **Context.** Order tracking and the KDS both want live updates. Channels needs ASGI plus a Redis channel layer.
 
 **Decision.** Poll `GET /orders/{ref}/` every 15s with `ETag`/`If-None-Match`. KDS polls every 10s. Channels deferred to Phase 3.
 
 **Consequences.** No ASGI or channel-layer complexity on day one. At the expected volume (< 200 concurrent orders) a 304-returning poll is cheap. Up to 15s of latency — acceptable for food, not for a stock ticker. The API shape does not change when WebSockets arrive; only the transport does.
+
+**Phase 3.6 update.** Channels now serves `ws/orders/{ref}/` and `ws/kds/` with the same payloads as the REST endpoints. The order page loads over REST, goes live over the socket, and polls every 15s whenever the socket is unavailable, so a closed port, a proxy without WebSocket support or a Redis outage degrades to the Phase 1 behaviour rather than breaking tracking. Pushes are sent after commit, one per order per transaction, and a failed push is logged, never raised. Local development uses the in-memory channel layer (ADR-015 still holds); production with more than one process needs `REDIS_URL`.
 
 ---
 

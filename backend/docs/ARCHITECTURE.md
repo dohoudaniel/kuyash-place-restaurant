@@ -232,7 +232,7 @@ The single most important path in the system.
    │        ├─ carts: NOW clear the cart
    │        └─ KDS: order becomes visible to the kitchen
    │
-9. Customer polls GET /api/v1/orders/KYS-7Q2XF9/ every 15s (ETag-cached).
+9. Customer's page listens on ws/orders/KYS-7Q2XF9/ for each status change (Phase 3.6), falling back to polling GET /api/v1/orders/KYS-7Q2XF9/ every 15s (ETag-cached) when the socket is unavailable.
 ```
 
 **Step 8 is where the order becomes real — not step 6, and never on a client callback.** The browser redirect back from the provider is treated as a *hint* to re-verify, never as proof of payment.

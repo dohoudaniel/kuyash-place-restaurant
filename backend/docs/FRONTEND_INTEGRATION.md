@@ -784,6 +784,21 @@ Verified: backend 1143 passed, ruff/mypy clean, schema synced; `tsc` clean;
 `next build` passes; ESLint 20 → 0 errors; the sweep is clean; a live check of
 the five legal pages, FAQ, team, awards and settings passes.
 
+### 5.11 Phase 3.6 live order tracking delivered
+
+**Backend.** `apps/realtime` (Channels 4.3, Daphne, channels-redis): `ws/orders/{ref}/`
+and `ws/kds/` behind an origin check and the same access rules as the REST
+endpoints; order signals push after commit, once per transaction, and a push
+failure is logged, never raised. `runserver` now serves ASGI; production runs
+Daphne with Redis as the channel layer (DEPLOYMENT.md).
+
+**Frontend.** `lib/orders/useLiveOrder.ts` loads the order over REST, then listens
+on the socket (a guest authenticates with their stored token in the first
+message), stops when the order is final, and falls back to 15-second polling
+whenever the socket is unavailable. `/orders/[id]` uses it and shows a "Live"
+badge while connected. There is still no kitchen display screen in the
+frontend; `ws/kds/` is ready for one.
+
 ---
 
 ## 6. Definition of done for Phase 1 frontend

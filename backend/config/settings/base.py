@@ -36,6 +36,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "channels",
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
@@ -67,9 +68,11 @@ LOCAL_APPS = [
     "apps.academy",
     "apps.loyalty",
     "apps.reporting",
+    "apps.realtime",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+# Daphne first: its runserver serves ASGI, so WebSockets work under `make run`.
+INSTALLED_APPS = ["daphne", *DJANGO_APPS, *THIRD_PARTY_APPS, *LOCAL_APPS]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -371,6 +374,21 @@ else:
 # ── Celery ────────────────────────────────────────────────────────────────────
 # Without Redis, tasks run eagerly (synchronously, in-process). That keeps local
 # development to a single process; see DEPLOYMENT.md §2.
+# ── WebSockets (Phase 3.6) ────────────────────────────────────────────────────
+ASGI_APPLICATION = "config.asgi.application"
+# In memory locally (one process, no Redis — ADR-015). Across several server
+# processes the pushes must travel through Redis.
+CHANNEL_LAYERS = (
+    {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDIS_URL]},
+        }
+    }
+    if REDIS_URL
+    else {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+)
+
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=not REDIS_URL)
 CELERY_TASK_EAGER_PROPAGATES = True
 # "memory://localhost//" rather than "memory://": kombu warns about a missing
@@ -419,6 +437,9 @@ CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=["http://localhost:3000"])
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000"])
+# Browsers do not apply CORS to WebSockets, so the handshake's Origin is checked
+# against the same allowlist.
+WEBSOCKET_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ["X-Cart-Token", "X-Request-ID", "Idempotency-Replayed"]
 # The frontend *sends* these on cross-origin requests, so the preflight must allow

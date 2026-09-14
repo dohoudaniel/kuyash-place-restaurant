@@ -5,17 +5,14 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Phone, MessageCircle, CheckCircle, AlertCircle, Loader2, FileDown, ShoppingCart, CreditCard, XCircle } from "lucide-react";
 import { OrderStatus, OrderDetails, OrderSummary } from "@/components/features/orders";
-import { FINAL_STATUSES } from "@/components/features/orders/statusStyles";
 import { ReviewModal } from "@/components/features/reviews";
 import { ApiError, api } from "@/lib/api/client";
 import { cancelOrder, downloadReceipt, fetchOrder, initialisePayment, reorder } from "@/lib/api/orders";
-import type { Branch, OrderDetail, OrderLine } from "@/lib/api/types";
+import { useLiveOrder } from "@/lib/orders/useLiveOrder";
+import type { Branch, OrderLine } from "@/lib/api/types";
 import { useAuthModalStore } from "@/lib/store/authModalStore";
 import { useAuthStore } from "@/lib/store/authStore";
 import { useCartStore } from "@/lib/store/cartStore";
-
-/** How often to re-read an order that is still moving. */
-const POLL_MS = 15_000;
 
 const SUBTITLES: Record<string, string> = {
   pending_payment: "Your order is saved and waiting for payment.",
@@ -33,8 +30,8 @@ function OrderTracking() {
   const openAuth = useAuthModalStore((state) => state.open);
   const refreshCart = useCartStore((state) => state.refresh);
 
-  const [order, setOrder] = useState<OrderDetail | null>(null);
-  const [loadError, setLoadError] = useState<"not_found" | "network" | null>(null);
+  // Live over a WebSocket, polling if that is unavailable.
+  const { order, setOrder, loadError, live } = useLiveOrder(reference, authStatus !== "idle" && authStatus !== "loading");
   const [branch, setBranch] = useState<Branch | null>(null);
   const [busy, setBusy] = useState<"pay" | "cancel" | "receipt" | "reorder" | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -49,39 +46,6 @@ function OrderTracking() {
       cancelled = true;
     };
   }, []);
-
-  // Load, then keep reading while the order is still moving and the tab is visible.
-  useEffect(() => {
-    if (authStatus === "idle" || authStatus === "loading") return;
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const load = async () => {
-      if (document.visibilityState === "visible") {
-        try {
-          const data = await fetchOrder(reference);
-          if (cancelled) return;
-          setOrder(data);
-          setLoadError(null);
-          if (FINAL_STATUSES.has(data.status)) return;
-        } catch (err) {
-          if (cancelled) return;
-          if (err instanceof ApiError && err.status === 404) {
-            setLoadError("not_found");
-            return;
-          }
-          setLoadError((current) => current ?? "network");
-        }
-      }
-      timer = window.setTimeout(load, POLL_MS);
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [reference, authStatus]);
 
   const run = async (kind: NonNullable<typeof busy>, action: () => Promise<void>) => {
     setBusy(kind);
@@ -220,6 +184,7 @@ function OrderTracking() {
             </h1>
             <p className="text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
               {SUBTITLES[order.status] ?? `${order.status_display}. This page updates automatically.`}
+              {live && <span className="ml-2 inline-flex items-center gap-1 text-xs font-bold" style={{ color: "#10b981" }}><span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#10b981" }} />Live</span>}
             </p>
           </div>
 
