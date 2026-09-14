@@ -14,6 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.client_ip import client_ip
 from apps.common.permissions import IsStaffMember, current_user
 from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
@@ -61,7 +62,7 @@ class ContactView(APIView):
             message=data["message"],
             user=request.user,
             honeypot=data.get("website", ""),
-            ip_address=request.META.get("REMOTE_ADDR"),
+            ip_address=client_ip(request) or None,
             user_agent=request.headers.get("User-Agent", ""),
         )
         # A quarantined message gets the same response as a real one: telling a

@@ -77,6 +77,21 @@ def test_paystack_maps_unknown_states_to_pending() -> None:
 
 
 @responses.activate
+def test_paystack_verify_reports_a_refusal_as_failed() -> None:
+    """Paystack answers ``status: false`` for a reference it won't verify."""
+    responses.add(
+        responses.GET,
+        f"{PS}/transaction/verify/ref-1",
+        json={"status": False, "message": "Transaction reference not found"},
+        status=400,
+    )
+    result = PaystackProvider("sk_test").verify("ref-1")
+    assert result.status == "failed"
+    assert result.succeeded is False
+    assert "not found" in result.message
+
+
+@responses.activate
 def test_paystack_network_errors_become_pending_not_failed() -> None:
     """A timeout means "we do not know", not "the customer did not pay"."""
     responses.add(
@@ -241,6 +256,14 @@ def test_flutterwave_refund_paths() -> None:
     assert FlutterwaveProvider("k", "h").refund("ref-1").ok is False
 
 
+@pytest.mark.parametrize("amount", [None, ""])
+def test_flutterwave_missing_amount_is_zero_kobo(amount) -> None:  # type: ignore[no-untyped-def]
+    """No amount must read as nothing paid — never as the order total."""
+    from apps.payments.providers.flutterwave import _to_kobo
+
+    assert _to_kobo(amount) == 0
+
+
 def test_flutterwave_webhook_hash_comparison() -> None:
     provider = FlutterwaveProvider("k", "secret-hash")
     assert provider.verify_webhook(b"{}", {"verif-hash": "secret-hash"}) is True
@@ -282,6 +305,11 @@ def test_the_simulator_is_only_available_in_debug(settings) -> None:  # type: ig
     settings.DEBUG = False
     with pytest.raises(ProviderUnavailable):
         get_provider("dummy")
+
+
+def test_the_simulator_can_be_asked_for_by_name_in_debug(settings) -> None:  # type: ignore[no-untyped-def]
+    settings.DEBUG = True
+    assert isinstance(get_provider("dummy"), DummyProvider)
 
 
 def test_an_unknown_provider_name_is_refused(settings) -> None:  # type: ignore[no-untyped-def]

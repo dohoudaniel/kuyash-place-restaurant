@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.carts.serializers import money
+from apps.common.client_ip import client_ip
 from apps.common.permissions import IsManager
 from apps.orders.models import Order
 from apps.orders.views import _may_read
@@ -165,7 +166,7 @@ class WebhookView(APIView):
             provider_name=self.provider_name,
             raw_body=request.body,
             headers=request.headers,
-            remote_addr=request.META.get("REMOTE_ADDR"),
+            remote_addr=client_ip(request) or None,
         )
         if not outcome.accepted:
             return Response({"detail": outcome.detail}, status=status.HTTP_401_UNAUTHORIZED)

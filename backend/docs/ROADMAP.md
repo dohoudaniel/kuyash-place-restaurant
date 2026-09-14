@@ -184,8 +184,8 @@ Notes:
 - [ ] Tax policy (`PRD.md` §7) decided; `/help` and `/terms` copy corrected
 - [x] Card fields deleted from the frontend; CI gate passing — allowlist now empty
 - [ ] Security checklist (`SECURITY.md` §8) fully ticked
-- [ ] 100% coverage on money, tax, discount, payment and state-machine logic
-- [ ] Webhook forgery, amount-mismatch and replay tests passing
+- [x] 100% coverage on money, tax, discount, payment and state-machine logic — enforced in CI: `apps.common.money`, and the money path (`carts`, `promotions`, `orders` and `payments` services, payment tasks and provider adapters, `loyalty.services`, `academy.services`) with `--cov-fail-under=100`
+- [x] Webhook forgery, amount-mismatch and replay tests passing — `payments/tests/test_webhooks.py`, `test_webhook_edges.py`, `test_payment_flows.py` (see `SECURITY.md` §8)
 - [ ] Backup restore actually performed on a staging database
 - [ ] Staff trained on the KDS; a dry-run service completed
 - [ ] Phase 2/3 features hidden or marked "coming soon" — **not faked**

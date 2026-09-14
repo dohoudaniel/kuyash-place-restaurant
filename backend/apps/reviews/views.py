@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.views import CsrfEnforcedMixin
+from apps.common.client_ip import client_ip
 from apps.common.pagination import PagePagination
 from apps.common.permissions import IsManager, current_user
 from apps.common.throttling import SCOPED_THROTTLES
@@ -145,7 +146,7 @@ def voter_key(request: Request) -> str:
     user = request.user
     if user and user.is_authenticated:
         return f"user:{user.pk}"
-    address = request.META.get("REMOTE_ADDR", "")
+    address = client_ip(request)
     digest = hashlib.sha256(f"{settings.SECRET_KEY}:{address}".encode()).hexdigest()
     return f"anon:{digest[:64]}"
 

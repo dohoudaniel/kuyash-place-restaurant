@@ -7,4 +7,4 @@ class CommonConfig(AppConfig):
     verbose_name = "Common"
 
     def ready(self) -> None:
-        from apps.common import checks  # noqa: F401
+        from apps.common import checks, client_ip  # noqa: F401  (client_ip registers kuyash.W021)

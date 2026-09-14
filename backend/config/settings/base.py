@@ -22,6 +22,12 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="insecure-development-key")
 DEBUG = env.bool("DEBUG", default=False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+
+# How many proxies sit in front of Django and append to X-Forwarded-For. 0 ignores
+# the header (it is client-supplied); behind one load balancer or Nginx, set 1.
+# Throttles, allauth rate limits and the admin allowlist all read the client IP
+# through apps/common/client_ip.py. SECURITY.md §8, kuyash.W021.
+TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 
 # ── Applications ──────────────────────────────────────────────────────────────
@@ -78,6 +84,7 @@ INSTALLED_APPS = ["daphne", *DJANGO_APPS, *THIRD_PARTY_APPS, *LOCAL_APPS]
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "apps.common.client_ip.AdminIPAllowlistMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -248,6 +255,9 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "apps.common.exceptions.problem_detail_handler",
+    # Without this DRF keys anonymous throttles on the raw X-Forwarded-For header,
+    # which a caller can change on every request.
+    "NUM_PROXIES": TRUSTED_PROXY_COUNT,
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -478,6 +488,9 @@ ADMIN_URL = env("ADMIN_URL", default="admin/")
 # ── Admin two-factor authentication (SECURITY.md §8) ──────────────────────────
 # Staff pass an authenticator-app code before any admin page (apps/accounts/staff_mfa.py).
 STAFF_MFA_REQUIRED = env.bool("STAFF_MFA_REQUIRED", default=True)
+# Addresses or CIDR ranges allowed to reach the admin at all; everyone else gets a
+# 404. Empty switches it off. A second layer behind any network allowlist or VPN.
+ADMIN_ALLOWED_IPS = env.list("ADMIN_ALLOWED_IPS", default=[])
 MFA_ADAPTER = "apps.accounts.mfa_adapter.KuyashMFAAdapter"
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
 MFA_TOTP_ISSUER = "Kuyash Place"

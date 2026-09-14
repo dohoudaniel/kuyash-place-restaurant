@@ -51,14 +51,18 @@ jobs:
         run: pytest apps/common/tests/test_money.py --cov=apps.common.money --cov-fail-under=100
 
       - name: Money-path coverage gate (100%)
-        # Pricing, promo rules, order services and payment services decide what
-        # is charged and what is refunded, so they carry the same requirement as
-        # the money primitives.
+        # Pricing, promo rules, order services, payment services, the provider
+        # adapters, loyalty rewards and paid enrolments decide what is charged,
+        # discounted and refunded, so they carry the same requirement as the
+        # money primitives. The loyalty and academy suites run too: they are
+        # what exercises the reward and enrolment branches of pricing and payments.
         run: |
           pytest apps/carts apps/promotions apps/orders apps/payments \
+            apps/loyalty apps/academy \
             --cov=apps.carts.services --cov=apps.promotions.services \
             --cov=apps.orders.services --cov=apps.payments.services \
-            --cov=apps.payments.tasks \
+            --cov=apps.payments.tasks --cov=apps.payments.providers \
+            --cov=apps.loyalty.services --cov=apps.academy.services \
             --cov-fail-under=100
 
       - name: Deployment check
@@ -74,6 +78,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           PAYSTACK_SECRET_KEY: sk_live_ci_placeholder
           ADMIN_URL: ci-staff-console-7f3a/
+          TRUSTED_PROXY_COUNT: "1"
           SESSION_COOKIE_DOMAIN: .example.com
           FRONTEND_URL: https://example.com
           PAYMENT_CALLBACK_URL: https://example.com/checkout/complete
@@ -160,11 +165,22 @@ jobs:
         # strings. See backend/docs/FRONTEND_INTEGRATION.md §6.
         run: ./scripts/check-no-price-arithmetic.sh
 
-      - name: Dependency audit
+      - name: Dependency audit (backend)
+        # Audits the project's installed dependencies, not the runner's bare
+        # Python, and fails on any known vulnerability. SECURITY.md §8.
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit
-          pip-audit --strict --desc || pip-audit --desc
+          pip install -e . pip-audit
+          pip-audit --strict --desc --skip-editable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Dependency audit (frontend)
+        # Reads the lockfile only; nothing is installed. Fails on high or critical.
+        working-directory: frontend
+        run: npm audit --package-lock-only --audit-level=high
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2

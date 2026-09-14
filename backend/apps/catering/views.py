@@ -23,6 +23,7 @@ from apps.catering.serializers import (
     OverdueEnquiriesSerializer,
 )
 from apps.catering.services import submit_enquiry
+from apps.common.client_ip import client_ip
 from apps.common.permissions import IsManager
 from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
@@ -85,7 +86,7 @@ class EnquiryCreateView(APIView):
             venue=data.get("venue", ""),
             message=data.get("message", ""),
             user=request.user,
-            ip_address=request.META.get("REMOTE_ADDR"),
+            ip_address=client_ip(request) or None,
         )
         return Response(EnquiryCreatedSerializer(enquiry).data, status=status.HTTP_201_CREATED)
 

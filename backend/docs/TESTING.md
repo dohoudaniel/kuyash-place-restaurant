@@ -252,9 +252,13 @@ Never `Faker("pydecimal")` for money. Every fixture price is an explicit, readab
 - ruff check . && ruff format --check .
 - mypy apps/common apps/carts/services apps/payments/services apps/orders/services
 - pytest --cov=apps --cov-fail-under=85
-- pytest --cov=apps/common/money.py --cov=apps/carts/services \
-         --cov=apps/payments/services --cov=apps/orders/services/state.py \
-         --cov-fail-under=100
+- pytest apps/common/tests/test_money.py --cov=apps.common.money --cov-fail-under=100
+- pytest apps/carts apps/promotions apps/orders apps/payments apps/loyalty apps/academy \
+         --cov=apps.carts.services --cov=apps.promotions.services \
+         --cov=apps.orders.services --cov=apps.payments.services \
+         --cov=apps.payments.tasks --cov=apps.payments.providers \
+         --cov=apps.loyalty.services --cov=apps.academy.services \
+         --cov-fail-under=100                              # money path: pricing, rewards, enrolments, providers
 - python manage.py check --deploy --fail-level WARNING
 - python manage.py makemigrations --check --dry-run     # no un-committed migrations
 - gitleaks detect --no-git

@@ -12,6 +12,7 @@ from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 
 from apps.accounts.signals import email_verified
+from apps.common.client_ip import client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,11 @@ class KuyashAccountAdapter(DefaultAccountAdapter):
     the current UI enforces it with an ``alert()``, which is trivially bypassed
     and legally worthless.
     """
+
+    def get_client_ip(self, request: HttpRequest) -> str:
+        # allauth trusts the leftmost X-Forwarded-For entry, which the caller
+        # writes. Its per-IP login limit would be bypassable by changing it.
+        return client_ip(request) or "0.0.0.0"  # noqa: S104 - an unknown address, never a bind
 
     def save_user(
         self,
