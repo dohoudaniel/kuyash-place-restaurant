@@ -179,7 +179,7 @@ Notes:
 > **All Phase 1 code is implemented.** Everything outstanding below is a
 > decision, a data entry task, or a frontend deletion — not backend work.
 
-- [ ] All eleven success criteria in `PRD.md` §9 demonstrated end-to-end
+- [x] All eleven success criteria in `PRD.md` §9 demonstrated end-to-end — criteria 1–10 as one customer-and-kitchen journey through the API (`orders/tests/test_prd_success_criteria.py`: register → verify → staff-set menu → priced modifiers on a cart that follows the customer across devices → server totals that ignore tampering → promo validated, usage-limited and un-enumerable → hosted checkout with no card data stored → KDS push and ticket within 15 s → advanced to delivered, each status visible on `/orders/{ref}`, confirmation and dispatch emails → server-backed history); criterion 11 by the CI gate `scripts/check-no-alert.sh`. Re-run on staging with real Paystack test keys before launch
 - [ ] **Zero menu items with `needs_repricing=True`** — the owner has set real naira prices
 - [ ] Tax policy (`PRD.md` §7) decided; `/help` and `/terms` copy corrected
 - [x] Card fields deleted from the frontend; CI gate passing — allowlist now empty

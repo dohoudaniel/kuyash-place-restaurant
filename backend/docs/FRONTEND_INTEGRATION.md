@@ -803,7 +803,7 @@ frontend; `ws/kds/` is ready for one.
 
 ## 6. Definition of done for Phase 1 frontend
 
-- [x] Zero `alert()` calls in any submission path (Gate 3 sweep, §5.10)
+- [x] Zero `alert()` calls in any submission path (Gate 3 sweep, §5.10) — kept that way by a CI grep gate (`scripts/check-no-alert.sh`: bare `alert(` and `window.alert/confirm/prompt(`, comments skipped; self-tested against each shape, allowlist empty)
 - [x] Zero `setTimeout` faking network latency — the remaining timers only reset "copied"/"added" feedback
 - [x] Zero price arithmetic in any component — CI grep gate (`scripts/check-no-price-arithmetic.sh`: arithmetic on `.amount`, `Intl.NumberFormat`/`style: "currency"`, hand-built `₦` strings; self-tested against each shape, no false positives on the current code)
 - [x] Zero hardcoded prices, menu items or promo codes

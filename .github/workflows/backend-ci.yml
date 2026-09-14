@@ -165,6 +165,11 @@ jobs:
         # strings. See backend/docs/FRONTEND_INTEGRATION.md §6.
         run: ./scripts/check-no-price-arithmetic.sh
 
+      - name: No alert() gate (frontend)
+        # PRD §9 criterion 11: forms show the API's result in the page, never a
+        # native browser dialog standing in for a real submission.
+        run: ./scripts/check-no-alert.sh
+
       - name: Dependency audit (backend)
         # Audits the project's installed dependencies, not the runner's bare
         # Python, and fails on any known vulnerability. SECURITY.md §8.

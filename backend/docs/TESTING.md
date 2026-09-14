@@ -263,6 +263,8 @@ Never `Faker("pydecimal")` for money. Every fixture price is an explicit, readab
 - python manage.py makemigrations --check --dry-run     # no un-committed migrations
 - gitleaks detect --no-git
 - ./scripts/check-no-card-fields.sh                     # PCI gate
+- ./scripts/check-no-price-arithmetic.sh                # components render Money.display
+- ./scripts/check-no-alert.sh                           # PRD §9 (11): no native dialogs
 - pip-audit
 ```
 
