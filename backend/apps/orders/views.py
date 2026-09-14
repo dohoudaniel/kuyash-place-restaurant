@@ -362,8 +362,7 @@ class KDSSummaryView(APIView):
 
     @extend_schema(summary="Kitchen summary", responses={200: KDSSummarySerializer}, tags=["kds"])
     def get(self, request: Request) -> Response:
-        from django.db.models import Count, Sum
-        from django.utils import timezone
+        from django.db.models import Count
 
         from apps.carts.serializers import money
 
@@ -371,15 +370,13 @@ class KDSSummaryView(APIView):
         counts = dict(
             Order.objects.filter(branch=branch).values_list("status").annotate(total=Count("id"))
         )
-        today = timezone.localtime().date()
-        revenue = (
-            Order.objects.filter(
-                branch=branch,
-                placed_at__date=today,
-                status__in=[OrderStatus.DELIVERED, OrderStatus.READY, OrderStatus.PREPARING],
-            ).aggregate(total=Sum("grand_total"))["total"]
-            or 0
-        )
+        # The same definition as the sales report, on the restaurant's own day.
+        # This used to sum orders by UTC date, counting unpaid cash orders still
+        # in the kitchen and missing confirmed and out-for-delivery ones.
+        from apps.reporting import services as reports
+
+        today = branch.local_now().date().isoformat()
+        revenue = reports.sales(branch, reports.period(branch, start=today, end=today))["net"]
         return Response(
             {
                 "counts": counts,

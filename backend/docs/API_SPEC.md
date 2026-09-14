@@ -521,7 +521,7 @@ All require `kitchen`, `managers` or `admin` group membership.
 | POST | `/kds/orders/{reference}/advance/` | `{ "to": "preparing" \| "ready" \| "out_for_delivery" \| "delivered" }` |
 | POST | `/kds/orders/{reference}/assign-rider/` | `{ "rider": "<uuid>" }` |
 | POST | `/kds/items/{slug}/availability/` | `{ "is_available_now": false }` — "86 this item" |
-| GET | `/kds/summary/` | Counts by status, average prep time, today's revenue |
+| GET | `/kds/summary/` | Counts by status, open tickets, today's revenue — ✅ revenue uses the sales-report definition on the restaurant's local day (it summed unpaid kitchen orders by UTC date) |
 | GET | `/kds/reservations/today/` | 🟡 Today's book |
 
 `GET /kds/orders/` returns `elapsed_seconds` and an `is_late` flag per order — the numbers a kitchen actually runs on.
@@ -700,6 +700,21 @@ Photos are uploaded in the Django admin (branch preselected, thumbnails in the l
 | POST | `/wishlist/sync/` | ✓ | Merge the localStorage wishlist on first login |
 
 ---
+
+## 15b. Reports  ✅ (Phase 3.7)
+
+Managers only (`IsManager`). Every report takes `?from=YYYY-MM-DD&to=YYYY-MM-DD` (both inclusive; default the last 7 days; at most 366 days; a bad period is 400) and `?export=csv` for a spreadsheet (not `?format=`, which DRF reserves).
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/reports/sales/` | `orders`, `gross`, `refunds`, `net`, `average_order`, `subtotal`, `discounts`, `delivery_fees`, `service_charges`, `vat`, `tips`, `average_prep_minutes`, `by_payment_method`, `by_fulfilment`, `incomplete_orders`, `daily[]`. CSV: one row per day |
+| GET | `/reports/items/` | Best sellers: `name`, `quantity`, `orders`, `revenue` (after line discounts). `?limit=1–100` |
+| GET | `/reports/peak-hours/` | `grid[weekday][hour]` order counts, `by_hour`, `busiest` |
+| GET | `/reports/riders/` | Per rider: `deliveries`, `failed`, `average_delivery_minutes` (pick-up, else assignment, to hand-over), `on_time_percent` (delivered by the estimate shown), `cash_collected` |
+
+**Definitions.** Days are the branch's local days. A **sale** is an order placed in the period that was paid (including ones later partly or fully refunded) or a cash order that was delivered; unpaid, expired and failed orders are listed under `incomplete_orders` instead. **Refunds** count in the period they were issued, so they never rewrite an earlier period. Items come from the order-line snapshots, i.e. what was actually sold at the price charged.
+
+The same four reports are on the admin **Reports** page (visible to superusers and staff in the managers group), with CSV links.
 
 ## 16. Rate limits
 

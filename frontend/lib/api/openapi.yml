@@ -2579,6 +2579,147 @@ paths:
               schema:
                 $ref: '#/components/schemas/Cart'
           description: ''
+  /api/v1/reports/sales/:
+    get:
+      operationId: reports_sales_retrieve
+      summary: Sales, refunds and daily totals
+      parameters:
+      - in: query
+        name: export
+        schema:
+          type: string
+          enum:
+          - csv
+      - in: query
+        name: from
+        schema:
+          type: string
+          format: date
+        description: 'First day, inclusive. Default: 6 days before `to`.'
+      - in: query
+        name: to
+        schema:
+          type: string
+          format: date
+        description: 'Last day, inclusive. Default: today.'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesReport'
+          description: ''
+  /api/v1/reports/items/:
+    get:
+      operationId: reports_items_retrieve
+      summary: Best-selling dishes
+      parameters:
+      - in: query
+        name: export
+        schema:
+          type: string
+          enum:
+          - csv
+      - in: query
+        name: from
+        schema:
+          type: string
+          format: date
+        description: 'First day, inclusive. Default: 6 days before `to`.'
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: 1–100, default 20.
+      - in: query
+        name: to
+        schema:
+          type: string
+          format: date
+        description: 'Last day, inclusive. Default: today.'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PopularItemsReport'
+          description: ''
+  /api/v1/reports/peak-hours/:
+    get:
+      operationId: reports_peak_hours_retrieve
+      summary: Orders by weekday and hour
+      parameters:
+      - in: query
+        name: export
+        schema:
+          type: string
+          enum:
+          - csv
+      - in: query
+        name: from
+        schema:
+          type: string
+          format: date
+        description: 'First day, inclusive. Default: 6 days before `to`.'
+      - in: query
+        name: to
+        schema:
+          type: string
+          format: date
+        description: 'Last day, inclusive. Default: today.'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeakHoursReport'
+          description: ''
+  /api/v1/reports/riders/:
+    get:
+      operationId: reports_riders_retrieve
+      summary: Rider performance
+      parameters:
+      - in: query
+        name: export
+        schema:
+          type: string
+          enum:
+          - csv
+      - in: query
+        name: from
+        schema:
+          type: string
+          format: date
+        description: 'First day, inclusive. Default: 6 days before `to`.'
+      - in: query
+        name: to
+        schema:
+          type: string
+          format: date
+        description: 'Last day, inclusive. Default: today.'
+      tags:
+      - reports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiderReport'
+          description: ''
   /api/v1/wishlist/:
     get:
       operationId: wishlist_retrieve
@@ -3428,6 +3569,19 @@ components:
       - timezone
       - vat_rate_bps
       - whatsapp
+    BusiestSlot:
+      type: object
+      properties:
+        weekday:
+          type: string
+        hour:
+          type: integer
+        orders:
+          type: integer
+      required:
+      - hour
+      - orders
+      - weekday
     CancelRequest:
       type: object
       properties:
@@ -4369,6 +4523,20 @@ components:
       - is_email_verified
       - marketing_opt_in
       - phone
+    DailySales:
+      type: object
+      properties:
+        orders:
+          type: integer
+        gross:
+          $ref: '#/components/schemas/Money'
+        date:
+          type: string
+          format: date
+      required:
+      - date
+      - gross
+      - orders
     DeliveryZone:
       type: object
       properties:
@@ -6687,6 +6855,35 @@ components:
       - order_status
       - payment_status
       - status
+    PeakHoursReport:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportPeriod'
+        weekdays:
+          type: array
+          items:
+            type: string
+        grid:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+        by_hour:
+          type: array
+          items:
+            type: integer
+        busiest:
+          allOf:
+          - $ref: '#/components/schemas/BusiestSlot'
+          nullable: true
+      required:
+      - busiest
+      - by_hour
+      - grid
+      - period
+      - weekdays
     PlaceOrderPaymentMethodEnum:
       enum:
       - card
@@ -6724,6 +6921,37 @@ components:
           additionalProperties: {}
       required:
       - payment_method
+    PopularItem:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        orders:
+          type: integer
+        revenue:
+          $ref: '#/components/schemas/Money'
+      required:
+      - name
+      - orders
+      - quantity
+      - revenue
+      - slug
+    PopularItemsReport:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportPeriod'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PopularItem'
+      required:
+      - items
+      - period
     PriceFragment:
       type: object
       properties:
@@ -6950,6 +7178,21 @@ components:
       - item
       - name
       - reason
+    ReportPeriod:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        days:
+          type: integer
+      required:
+      - days
+      - end
+      - start
     Reservation:
       type: object
       description: A booking as the customer sees it.
@@ -7269,6 +7512,118 @@ components:
       - assigned_at
       - order
       - rider
+    RiderPerformance:
+      type: object
+      properties:
+        rider:
+          type: string
+        deliveries:
+          type: integer
+        failed:
+          type: integer
+        average_delivery_minutes:
+          type: number
+          format: double
+          nullable: true
+        on_time_percent:
+          type: integer
+          nullable: true
+        cash_collected:
+          $ref: '#/components/schemas/Money'
+      required:
+      - average_delivery_minutes
+      - cash_collected
+      - deliveries
+      - failed
+      - on_time_percent
+      - rider
+    RiderReport:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportPeriod'
+        riders:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiderPerformance'
+      required:
+      - period
+      - riders
+    SalesBucket:
+      type: object
+      properties:
+        orders:
+          type: integer
+        gross:
+          $ref: '#/components/schemas/Money'
+      required:
+      - gross
+      - orders
+    SalesReport:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportPeriod'
+        orders:
+          type: integer
+        gross:
+          $ref: '#/components/schemas/Money'
+        refunds:
+          $ref: '#/components/schemas/Money'
+        net:
+          $ref: '#/components/schemas/Money'
+        average_order:
+          $ref: '#/components/schemas/Money'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        discounts:
+          $ref: '#/components/schemas/Money'
+        delivery_fees:
+          $ref: '#/components/schemas/Money'
+        service_charges:
+          $ref: '#/components/schemas/Money'
+        vat:
+          $ref: '#/components/schemas/Money'
+        tips:
+          $ref: '#/components/schemas/Money'
+        average_prep_minutes:
+          type: number
+          format: double
+          nullable: true
+        by_payment_method:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SalesBucket'
+        by_fulfilment:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SalesBucket'
+        incomplete_orders:
+          type: object
+          additionalProperties:
+            type: integer
+        daily:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailySales'
+      required:
+      - average_order
+      - average_prep_minutes
+      - by_fulfilment
+      - by_payment_method
+      - daily
+      - delivery_fees
+      - discounts
+      - gross
+      - incomplete_orders
+      - net
+      - orders
+      - period
+      - refunds
+      - service_charges
+      - subtotal
+      - tips
+      - vat
     SavedPaymentMethod:
       type: object
       properties:

@@ -1842,6 +1842,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/sales/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales, refunds and daily totals */
+        get: operations["reports_sales_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Best-selling dishes */
+        get: operations["reports_items_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/peak-hours/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Orders by weekday and hour */
+        get: operations["reports_peak_hours_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/riders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rider performance */
+        get: operations["reports_riders_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wishlist/": {
         parameters: {
             query?: never;
@@ -2223,6 +2291,11 @@ export interface components {
             readonly default_prep_minutes: number;
             readonly bank_transfer: components["schemas"]["BankTransferDetails"] | null;
         };
+        BusiestSlot: {
+            weekday: string;
+            hour: number;
+            orders: number;
+        };
         CancelRequest: {
             /** @default  */
             reason: string;
@@ -2577,6 +2650,12 @@ export interface components {
             readonly is_email_verified: boolean;
             readonly groups: string[];
             readonly marketing_opt_in: boolean;
+        };
+        DailySales: {
+            orders: number;
+            gross: components["schemas"]["Money"];
+            /** Format: date */
+            date: string;
         };
         DeliveryZone: {
             /** Format: uuid */
@@ -3518,6 +3597,13 @@ export interface components {
             payment_status: string;
             amount: components["schemas"]["Money"];
         };
+        PeakHoursReport: {
+            period: components["schemas"]["ReportPeriod"];
+            weekdays: string[];
+            grid: number[][];
+            by_hour: number[];
+            busiest: components["schemas"]["BusiestSlot"] | null;
+        };
         /**
          * @description * `card` - card
          *     * `transfer` - transfer
@@ -3541,6 +3627,17 @@ export interface components {
             guest?: {
                 [key: string]: unknown;
             };
+        };
+        PopularItem: {
+            slug: string;
+            name: string;
+            quantity: number;
+            orders: number;
+            revenue: components["schemas"]["Money"];
+        };
+        PopularItemsReport: {
+            period: components["schemas"]["ReportPeriod"];
+            items: components["schemas"]["PopularItem"][];
         };
         PriceFragment: {
             amount: number;
@@ -3644,6 +3741,13 @@ export interface components {
             item: string;
             name: string;
             reason: string;
+        };
+        ReportPeriod: {
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: string;
+            days: number;
         };
         /** @description A booking as the customer sees it. */
         Reservation: {
@@ -3765,6 +3869,49 @@ export interface components {
             };
             /** Format: date-time */
             assigned_at: string;
+        };
+        RiderPerformance: {
+            rider: string;
+            deliveries: number;
+            failed: number;
+            /** Format: double */
+            average_delivery_minutes: number | null;
+            on_time_percent: number | null;
+            cash_collected: components["schemas"]["Money"];
+        };
+        RiderReport: {
+            period: components["schemas"]["ReportPeriod"];
+            riders: components["schemas"]["RiderPerformance"][];
+        };
+        SalesBucket: {
+            orders: number;
+            gross: components["schemas"]["Money"];
+        };
+        SalesReport: {
+            period: components["schemas"]["ReportPeriod"];
+            orders: number;
+            gross: components["schemas"]["Money"];
+            refunds: components["schemas"]["Money"];
+            net: components["schemas"]["Money"];
+            average_order: components["schemas"]["Money"];
+            subtotal: components["schemas"]["Money"];
+            discounts: components["schemas"]["Money"];
+            delivery_fees: components["schemas"]["Money"];
+            service_charges: components["schemas"]["Money"];
+            vat: components["schemas"]["Money"];
+            tips: components["schemas"]["Money"];
+            /** Format: double */
+            average_prep_minutes: number | null;
+            by_payment_method: {
+                [key: string]: components["schemas"]["SalesBucket"];
+            };
+            by_fulfilment: {
+                [key: string]: components["schemas"]["SalesBucket"];
+            };
+            incomplete_orders: {
+                [key: string]: number;
+            };
+            daily: components["schemas"]["DailySales"][];
         };
         SavedPaymentMethod: {
             /** Format: uuid */
@@ -6153,6 +6300,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Cart"];
+                };
+            };
+        };
+    };
+    reports_sales_retrieve: {
+        parameters: {
+            query?: {
+                export?: "csv";
+                /** @description First day, inclusive. Default: 6 days before `to`. */
+                from?: string;
+                /** @description Last day, inclusive. Default: today. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesReport"];
+                };
+            };
+        };
+    };
+    reports_items_retrieve: {
+        parameters: {
+            query?: {
+                export?: "csv";
+                /** @description First day, inclusive. Default: 6 days before `to`. */
+                from?: string;
+                /** @description 1–100, default 20. */
+                limit?: number;
+                /** @description Last day, inclusive. Default: today. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PopularItemsReport"];
+                };
+            };
+        };
+    };
+    reports_peak_hours_retrieve: {
+        parameters: {
+            query?: {
+                export?: "csv";
+                /** @description First day, inclusive. Default: 6 days before `to`. */
+                from?: string;
+                /** @description Last day, inclusive. Default: today. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeakHoursReport"];
+                };
+            };
+        };
+    };
+    reports_riders_retrieve: {
+        parameters: {
+            query?: {
+                export?: "csv";
+                /** @description First day, inclusive. Default: 6 days before `to`. */
+                from?: string;
+                /** @description Last day, inclusive. Default: today. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiderReport"];
                 };
             };
         };

@@ -411,7 +411,7 @@ backend work:
 | 3.4 | ✅ Gallery CMS | 0.3 wk |
 | 3.5 | ✅ Chat: FAQ matching, order lookup, ticket escalation | 0.7 wk |
 | 3.6 | Django Channels: live KDS and order tracking over WebSockets | 0.7 wk |
-| 3.7 | Reporting: sales, popular items, peak hours, rider performance | 0.5 wk |
+| 3.7 | ✅ Reporting: sales, popular items, peak hours, rider performance | 0.5 wk |
 
 **Gate 3:** every screen in the frontend is backed by real data. No mock arrays remain anywhere in `frontend/`.
 

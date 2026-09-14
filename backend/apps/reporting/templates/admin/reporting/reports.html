@@ -1,0 +1,57 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Reports | {{ site_title }}{% endblock %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> › Reports</div>{% endblock %}
+{% block content %}
+<div id="content-main">
+  <form method="get" style="margin-bottom:1.5em">
+    <label>From <input type="date" name="from" value="{{ window.start|date:'Y-m-d' }}"></label>
+    <label style="margin-left:1em">To <input type="date" name="to" value="{{ window.end|date:'Y-m-d' }}"></label>
+    <input type="submit" value="Show" style="margin-left:1em">
+    <span style="margin-left:1em;color:var(--body-quiet-color)">Days are counted in the restaurant's time zone. A sale is a paid order, or a delivered cash order; refunds count in the period they were issued.</span>
+  </form>
+  {% if error %}<p class="errornote">{{ error }} Showing the last 7 days instead.</p>{% endif %}
+
+  <div class="module">
+    <h2>Sales · {{ window.start|date:"j M Y" }} – {{ window.end|date:"j M Y" }} <a href="{{ csv.sales }}" style="float:right;color:inherit">CSV</a></h2>
+    <table style="width:100%">
+      <tr><th>Orders</th><td>{{ sales.orders }}</td><th>Gross</th><td>{{ money.gross }}</td><th>Refunds</th><td>{{ money.refunds }}</td><th>Net</th><td><strong>{{ money.net }}</strong></td></tr>
+      <tr><th>Average order</th><td>{{ money.average_order }}</td><th>Discounts</th><td>{{ money.discounts }}</td><th>Delivery fees</th><td>{{ money.delivery_fees }}</td><th>VAT</th><td>{{ money.vat }}</td></tr>
+      <tr><th>Tips</th><td>{{ money.tips }}</td><th>Average prep</th><td>{% if sales.average_prep_minutes is not None %}{{ sales.average_prep_minutes }} min{% else %}—{% endif %}</td>
+          <th>Did not complete</th><td colspan="3">{% for status, count in sales.incomplete_orders.items %}{{ status }}: {{ count }}{% if not forloop.last %} · {% endif %}{% endfor %}</td></tr>
+    </table>
+  </div>
+
+  <div class="module">
+    <h2>By day</h2>
+    <table style="width:100%"><thead><tr><th>Date</th><th>Orders</th><th>Gross</th></tr></thead><tbody>
+      {% for row in daily %}<tr><td>{{ row.date|date:"D j M" }}</td><td>{{ row.orders }}</td><td>{{ row.gross_display }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% if payment_methods %}<p style="padding:0 10px">{% for method in payment_methods %}{{ method.name }}: {{ method.orders }} orders, {{ method.gross }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+  </div>
+
+  <div class="module">
+    <h2>Popular dishes <a href="{{ csv.items }}" style="float:right;color:inherit">CSV</a></h2>
+    <table style="width:100%"><thead><tr><th>Dish</th><th>Quantity</th><th>Orders</th><th>Revenue</th></tr></thead><tbody>
+      {% for row in items %}<tr><td>{{ row.name }}</td><td>{{ row.quantity }}</td><td>{{ row.orders }}</td><td>{{ row.revenue_display }}</td></tr>
+      {% empty %}<tr><td colspan="4">No sales in this period.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+
+  <div class="module">
+    <h2>Peak hours{% if busiest %} · busiest: {{ busiest.weekday }} {{ busiest.hour }}:00 ({{ busiest.orders }}){% endif %} <a href="{{ csv.peak_hours }}" style="float:right;color:inherit">CSV</a></h2>
+    <div style="overflow-x:auto"><table><thead><tr><th></th>{% for hour in hours %}<th style="text-align:center">{{ hour }}</th>{% endfor %}</tr></thead><tbody>
+      {% for row in peak_rows %}<tr><th>{{ row.weekday|slice:":3" }}</th>{% for cell in row.cells %}<td style="text-align:center;background:rgba(217,4,41,{{ cell.shade }})">{% if cell.count %}{{ cell.count }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+
+  <div class="module">
+    <h2>Riders <a href="{{ csv.riders }}" style="float:right;color:inherit">CSV</a></h2>
+    <table style="width:100%"><thead><tr><th>Rider</th><th>Deliveries</th><th>Failed</th><th>Average delivery</th><th>On time</th><th>Cash collected</th></tr></thead><tbody>
+      {% for row in riders %}<tr><td>{{ row.rider }}</td><td>{{ row.deliveries }}</td><td>{{ row.failed }}</td>
+        <td>{% if row.average_delivery_minutes is not None %}{{ row.average_delivery_minutes }} min{% else %}—{% endif %}</td>
+        <td>{% if row.on_time_percent is not None %}{{ row.on_time_percent }}%{% else %}—{% endif %}</td><td>{{ row.cash_display }}</td></tr>
+      {% empty %}<tr><td colspan="6">No deliveries in this period.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+{% endblock %}
