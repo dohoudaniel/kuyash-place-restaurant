@@ -219,6 +219,11 @@ class Command(BaseCommand):
         self.stdout.write("Academy:")
         seed_academy(branch, stdout=self.stdout)
 
+        from apps.loyalty.seed import seed_loyalty
+
+        self.stdout.write("Loyalty:")
+        seed_loyalty(branch, stdout=self.stdout)
+
         settings_obj = SiteSettings.load()
         if not settings_obj.tagline:
             settings_obj.tagline = "Tastefully Classy"

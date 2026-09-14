@@ -265,7 +265,7 @@ Replace the 18 hardcoded slots with `GET /reservations/availability/?date=&party
 | `components/features/reviews/ReviewModal.tsx:50` | ✅ `alert(...)` → `POST /reviews/` (Phase 3.1, see §5.5) |
 | `app/academy/page.tsx:28` | ✅ inline `COURSES` array → `GET /academy/courses/` (Phase 3.2, see §5.8) |
 | `components/features/academy/EnrollmentModal.tsx:24` | ✅ `alert(...)` → `POST /academy/enrolments/` with cohort selection. The "installment" option is removed (ACA-6, OD-5) |
-| `app/rewards/page.tsx:22` | `useState(false)` → `GET /loyalty/account/` |
+| `app/rewards/page.tsx:22` | ✅ `useState(false)` → `GET /loyalty/account/` (Phase 3.3, see §5.9) |
 | `app/gallery/page.tsx:20` | ✅ 20 items with broken image keys → `GET /gallery/` (Phase 3.4, see §5.6) |
 | `components/features/chat/*` | ✅ local echo → `/support/chat/…` (Phase 3.5, see §5.7) |
 
@@ -722,6 +722,35 @@ a live run (20 checks) covers CORS, CSRF, idempotency, the fee guard, seat
 holds, the last seat, token access, provider verification, counted students and
 transfer enrolment, plus completion, certificate and transfer confirmation
 through the services.
+
+### 5.9 Phase 3.3 loyalty delivered
+
+**Backend.** New `apps/loyalty` (API_SPEC §13, DATA_MODEL §15): an append-only
+points ledger with idempotent postings, tiers by lifetime points, earning on
+delivery, reversal when an order is refunded or never goes through, rewards
+priced into the cart and spent at placement, daily birthday and expiry tasks,
+and staff adjustments in the admin. Cart pricing and placement gained a reward
+step beside the promo step; every existing cart, order, promo and payment test
+still passes.
+
+**Frontend.**
+- `lib/api/loyalty.ts`; `cartStore.applyReward` / `removeReward` (both return
+  the repriced cart).
+- `/rewards`: signed-out visitors see the real tiers, earn rates and catalogue,
+  and "Join" opens sign-up. Members see their balance, tier and progress, apply
+  affordable rewards to their cart, see their points history, and are prompted
+  to add a birthday when a bonus exists. The tiers' invented perks, the "MOST
+  POPULAR" badge, referral/first-order/anniversary bonuses and the FAQ's
+  unbacked claims are gone; the FAQ now states the real expiry period.
+- Cart and checkout summaries show the promo discount and the reward
+  separately, and the cart shows why an applied reward doesn't apply.
+
+Verified: backend 1137 passed, loyalty + cart pricing + placement at 100%
+coverage, ruff/mypy clean, card-field gate clean, schema synced; `tsc` clean;
+`next build` passes; ESLint 22 → 20 errors, no findings in changed files; a
+live run (19 checks) places real orders over HTTP and follows the points through
+delivery, a reward applied and spent at checkout, expiry returning the points,
+and a refund reversing earned points.
 
 ---
 

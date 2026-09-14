@@ -84,6 +84,15 @@ export type Enrolment = Schemas["Enrolment"];
 export type EnrolmentCreated = Schemas["EnrolmentCreated"];
 export type EnrolmentPaymentStart = Schemas["EnrolmentPaymentStart"];
 export type EnrolmentPaymentVerification = Schemas["EnrolmentPaymentVerification"];
+
+// Loyalty
+export type LoyaltyAccount = Schemas["Account"];
+export type LoyaltyProgramme = Schemas["LoyaltyProgramme"];
+export type LoyaltyTier = Schemas["Tier"];
+export type LedgerEntry = Schemas["LedgerEntry"];
+export type PaginatedLedger = Schemas["PaginatedLedgerEntryList"];
+export type Reward = Schemas["Reward"];
+export type CartReward = Schemas["CartReward"];
 export type PaymentVerification = Schemas["PaymentVerification"];
 export type Address = Schemas["Address"];
 

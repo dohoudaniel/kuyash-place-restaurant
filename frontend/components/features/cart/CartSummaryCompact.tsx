@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Tag, X, Check, ShoppingBag, Truck, Clock, AlertCircle, Loader2 } from "lucide-react";
+import { Tag, X, Check, ShoppingBag, Truck, Clock, AlertCircle, Loader2, Gift } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import type { Branch, Cart } from "@/lib/api/types";
 import { useCartStore } from "@/lib/store/cartStore";
@@ -26,6 +26,9 @@ const CHECKOUT_STAGE_BLOCKERS = new Set(["address_required", "outside_delivery_a
 export default function CartSummaryCompact({ cart, branch }: CartSummaryCompactProps) {
   const applyPromo = useCartStore((state) => state.applyPromo);
   const removePromo = useCartStore((state) => state.removePromo);
+  const removeReward = useCartStore((state) => state.removeReward);
+  const [rewardBusy, setRewardBusy] = useState(false);
+  const reward = cart.loyalty_reward;
 
   const [promoCode, setPromoCode] = useState("");
   const [promoBusy, setPromoBusy] = useState(false);
@@ -148,6 +151,40 @@ export default function CartSummaryCompact({ cart, branch }: CartSummaryCompactP
             </div>
           )}
 
+          {reward && (
+            <div className="flex items-center justify-between p-2 rounded-lg mt-2" style={{ background: "rgba(217,4,41,0.05)" }}>
+              <div className="flex items-center gap-2">
+                <Gift className="w-4 h-4" style={{ color: "var(--red)" }} />
+                <div>
+                  <p className="font-bold text-xs" style={{ color: "var(--black)" }}>{reward.name} · {reward.points_cost} pts</p>
+                  <p className="text-[10px]" style={{ color: reward.applied ? "var(--text-muted)" : "var(--red)" }}>
+                    {reward.applied
+                      ? reward.free_delivery ? "Free delivery" : `−${reward.discount.display}`
+                      : reward.problem}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  setRewardBusy(true);
+                  try {
+                    await removeReward();
+                  } catch {
+                    /* the reward stays shown; the customer can try again */
+                  } finally {
+                    setRewardBusy(false);
+                  }
+                }}
+                disabled={rewardBusy}
+                aria-label="Remove reward"
+                className="w-6 h-6 rounded-full flex items-center justify-center transition-all hover:opacity-80 disabled:opacity-50"
+                style={{ background: "var(--red)" }}
+              >
+                {rewardBusy ? <Loader2 className="w-3 h-3 text-white animate-spin" /> : <X className="w-3 h-3 text-white" />}
+              </button>
+            </div>
+          )}
+
           {promoMessage && (
             <p
               role={promoMessage.type === "error" ? "alert" : "status"}
@@ -166,10 +203,17 @@ export default function CartSummaryCompact({ cart, branch }: CartSummaryCompactP
             <span className="font-semibold" style={{ color: "var(--black)" }}>{totals.subtotal.display}</span>
           </div>
 
-          {totals.discount.amount > 0 && (
+          {cart.promo_discount.amount > 0 && (
             <div className="flex justify-between text-xs">
               <span style={{ color: "var(--red)" }}>Discount</span>
-              <span className="font-semibold" style={{ color: "var(--red)" }}>−{totals.discount.display}</span>
+              <span className="font-semibold" style={{ color: "var(--red)" }}>−{cart.promo_discount.display}</span>
+            </div>
+          )}
+
+          {reward?.applied && reward.discount.amount > 0 && (
+            <div className="flex justify-between text-xs">
+              <span style={{ color: "var(--red)" }}>Reward</span>
+              <span className="font-semibold" style={{ color: "var(--red)" }}>−{reward.discount.display}</span>
             </div>
           )}
 

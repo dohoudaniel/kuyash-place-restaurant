@@ -78,6 +78,10 @@ class PricedCart:
     currency: str
 
     promo_code: str = ""
+    #: The promo code's share of ``discount_total``; the rest is the reward's.
+    promo_discount: int = 0
+    #: The applied loyalty reward, whether or not it currently takes anything off.
+    reward: dict[str, Any] | None = None
     delivery_note: str = ""
     vat_note: str = ""
     estimated_minutes: int | None = None
@@ -212,6 +216,25 @@ def price_cart(cart: Any) -> PricedCart:
             discount_total = calculate_discount(promo, eligible)
             free_delivery = promo.discount_type == "free_delivery"
 
+    # ── 2b. Loyalty reward ────────────────────────────────────────────────────
+    promo_discount = discount_total
+    free_delivery_label = promo_code_label if free_delivery else ""
+    reward_payload: dict[str, Any] | None = None
+    if cart.loyalty_reward_id:
+        from apps.loyalty.services import quote_reward
+
+        quote = quote_reward(
+            cart,
+            subtotal=subtotal,
+            promo_discount=promo_discount,
+            lines=[(line["menu_item"], line["unit_price"]) for line in raw_lines],
+        )
+        discount_total += quote.discount
+        if quote.free_delivery and not free_delivery:
+            free_delivery = True
+            free_delivery_label = quote.reward.name
+        reward_payload = quote.as_payload()
+
     # ── 3. Allocate the discount across lines, before VAT ─────────────────────
     weights = [line["line_subtotal"] for line in raw_lines]
     if discount_total and any(weights):
@@ -243,7 +266,7 @@ def price_cart(cart: Any) -> PricedCart:
             estimated_minutes = zone.estimated_minutes
             threshold = branch.free_delivery_threshold
             if free_delivery:
-                delivery_note = f"Free delivery applied with {promo_code_label}."
+                delivery_note = f"Free delivery applied with {free_delivery_label}."
             elif threshold is not None and subtotal >= threshold:
                 delivery_note = f"Free delivery — order over {format_money(threshold)}."
             else:
@@ -380,6 +403,8 @@ def price_cart(cart: Any) -> PricedCart:
         prices_include_vat=inclusive,
         currency=branch.currency,
         promo_code=promo_code_label,
+        promo_discount=promo_discount,
+        reward=reward_payload,
         delivery_note=delivery_note,
         vat_note=vat_note,
         estimated_minutes=estimated_minutes,

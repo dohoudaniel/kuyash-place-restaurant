@@ -149,10 +149,16 @@ export default function ReviewStep({ cart, branch, deliveryData, paymentData, on
                 <span style={{ color: "var(--text-muted)" }}>Subtotal</span>
                 <span className="font-semibold" style={{ color: "var(--black)" }}>{totals.subtotal.display}</span>
               </div>
-              {totals.discount.amount > 0 && (
+              {cart.promo_discount.amount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span style={{ color: "var(--red)" }}>Discount{cart.promo_code ? ` (${cart.promo_code})` : ""}</span>
-                  <span className="font-semibold" style={{ color: "var(--red)" }}>−{totals.discount.display}</span>
+                  <span className="font-semibold" style={{ color: "var(--red)" }}>−{cart.promo_discount.display}</span>
+                </div>
+              )}
+              {cart.loyalty_reward?.applied && cart.loyalty_reward.discount.amount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span style={{ color: "var(--red)" }}>Reward ({cart.loyalty_reward.name} · {cart.loyalty_reward.points_cost} pts)</span>
+                  <span className="font-semibold" style={{ color: "var(--red)" }}>−{cart.loyalty_reward.discount.display}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">

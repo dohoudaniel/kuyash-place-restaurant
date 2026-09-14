@@ -43,6 +43,9 @@ interface CartStore {
   removeItem: (lineId: string) => Promise<Cart>;
   applyPromo: (code: string) => Promise<Cart>;
   removePromo: () => Promise<Cart>;
+  /** Apply a loyalty reward. Its points are spent when the order is placed. */
+  applyReward: (rewardId: string) => Promise<Cart>;
+  removeReward: () => Promise<Cart>;
   setFulfilment: (input: FulfilmentInput) => Promise<Cart>;
 }
 
@@ -118,6 +121,8 @@ export const useCartStore = create<CartStore>()((set) => {
     applyPromo: (code) => write("/cart/promo/", { method: "POST", body: { code } }),
 
     removePromo: () => write("/cart/promo/", { method: "DELETE" }),
+    applyReward: (rewardId) => write(`/loyalty/rewards/${encodeURIComponent(rewardId)}/redeem/`, { method: "POST" }),
+    removeReward: () => write("/loyalty/rewards/applied/", { method: "DELETE" }),
 
     setFulfilment: (input) => write("/cart/fulfilment/", { method: "PATCH", body: input }),
   };

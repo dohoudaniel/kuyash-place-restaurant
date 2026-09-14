@@ -65,6 +65,7 @@ LOCAL_APPS = [
     "apps.reviews",
     "apps.gallery",
     "apps.academy",
+    "apps.loyalty",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -304,6 +305,8 @@ SPECTACULAR_SETTINGS = {
         "EnrolmentStatusEnum": "apps.academy.models.EnrolmentStatus",
         "ExperienceLevelEnum": "apps.academy.models.ExperienceLevel",
         "EnrolmentPaymentMethodEnum": "apps.academy.models.EnrolmentPaymentMethod",
+        "LedgerEntryTypeEnum": "apps.loyalty.models.LedgerEntryType",
+        "RewardTypeEnum": "apps.loyalty.models.RewardType",
     },
 }
 
@@ -392,6 +395,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "payments.expire_stale_orders",
         "schedule": 3600.0,  # hourly
     },
+    "loyalty-birthday-bonuses": {
+        "task": "loyalty.birthday_bonuses",
+        "schedule": 86400.0,  # daily; idempotent per member per year
+    },
+    "loyalty-expire-inactive": {
+        "task": "loyalty.expire_inactive",
+        "schedule": 86400.0,  # daily
+    },
 }
 
 # ── Sessions & CSRF ───────────────────────────────────────────────────────────
@@ -460,6 +471,11 @@ ACADEMY_PAYMENT_CALLBACK_URL = env(
 # people who never pay.
 ACADEMY_CARD_HOLD_MINUTES = env.int("ACADEMY_CARD_HOLD_MINUTES", default=30)
 ACADEMY_TRANSFER_HOLD_HOURS = env.int("ACADEMY_TRANSFER_HOLD_HOURS", default=48)
+
+# Kuyash Rewards (LOY-2): kobo spent per base point (10_000 = 1 point per ₦100),
+# and how long a balance survives without an order or a redemption.
+LOYALTY_KOBO_PER_POINT = env.int("LOYALTY_KOBO_PER_POINT", default=10_000)
+LOYALTY_EXPIRY_INACTIVE_DAYS = env.int("LOYALTY_EXPIRY_INACTIVE_DAYS", default=365)
 
 # ── Domain defaults ───────────────────────────────────────────────────────────
 DEFAULT_CURRENCY = "NGN"

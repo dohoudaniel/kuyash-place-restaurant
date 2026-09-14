@@ -290,7 +290,7 @@ The current tip UI offers **₦2 / ₦5 / ₦10** — dollar amounts with a nair
 |---|---|
 | RF-1 | Full and partial refunds supported through the provider API |
 | RF-2 | Every refund recorded with amount, reason and `initiated_by` |
-| RF-3 | A refund **reverses loyalty points** (`PointsLedgerEntry` type `reversal`) |
+| RF-3 | A refund **reverses loyalty points** (`PointsLedgerEntry` type `reversal`) — ✅ on full refund, cancellation, rejection or expiry; partial refunds do not move points |
 | RF-4 | A refund **reverses the promo redemption**, restoring the customer's remaining uses |
 | RF-5 | Order rejection by the kitchen **auto-refunds** prepaid orders |
 | RF-6 | Managers may refund up to a ceiling (default ₦50,000); above that requires admin |

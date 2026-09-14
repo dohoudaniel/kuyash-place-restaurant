@@ -557,24 +557,28 @@ Message: `session` FK · `sender` (`user`/`bot`) · `body` · `matched_faq` FK n
 
 ---
 
-## 15. `loyalty`  *(Phase 3)*
+## 15. `loyalty`  *(Phase 3 — ✅ delivered in 3.3)*
 
 ### LoyaltyTier
-`name` (Silver / Gold / Platinum) · `min_points` · `benefits` JSON · `points_multiplier_bps` · `colour` · `display_order`.
+`name` (unique) · `min_points` (unique; **lifetime** points needed) · `points_multiplier_bps` (10000 = 1×) · `birthday_points` (0 = none) · `benefits` JSON list · `colour`. Ordered by `min_points`.
 
 ### LoyaltyAccount
-`user` O2O · `points_balance` (**denormalised from the ledger**) · `lifetime_points` · `tier` FK · `joined_at`.
+`user` O2O · `points_balance` (**cached sum of the ledger**, signed — can go negative when an order refunded after its points were spent) · `lifetime_points` (earned, net of reversed earnings — decides the tier; spending never demotes) · `tier` FK null · `is_closed` · `created_at` (= joined). Created on first use: every account is a membership.
 
 ### PointsLedgerEntry  *(append-only — the source of truth)*
-`account` FK · `entry_type` (`earn`/`redeem`/`expire`/`adjustment`/`reversal`) · `points` `IntegerField` (**signed**) · `order` FK null · `reward` FK null · `description` · `expires_at` null · `created_by` FK null.
+`account` FK · `entry_type` (`earn`/`redeem`/`expire`/`adjustment`/`reversal`) · `points` (**signed**) · `order` FK null · `reward` FK null · `description` · `reversal_of` FK self null · `created_by` FK null · `idempotency_key` unique null (`earn:{order}`, `redeem:{order}`, `reverse-earn:{order}`, `reverse-redeem:{order}`, `birthday:{user}:{year}`, `expire:{account}:{date}`) · `created_at`.
+`save()` refuses updates; balance, lifetime and tier move in the same transaction as the insert, under a row lock on the account. There is no `expires_at`: expiry is by inactivity, posted as an `expire` entry.
 
 > A balance column alone is not acceptable (LOY-1). The ledger is what makes refund reversal (LOY-5) possible.
 
 ### Reward
-`name` · `description` · `points_cost` · `reward_type` (`discount`/`free_item`/`free_delivery`) · `value` · `menu_item` FK null · `is_active` · `stock` null.
+`branch` FK · `name` · `description` · `points_cost` · `reward_type` (`discount`/`free_item`/`free_delivery`) · `value` Money (money-off only) · `min_order_value` Money · `menu_item` FK null (free-dish only) · `stock` null (= unlimited) · `display_order` · `is_active`.
 
 ### RewardRedemption
-`account` FK · `reward` FK · `order` FK null · `points_spent` · `status` · `redeemed_at`.
+`account` FK · `reward` FK · `order` O2O null · `points_spent` · `discount_amount` Money · `status` (`spent`/`reversed`) · `created_at` · `reversed_at`.
+
+### Cart
+Gains `loyalty_reward` FK null: applied, not spent. Points are spent inside order placement.
 
 ---
 

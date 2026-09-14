@@ -407,7 +407,7 @@ backend work:
 |---|---|---|
 | 3.1 | ✅ Reviews: verified purchase, moderation queue, aggregate recalculation | 0.7 wk |
 | 3.2 | ✅ Academy: instructors, courses, cohorts, enrolments, payments, certificates | 1.5 wk |
-| 3.3 | Loyalty: ledger, tiers, rewards, redemption, refund reversal | 1 wk |
+| 3.3 | ✅ Loyalty: ledger, tiers, rewards, redemption, refund reversal | 1 wk |
 | 3.4 | ✅ Gallery CMS | 0.3 wk |
 | 3.5 | ✅ Chat: FAQ matching, order lookup, ticket escalation | 0.7 wk |
 | 3.6 | Django Channels: live KDS and order tracking over WebSockets | 0.7 wk |

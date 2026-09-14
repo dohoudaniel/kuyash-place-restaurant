@@ -157,6 +157,21 @@ class CartBlockerSerializer(serializers.Serializer):
         ref_name = "CartBlocker"
 
 
+class CartRewardSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    points_cost = serializers.IntegerField()
+    discount = MoneySerializer()
+    free_delivery = serializers.BooleanField()
+    applied = serializers.BooleanField()
+    problem = serializers.CharField(
+        allow_blank=True, help_text="Why it takes nothing off right now."
+    )
+
+    class Meta:
+        ref_name = "CartReward"
+
+
 class CartResponseSerializer(serializers.Serializer):
     """Documents the cart response shape for the generated schema."""
 
@@ -167,6 +182,8 @@ class CartResponseSerializer(serializers.Serializer):
     item_count = serializers.IntegerField(help_text="Total quantity across lines, for badges.")
     totals = TotalsSerializer()
     promo_code = serializers.CharField(allow_blank=True)
+    promo_discount = MoneySerializer(help_text="The promo code's part of totals.discount.")
+    loyalty_reward = CartRewardSerializer(allow_null=True)
     prices_include_vat = serializers.BooleanField()
     vat_note = serializers.CharField(allow_blank=True)
     delivery_note = serializers.CharField(allow_blank=True)
@@ -222,6 +239,15 @@ def serialise_cart(cart: Any, priced: Any) -> dict[str, Any]:
         ],
         "item_count": sum(line.quantity for line in priced.lines),
         "promo_code": priced.promo_code,
+        "promo_discount": money(priced.promo_discount, currency),
+        "loyalty_reward": (
+            {
+                **{k: v for k, v in priced.reward.items() if k != "discount_amount"},
+                "discount": money(priced.reward["discount_amount"], currency),
+            }
+            if priced.reward
+            else None
+        ),
         "totals": {
             "subtotal": money(priced.subtotal, currency),
             "discount": money(priced.discount_total, currency),

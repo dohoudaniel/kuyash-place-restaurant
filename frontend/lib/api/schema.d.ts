@@ -1682,6 +1682,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/loyalty/tiers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Loyalty tiers and rules
+         * @description Tiers and earning rules. Public: the rewards page shows them to everyone.
+         */
+        get: operations["loyalty_tiers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loyalty/account/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My points, tier and progress
+         * @description Shared cart resolution and rendering.
+         */
+        get: operations["loyalty_account_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loyalty/ledger/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My points history
+         * @description Every points movement, newest first.
+         */
+        get: operations["loyalty_ledger_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loyalty/rewards/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rewards catalogue
+         * @description The catalogue. Signed-in members also see what they can afford.
+         */
+        get: operations["loyalty_rewards_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loyalty/rewards/applied/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove the reward from my cart
+         * @description Shared cart resolution and rendering.
+         */
+        delete: operations["loyalty_rewards_applied_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/loyalty/rewards/{reward_id}/redeem/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use a reward on my cart
+         * @description 409 `insufficient_points` or `reward_unavailable`.
+         */
+        post: operations["loyalty_rewards_redeem_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wishlist/": {
         parameters: {
             query?: never;
@@ -1893,6 +2013,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Account: {
+            /** @description Cached sum of the ledger. Can go negative after a reversal. */
+            readonly points_balance: number;
+            /** @description Points earned, net of reversed earnings. Decides the tier. */
+            readonly lifetime_points: number;
+            readonly tier: components["schemas"]["Tier"] | null;
+            readonly next_tier: components["schemas"]["LoyaltyNextTier"] | null;
+            /** @description How far from the current tier's floor to the next tier's. */
+            readonly progress_percent: number;
+            readonly earn_rate: string;
+            readonly applied_reward: components["schemas"]["LoyaltyAppliedReward"] | null;
+            readonly birthday_on_file: boolean;
+            readonly is_closed: boolean;
+        };
         /**
          * @description * `approve` - Approve
          *     * `reject` - Reject
@@ -2059,6 +2193,9 @@ export interface components {
             item_count: number;
             totals: components["schemas"]["Totals"];
             promo_code: string;
+            /** @description The promo code's part of totals.discount. */
+            promo_discount: components["schemas"]["Money"];
+            loyalty_reward: components["schemas"]["CartReward"] | null;
             prices_include_vat: boolean;
             vat_note: string;
             delivery_note: string;
@@ -2104,6 +2241,17 @@ export interface components {
             slug: string;
             name: string;
             image_url: string | null;
+        };
+        CartReward: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            points_cost: number;
+            discount: components["schemas"]["Money"];
+            free_delivery: boolean;
+            applied: boolean;
+            /** @description Why it takes nothing off right now. */
+            problem: string;
         };
         CartUnavailable: {
             item: string;
@@ -2737,6 +2885,27 @@ export interface components {
          * @enum {string}
          */
         LabelEnum: "home" | "work" | "other";
+        LedgerEntry: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly entry_type: components["schemas"]["LedgerEntryTypeEnum"];
+            readonly entry_type_display: string;
+            /** @description Signed. Negative for redemptions, expiry and reversals of earnings. */
+            readonly points: number;
+            readonly description: string;
+            readonly order_reference: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `earn` - Earned
+         *     * `redeem` - Redeemed
+         *     * `expire` - Expired
+         *     * `adjustment` - Adjustment
+         *     * `reversal` - Reversal
+         * @enum {string}
+         */
+        LedgerEntryTypeEnum: "earn" | "redeem" | "expire" | "adjustment" | "reversal";
         /** @description A policy page as customers read it. */
         LegalPage: {
             /** @description terms, privacy, cookies, refunds, accessibility… */
@@ -2771,6 +2940,21 @@ export interface components {
             /** Format: email */
             email: string;
             password: string;
+        };
+        LoyaltyAppliedReward: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        LoyaltyNextTier: {
+            name: string;
+            min_points: number;
+            points_to_go: number;
+        };
+        LoyaltyProgramme: {
+            tiers: components["schemas"]["Tier"][];
+            base_earn_rate: string;
+            expiry_inactive_days: number;
         };
         /** @description Full shape, including everything needed to configure a line. */
         MenuItemDetail: {
@@ -3121,6 +3305,19 @@ export interface components {
             readonly can_edit: boolean;
             /** Format: date-time */
             readonly editable_until: string;
+        };
+        PaginatedLedgerEntryList: {
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cD00ODY%3D"
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+             */
+            previous?: string | null;
+            results: components["schemas"]["LedgerEntry"][];
         };
         PaginatedMenuItemListList: {
             /** @example 123 */
@@ -3485,6 +3682,32 @@ export interface components {
          * @enum {string}
          */
         ReviewStatusEnum: "pending" | "approved" | "rejected";
+        Reward: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            readonly description: string;
+            readonly points_cost: number;
+            readonly reward_type: components["schemas"]["RewardTypeEnum"];
+            readonly reward_type_display: string;
+            readonly value: components["schemas"]["Money"] | null;
+            readonly min_order_value: components["schemas"]["Money"] | null;
+            readonly menu_item: components["schemas"]["RewardMenuItem"] | null;
+            readonly in_stock: boolean;
+            readonly affordable: boolean | null;
+            readonly points_short: number | null;
+        };
+        RewardMenuItem: {
+            slug: string;
+            name: string;
+        };
+        /**
+         * @description * `discount` - Money off
+         *     * `free_delivery` - Free delivery
+         *     * `free_item` - Free dish
+         * @enum {string}
+         */
+        RewardTypeEnum: "discount" | "free_delivery" | "free_item";
         RiderAssignment: {
             order: string;
             rider: {
@@ -3612,6 +3835,17 @@ export interface components {
          * @enum {string}
          */
         TicketStatusEnum: "open" | "pending" | "resolved" | "closed";
+        Tier: {
+            readonly name: string;
+            /** @description Lifetime points needed to reach this tier. */
+            readonly min_points: number;
+            readonly multiplier: string;
+            readonly earn_rate: string;
+            /** @description Points granted on the member's birthday. 0 = none. */
+            readonly birthday_points: number;
+            readonly benefits: string[];
+            readonly colour: string;
+        };
         /** @description Response envelope for ``GET /reservations/book/``.
          *
          *     Declared explicitly so the generated OpenAPI schema — and the frontend types
@@ -5698,6 +5932,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrolmentPaymentVerification"];
+                };
+            };
+        };
+    };
+    loyalty_tiers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoyaltyProgramme"];
+                };
+            };
+        };
+    };
+    loyalty_account_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+        };
+    };
+    loyalty_ledger_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLedgerEntryList"];
+                };
+            };
+        };
+    };
+    loyalty_rewards_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reward"][];
+                };
+            };
+        };
+    };
+    loyalty_rewards_applied_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
+                };
+            };
+        };
+    };
+    loyalty_rewards_redeem_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reward_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
                 };
             };
         };

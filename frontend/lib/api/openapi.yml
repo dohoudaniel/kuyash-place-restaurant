@@ -2420,6 +2420,127 @@ paths:
               schema:
                 $ref: '#/components/schemas/EnrolmentPaymentVerification'
           description: ''
+  /api/v1/loyalty/tiers/:
+    get:
+      operationId: loyalty_tiers_retrieve
+      description: 'Tiers and earning rules. Public: the rewards page shows them to
+        everyone.'
+      summary: Loyalty tiers and rules
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoyaltyProgramme'
+          description: ''
+  /api/v1/loyalty/account/:
+    get:
+      operationId: loyalty_account_retrieve
+      description: Shared cart resolution and rendering.
+      summary: My points, tier and progress
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: ''
+  /api/v1/loyalty/ledger/:
+    get:
+      operationId: loyalty_ledger_list
+      description: Every points movement, newest first.
+      summary: My points history
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLedgerEntryList'
+          description: ''
+  /api/v1/loyalty/rewards/:
+    get:
+      operationId: loyalty_rewards_list
+      description: The catalogue. Signed-in members also see what they can afford.
+      summary: Rewards catalogue
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reward'
+          description: ''
+  /api/v1/loyalty/rewards/applied/:
+    delete:
+      operationId: loyalty_rewards_applied_destroy
+      description: Shared cart resolution and rendering.
+      summary: Remove the reward from my cart
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+  /api/v1/loyalty/rewards/{reward_id}/redeem/:
+    post:
+      operationId: loyalty_rewards_redeem_create
+      description: 409 `insufficient_points` or `reward_unavailable`.
+      summary: Use a reward on my cart
+      parameters:
+      - in: path
+        name: reward_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - loyalty
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
   /api/v1/wishlist/:
     get:
       operationId: wishlist_retrieve
@@ -2786,6 +2907,55 @@ paths:
           description: ''
 components:
   schemas:
+    Account:
+      type: object
+      properties:
+        points_balance:
+          type: integer
+          readOnly: true
+          description: Cached sum of the ledger. Can go negative after a reversal.
+        lifetime_points:
+          type: integer
+          readOnly: true
+          description: Points earned, net of reversed earnings. Decides the tier.
+        tier:
+          allOf:
+          - $ref: '#/components/schemas/Tier'
+          readOnly: true
+          nullable: true
+        next_tier:
+          allOf:
+          - $ref: '#/components/schemas/LoyaltyNextTier'
+          nullable: true
+          readOnly: true
+        progress_percent:
+          type: integer
+          description: How far from the current tier's floor to the next tier's.
+          readOnly: true
+        earn_rate:
+          type: string
+          readOnly: true
+        applied_reward:
+          allOf:
+          - $ref: '#/components/schemas/LoyaltyAppliedReward'
+          nullable: true
+          readOnly: true
+        birthday_on_file:
+          type: boolean
+          readOnly: true
+        is_closed:
+          type: boolean
+          readOnly: true
+      required:
+      - applied_reward
+      - birthday_on_file
+      - earn_rate
+      - is_closed
+      - lifetime_points
+      - next_tier
+      - points_balance
+      - progress_percent
+      - tier
     ActionEnum:
       enum:
       - approve
@@ -3235,6 +3405,14 @@ components:
           $ref: '#/components/schemas/Totals'
         promo_code:
           type: string
+        promo_discount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          description: The promo code's part of totals.discount.
+        loyalty_reward:
+          allOf:
+          - $ref: '#/components/schemas/CartReward'
+          nullable: true
         prices_include_vat:
           type: boolean
         vat_note:
@@ -3269,8 +3447,10 @@ components:
       - id
       - item_count
       - items
+      - loyalty_reward
       - prices_include_vat
       - promo_code
+      - promo_discount
       - totals
       - unavailable
       - vat_note
@@ -3374,6 +3554,33 @@ components:
       - image_url
       - name
       - slug
+    CartReward:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        points_cost:
+          type: integer
+        discount:
+          $ref: '#/components/schemas/Money'
+        free_delivery:
+          type: boolean
+        applied:
+          type: boolean
+        problem:
+          type: string
+          description: Why it takes nothing off right now.
+      required:
+      - applied
+      - discount
+      - free_delivery
+      - id
+      - name
+      - points_cost
+      - problem
     CartUnavailable:
       type: object
       properties:
@@ -5022,6 +5229,57 @@ components:
         * `home` - Home
         * `work` - Work
         * `other` - Other
+    LedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        entry_type:
+          allOf:
+          - $ref: '#/components/schemas/LedgerEntryTypeEnum'
+          readOnly: true
+        entry_type_display:
+          type: string
+          readOnly: true
+        points:
+          type: integer
+          readOnly: true
+          description: Signed. Negative for redemptions, expiry and reversals of earnings.
+        description:
+          type: string
+          readOnly: true
+        order_reference:
+          type: string
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - description
+      - entry_type
+      - entry_type_display
+      - id
+      - order_reference
+      - points
+    LedgerEntryTypeEnum:
+      enum:
+      - earn
+      - redeem
+      - expire
+      - adjustment
+      - reversal
+      type: string
+      description: |-
+        * `earn` - Earned
+        * `redeem` - Redeemed
+        * `expire` - Expired
+        * `adjustment` - Adjustment
+        * `reversal` - Reversal
     LegalPage:
       type: object
       description: A policy page as customers read it.
@@ -5098,6 +5356,45 @@ components:
       required:
       - email
       - password
+    LoyaltyAppliedReward:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    LoyaltyNextTier:
+      type: object
+      properties:
+        name:
+          type: string
+        min_points:
+          type: integer
+        points_to_go:
+          type: integer
+      required:
+      - min_points
+      - name
+      - points_to_go
+    LoyaltyProgramme:
+      type: object
+      properties:
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tier'
+        base_earn_rate:
+          type: string
+        expiry_inactive_days:
+          type: integer
+      required:
+      - base_earn_rate
+      - expiry_inactive_days
+      - tiers
     MenuItemDetail:
       type: object
       description: Full shape, including everything needed to configure a line.
@@ -6012,6 +6309,25 @@ components:
       - rejection_reason
       - status
       - title
+    PaginatedLedgerEntryList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
     PaginatedMenuItemListList:
       type: object
       required:
@@ -6795,6 +7111,88 @@ components:
         * `pending` - Awaiting moderation
         * `approved` - Published
         * `rejected` - Not published
+    Reward:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        points_cost:
+          type: integer
+          readOnly: true
+        reward_type:
+          allOf:
+          - $ref: '#/components/schemas/RewardTypeEnum'
+          readOnly: true
+        reward_type_display:
+          type: string
+          readOnly: true
+        value:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          nullable: true
+          readOnly: true
+        min_order_value:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          nullable: true
+          readOnly: true
+        menu_item:
+          allOf:
+          - $ref: '#/components/schemas/RewardMenuItem'
+          nullable: true
+          readOnly: true
+        in_stock:
+          type: boolean
+          readOnly: true
+        affordable:
+          type: boolean
+          nullable: true
+          readOnly: true
+        points_short:
+          type: integer
+          nullable: true
+          readOnly: true
+      required:
+      - affordable
+      - description
+      - id
+      - in_stock
+      - menu_item
+      - min_order_value
+      - name
+      - points_cost
+      - points_short
+      - reward_type
+      - reward_type_display
+      - value
+    RewardMenuItem:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+      required:
+      - name
+      - slug
+    RewardTypeEnum:
+      enum:
+      - discount
+      - free_delivery
+      - free_item
+      type: string
+      description: |-
+        * `discount` - Money off
+        * `free_delivery` - Free delivery
+        * `free_item` - Free dish
     RiderAssignment:
       type: object
       properties:
@@ -7092,6 +7490,42 @@ components:
         * `pending` - Awaiting customer
         * `resolved` - Resolved
         * `closed` - Closed
+    Tier:
+      type: object
+      properties:
+        name:
+          type: string
+          readOnly: true
+        min_points:
+          type: integer
+          readOnly: true
+          description: Lifetime points needed to reach this tier.
+        multiplier:
+          type: string
+          readOnly: true
+        earn_rate:
+          type: string
+          readOnly: true
+        birthday_points:
+          type: integer
+          readOnly: true
+          description: Points granted on the member's birthday. 0 = none.
+        benefits:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        colour:
+          type: string
+          readOnly: true
+      required:
+      - benefits
+      - birthday_points
+      - colour
+      - earn_rate
+      - min_points
+      - multiplier
+      - name
     TodaysBook:
       type: object
       description: |-

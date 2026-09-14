@@ -660,13 +660,20 @@ Transcripts are in the admin (read-only), which is where to see what the FAQ fai
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/loyalty/account/` | ✓ | Balance, tier, progress to next tier |
-| GET | `/loyalty/ledger/` | ✓ | Paginated entries |
-| GET | `/loyalty/tiers/` | — | Silver / Gold / Platinum + benefits |
-| GET | `/loyalty/rewards/` | ✓ | Catalogue + affordability |
-| POST | `/loyalty/rewards/{id}/redeem/` | ✓ | Applies to the active cart |
+| GET | `/loyalty/account/` | ✓ | ✅ `points_balance`, `lifetime_points`, `tier`, `next_tier {name, min_points, points_to_go}`, `progress_percent`, `earn_rate`, `applied_reward`, `birthday_on_file` |
+| GET | `/loyalty/ledger/` | ✓ | ✅ Cursor-paginated, newest first |
+| GET | `/loyalty/tiers/` | — | ✅ `{tiers: [{name, min_points, multiplier, earn_rate, birthday_points, benefits, colour}], base_earn_rate, expiry_inactive_days}` |
+| GET | `/loyalty/rewards/` | — | ✅ Active catalogue. Public (the page markets it); `affordable` / `points_short` are null unless signed in |
+| POST | `/loyalty/rewards/{id}/redeem/` | ✓ | ✅ Applies the reward to the active cart → Cart. 409 `insufficient_points` · `reward_unavailable` |
+| DELETE | `/loyalty/rewards/applied/` | ✓ | ✅ Removes it → Cart |
 
-> Replaces `const [signedUp, setSignedUp] = useState(false)` on the rewards page.
+- **Earning (LOY-2):** on `delivered`, `floor((subtotal − discounts) / LOYALTY_KOBO_PER_POINT) × tier multiplier`. Delivery, service charge and tips earn nothing. Guests earn nothing.
+- **Spending (LOY-4):** a reward applied to the cart is priced like a promo code: the cart gains `promo_discount` and `loyalty_reward {id, name, points_cost, discount, free_delivery, applied, problem}`, and `totals.discount` is their sum. A reward whose conditions stop holding stays attached with a `problem` and takes nothing off. Points are spent inside `place_order`, re-checked under the account lock.
+- **Reversal (LOY-5):** an order that ends `refunded`, `cancelled`, `rejected`, `expired` or `failed` has its earned points reversed and any spent reward points returned (stock restored). Partial refunds do not move points.
+- **Birthdays (LOY-6):** daily task, once per member per year, at their tier's `birthday_points`; 29 February is celebrated on the 28th.
+- **Expiry:** daily task; a positive balance with no earning or redemption for `LOYALTY_EXPIRY_INACTIVE_DAYS` (default 365) is expired.
+- **Erasure:** the balance is expired and the account closed; the ledger stays.
+- Seeded tiers keep the advertised thresholds and multipliers only. Seeded rewards are **inactive** until staff review them; the page's invented perks (concierge, catering discounts, referral and anniversary points) are not represented.
 
 ---
 
@@ -711,6 +718,7 @@ Photos are uploaded in the Django admin (branch preselected, thumbnails in the l
 | `POST /support/chat/sessions/{id}/messages/` | 30/min per user or IP |
 | `POST /support/chat/sessions/{id}/escalate/` | 3/hour per user or IP |
 | `POST /academy/enrolments/` | 10/hour per user or IP |
+| `POST /loyalty/rewards/{id}/redeem/` | global user rate (sign-in required; nothing to brute-force) |
 | Webhooks | unlimited, signature-gated |
 
 429 responses carry `Retry-After`.

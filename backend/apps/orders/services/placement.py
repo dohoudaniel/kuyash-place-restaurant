@@ -193,7 +193,7 @@ def place_order(
             )
 
     # ── Promo ledger ──────────────────────────────────────────────────────────
-    if cart.promo_code is not None and priced.discount_total:
+    if cart.promo_code is not None and priced.promo_discount:
         from apps.promotions.models import PromoRedemption, RedemptionStatus
 
         PromoRedemption.objects.create(
@@ -201,9 +201,15 @@ def place_order(
             user=cart.user,
             order=order,
             order_reference=order.reference,
-            discount_amount=priced.discount_total,
+            discount_amount=priced.promo_discount,
             status=RedemptionStatus.PENDING,
         )
+
+    # ── Loyalty reward: points are spent now, returned if the order fails ─────
+    if priced.reward is not None and priced.reward["applied"]:
+        from apps.loyalty.services import spend_reward_for_order
+
+        spend_reward_for_order(cart=cart, order=order, discount=priced.reward["discount_amount"])
 
     # ── ETA ───────────────────────────────────────────────────────────────────
     zone_minutes = address.zone.estimated_minutes if address is not None and address.zone else None

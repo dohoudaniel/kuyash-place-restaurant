@@ -66,6 +66,14 @@ class Cart(TimeStampedModel):
         related_name="carts",
         help_text="Applied but not yet redeemed.",
     )
+    loyalty_reward = models.ForeignKey(
+        "loyalty.Reward",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="carts",
+        help_text="Applied to the cart; the points are spent when the order is placed.",
+    )
     tip = MoneyField(help_text="Gratuity in kobo. Not subject to VAT.")
 
     expires_at = models.DateTimeField(default=timezone.now)

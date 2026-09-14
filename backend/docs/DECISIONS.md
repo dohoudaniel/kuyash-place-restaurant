@@ -208,6 +208,7 @@ The cost is a dev/prod database divergence. It is bounded and managed:
 | OD-6 | Tip presets — the current ₦2/₦5/₦10 are dollar figures | Before Gate 1 | Product owner |
 | **OD-7** | **Should guests be able to choose delivery?** Addresses belong to accounts today, so guests get pickup or must sign in. Allowing it needs a guest address on the cart/order. | Before Gate 1 | Product owner |
 | **OD-8** | **Cash-on-delivery limits.** PAYMENTS.md §5.3 specifies a cap and a verified account; neither is enforced. Pick the cap (or none). | Before Gate 1 | Product owner |
+| **OD-9** | **Rewards programme terms.** Confirm the tier thresholds and multipliers, set a birthday bonus (seeded at 0), and review and publish the rewards (seeded inactive). The old page's perks — free delivery for Gold, catering discounts, concierge, referral and anniversary points — are not built; add them only as real features. | Before launch of Rewards | Product owner |
 
 ### OD-1 — still open, but no longer silent
 
