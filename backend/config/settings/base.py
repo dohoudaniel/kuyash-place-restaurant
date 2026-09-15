@@ -434,7 +434,19 @@ CELERY_BEAT_SCHEDULE = {
         "task": "loyalty.expire_inactive",
         "schedule": 86400.0,  # daily
     },
+    # Operational watchers (apps/common/tasks.py, DEPLOYMENT.md §9).
+    "ops-heartbeat": {"task": "ops.heartbeat", "schedule": 60.0},
+    "ops-watch": {"task": "ops.watch", "schedule": 600.0},
+    "ops-daily-report": {"task": "ops.daily_report", "schedule": 86400.0},
 }
+
+# Alert thresholds. "Page" alerts are ERROR logs, which Sentry turns into events.
+OPS_STALE_PAYMENT_ALERT = env.int("OPS_STALE_PAYMENT_ALERT", default=5)
+OPS_STUCK_ORDER_MINUTES = env.int("OPS_STUCK_ORDER_MINUTES", default=60)
+OPS_QUEUE_DEPTH_WARN = env.int("OPS_QUEUE_DEPTH_WARN", default=100)
+OPS_BEAT_STALE_SECONDS = env.int("OPS_BEAT_STALE_SECONDS", default=300)
+# Extra recipients for the daily stuck-orders email, besides the managers group.
+OPS_ALERT_EMAILS = env.list("OPS_ALERT_EMAILS", default=[])
 
 # ── Sessions & CSRF ───────────────────────────────────────────────────────────
 SESSION_COOKIE_NAME = "kuyash_session"

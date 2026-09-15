@@ -35,6 +35,12 @@ def health_check(request: HttpRequest) -> JsonResponse:
         checks["cache"] = f"error: {exc.__class__.__name__}"
 
     checks["celery"] = "eager" if settings.CELERY_TASK_ALWAYS_EAGER else "broker"
+    if not settings.CELERY_TASK_ALWAYS_EAGER:
+        from apps.common.tasks import scheduler_status
+
+        # Reported, never an "error": a stopped beat must be fixed, but restarting
+        # the web process (what a failing probe triggers) would not fix it.
+        checks["scheduler"] = scheduler_status()
 
     healthy = all(not str(value).startswith("error") for value in checks.values())
     return JsonResponse(

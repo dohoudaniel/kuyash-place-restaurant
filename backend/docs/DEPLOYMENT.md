@@ -316,7 +316,18 @@ The drill checks the checksum, refuses to restore over `DATABASE_URL` (compared 
 | Disk / connection pool | > 80% | Warn |
 | Certificate expiry | < 14 days | Warn |
 
-`/health/` returns DB, Redis and Celery status for the platform's health check.
+`/health/` returns database and cache status (503 if either fails) and, with a broker, `scheduler`: `ok`, `not seen` or `stale: last run Ns ago` from the beat heartbeat. A stale scheduler does not fail the probe — restarting web would not fix beat — so alert on the value.
+
+The alerts above come from `apps/common/tasks.py` on the beat schedule. **Page** alerts are `ERROR` logs, which Sentry records as events; route on the message:
+
+| Message | Task | Condition | Setting |
+|---|---|---|---|
+| `alert_stale_payments` | `ops.watch` (10 min) | more than N transactions still unverified 30 min after starting | `OPS_STALE_PAYMENT_ALERT` (5) |
+| `alert_orders_stuck` | `ops.watch` | orders in `confirmed`/`preparing` longer than N minutes | `OPS_STUCK_ORDER_MINUTES` (60) |
+| `alert_queue_depth` (warning) | `ops.watch` | Redis `celery` queue longer than N | `OPS_QUEUE_DEPTH_WARN` (100) |
+| daily email | `ops.daily_report` | stuck orders, sent to the managers group and `OPS_ALERT_EMAILS` | — |
+
+5xx rate, p95 latency, disk, pool and certificate alerts come from the platform and Sentry performance, not from code. After setting `SENTRY_DSN`, run `python manage.py sentry_check` and confirm the probe event arrives with its secrets redacted.
 
 ---
 
