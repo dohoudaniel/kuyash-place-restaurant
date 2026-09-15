@@ -12,5 +12,5 @@ export function safeNext(value: string | null | undefined, fallback = "/"): stri
   return value;
 }
 
-/** Routes that need a signed-in customer. Kept in one place for proxy and pages. */
-export const PROTECTED_PATHS = ["/account", "/orders"] as const;
+/** Routes that need a signed-in user. Kept in one place for proxy and pages. */
+export const PROTECTED_PATHS = ["/account", "/orders", "/kitchen"] as const;

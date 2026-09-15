@@ -27,7 +27,12 @@ const WS_ORIGIN = API_ORIGIN.replace(/^http/, "ws");
  * Keep in step with PROTECTED_PATHS in lib/auth/next.ts.
  */
 function isProtected(pathname: string): boolean {
-  return pathname === "/orders" || pathname === "/account" || pathname.startsWith("/account/");
+  return (
+    pathname === "/orders" ||
+    pathname === "/kitchen" ||
+    pathname === "/account" ||
+    pathname.startsWith("/account/")
+  );
 }
 
 export function contentSecurityPolicy(nonce: string, isDev = process.env.NODE_ENV === "development"): string {

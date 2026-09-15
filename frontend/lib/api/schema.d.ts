@@ -773,6 +773,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kds/riders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Riders
+         * @description Riders the kitchen can hand a ready order to, on shift first.
+         */
+        get: operations["kds_riders_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kds/items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dishes and availability
+         * @description Every dish on sale, including the ones 86'd, so the kitchen can bring them back.
+         *
+         *     The public menu hides sold-out dishes; this list is how the kitchen sees them.
+         */
+        get: operations["kds_items_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kds/orders/{reference}/assign-rider/": {
         parameters: {
             query?: never;
@@ -2973,8 +3015,33 @@ export interface components {
             variant?: string | null;
             modifiers?: components["schemas"]["ModifierChoiceRequest"][];
         };
+        KDSItem: {
+            slug: string;
+            name: string;
+            category: string;
+            is_available_now: boolean;
+        };
+        KDSItems: {
+            items: components["schemas"]["KDSItem"][];
+        };
         KDSQueue: {
             orders: components["schemas"]["KDSTicket"][];
+            reject_reasons: components["schemas"]["KDSRejectReason"][];
+        };
+        KDSRejectReason: {
+            code: string;
+            title: string;
+        };
+        KDSRider: {
+            id: string;
+            name: string;
+            phone: string;
+            vehicle_type: string;
+            is_on_shift: boolean;
+            zone: string;
+        };
+        KDSRiders: {
+            riders: components["schemas"]["KDSRider"][];
         };
         KDSSummary: {
             counts: {
@@ -2998,14 +3065,25 @@ export interface components {
             payment_status: string;
             payment_method: string;
             requires_cash_collection: boolean;
-            items: {
-                [key: string]: unknown;
-            }[];
+            rider: components["schemas"]["KDSTicketRider"] | null;
+            items: components["schemas"]["KDSTicketLine"][];
             customer_note: string;
-            customer: {
-                [key: string]: unknown;
-            };
+            customer: components["schemas"]["KDSTicketCustomer"];
             grand_total: components["schemas"]["Money"];
+        };
+        KDSTicketCustomer: {
+            name: string;
+            phone: string;
+        };
+        KDSTicketLine: {
+            quantity: number;
+            name: string;
+            variant: string;
+            modifiers: string[];
+            special_instructions: string;
+        };
+        KDSTicketRider: {
+            name: string;
         };
         /**
          * @description * `home` - Home
@@ -5031,6 +5109,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KDSSummary"];
+                };
+            };
+        };
+    };
+    kds_riders_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KDSRiders"];
+                };
+            };
+        };
+    };
+    kds_items_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KDSItems"];
                 };
             };
         };

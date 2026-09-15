@@ -147,9 +147,9 @@ Sentry: `send_default_pii=False`, with a `before_send` scrubber for `password`, 
 Phase 1 does not ship until every box is ticked:
 
 - [x] Card fields deleted from the frontend; CI grep gate passing
-- [ ] `manage.py check --deploy` clean
-- [ ] `DEBUG = False`, `ALLOWED_HOSTS` explicit, HSTS on
-- [ ] All secrets in a secret manager; `gitleaks` clean on full history
+- [x] `manage.py check --deploy` clean — at `--fail-level WARNING` with the real `config.settings.prod`, both in CI (Deployment check step) and in the suite (`common/tests/test_prod_settings.py`, which loads prod settings in a fresh interpreter). Re-run with the production environment's own values at deploy
+- [x] `DEBUG = False`, `ALLOWED_HOSTS` explicit, HSTS on — `config/settings/prod.py`, proven by `common/tests/test_prod_settings.py`: DEBUG off, hosts exactly as configured (no default), HSTS one year with subdomains, SSL redirect, secure cookies, `X-Frame-Options: DENY`; a missing secret key, hosts, database or Redis URL stops the process
+- [ ] All secrets in a secret manager; `gitleaks` clean on full history — *history clean*: gitleaks 8.28.0 over all 34 commits on 2026-09-15 found no leaks (and CI runs gitleaks on every push); no `.env` file was ever committed. Tick once production secrets live in the platform's secret store
 - [x] Webhook signature verification tested against forged payloads — `payments/tests/test_webhooks.py` (forged, invalid and missing signatures rejected and recorded) and `test_webhook_edges.py` (replayed and concurrent duplicate deliveries)
 - [x] Amount-mismatch path tested — order stays unpaid — `payments/tests/test_payment_flows.py` (mismatch record survives the raise; reconciliation survives a mismatch) and `test_webhooks.py` (logged as critical)
 - [x] Idempotency verified under concurrent double-submit — `orders/tests/test_concurrency.py` (one Idempotency-Key admits one request; concurrent webhook deliveries settle once) and `test_orders_api.py` (double submit creates one order). The row-lock tests run in the CI Postgres job, which fails if any of them is skipped

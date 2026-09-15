@@ -222,6 +222,22 @@ One screen the kitchen keeps open, polling `GET /api/v1/kds/orders/` every 10 se
 | KDS-H | Degrades safely on connection loss: shows last-known state with a stale banner, never a blank screen |
 | KDS-I | Every action attributed to the acting staff user |
 
+**The screen** is `/kitchen` in the frontend (`components/features/kitchen/`), full screen without the customer site's navigation, for users in the `kitchen` or `managers` group. How each requirement is met:
+
+| Req | Where |
+|---|---|
+| KDS-A | Four columns — New, Cooking, Ready, Out for delivery — oldest first, with a ticking elapsed timer |
+| KDS-B | The card border and timer turn red when the API flags `is_late` |
+| KDS-C | One button per move: Accept, Start cooking, Mark ready, Out for delivery / Collected, Delivered |
+| KDS-D | Reject opens the fixed list from the queue's `reject_reasons`; the API refuses a rejection without one, and records the reason as the event note the customer is sent |
+| KDS-E | "Sold out" in the header opens every dish (`GET /kds/items/`, including 86'd ones); one tap toggles it |
+| KDS-F | Cash-on-delivery tickets carry an amber "collect ₦…" banner |
+| KDS-G | A chime for each newly paid order, once someone taps "Turn sound on" (browsers block sound until a tap) |
+| KDS-H | Live over `ws/kds/`; on loss it polls every 10 s, keeps the last tickets on screen under a stale banner, and retries the socket every 30 s |
+| KDS-I | Actions are the signed-in staff user's own requests; the event log records them |
+
+Ready delivery orders can be given a rider from `GET /kds/riders/` (on shift first); the assigned rider shows on the ticket.
+
 ### 4.4 "86 this item"
 
 ```

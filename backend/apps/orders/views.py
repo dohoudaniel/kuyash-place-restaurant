@@ -25,9 +25,12 @@ from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
 from apps.orders.models import EventSource, Order, OrderStatus
 from apps.orders.serializers import (
+    REJECT_REASONS,
     CancelSerializer,
     ItemAvailabilitySerializer,
+    KDSItemsSerializer,
     KDSQueueSerializer,
+    KDSRidersSerializer,
     KDSSummarySerializer,
     KDSTicketSerializer,
     OrderDetailResponseSerializer,
@@ -35,6 +38,7 @@ from apps.orders.serializers import (
     PlaceOrderSerializer,
     RiderAssignmentSerializer,
     kds_ticket,
+    reject_reason_choices,
     serialise_order,
 )
 from apps.orders.services.placement import place_order
@@ -261,7 +265,12 @@ class KDSQueueView(APIView):
             .prefetch_related("items__modifiers")
             .order_by("placed_at", "created_at")
         )
-        return Response({"orders": [kds_ticket(order) for order in orders]})
+        return Response(
+            {
+                "orders": [kds_ticket(order) for order in orders],
+                "reject_reasons": reject_reason_choices(),
+            }
+        )
 
 
 class KDSTransitionView(APIView):
@@ -295,12 +304,21 @@ class KDSTransitionView(APIView):
             if not target:
                 raise DomainError(f"Unknown action “{action}”.")
 
+        note = str(request.data.get("note", "") or "").strip()
+        if target == OrderStatus.REJECTED:
+            # KDS-D: a rejection always carries a reason from the fixed list, so
+            # the customer is told why rather than receiving a blank.
+            reason = REJECT_REASONS.get(str(request.data.get("reason", "")))
+            if reason is None:
+                raise DomainError("Choose why the order is being rejected.")
+            note = f"{reason}. {note}" if note else reason
+
         transition(
             order,
             target,
             actor=request.user,
             source=EventSource.STAFF,
-            note=request.data.get("note", ""),
+            note=note,
         )
         order.refresh_from_db()
         return Response(kds_ticket(order))
@@ -385,5 +403,72 @@ class KDSSummaryView(APIView):
                     counts.get(value, 0)
                     for value in [OrderStatus.CONFIRMED, OrderStatus.PREPARING, OrderStatus.READY]
                 ),
+            }
+        )
+
+
+class KDSRidersView(APIView):
+    """Riders the kitchen can hand a ready order to, on shift first."""
+
+    permission_classes = [IsKitchenStaff]
+
+    @extend_schema(summary="Riders", responses={200: KDSRidersSerializer}, tags=["kds"])
+    def get(self, request: Request) -> Response:
+        from apps.delivery.models import RiderProfile
+
+        riders = (
+            RiderProfile.objects.filter(user__is_active=True)
+            .select_related("user", "current_zone")
+            .order_by("-is_on_shift", "user__full_name")
+        )
+        return Response(
+            {
+                "riders": [
+                    {
+                        "id": str(rider.pk),
+                        "name": rider.user.get_short_name(),
+                        "phone": rider.user.phone,
+                        "vehicle_type": rider.vehicle_type,
+                        "is_on_shift": rider.is_on_shift,
+                        "zone": rider.current_zone.name if rider.current_zone else "",
+                    }
+                    for rider in riders
+                ]
+            }
+        )
+
+
+class KDSItemsView(APIView):
+    """Every dish on sale, including the ones 86'd, so the kitchen can bring them back.
+
+    The public menu hides sold-out dishes; this list is how the kitchen sees them.
+    """
+
+    permission_classes = [IsKitchenStaff]
+
+    @extend_schema(
+        summary="Dishes and availability", responses={200: KDSItemsSerializer}, tags=["kds"]
+    )
+    def get(self, request: Request) -> Response:
+        from apps.catalog.models import MenuItem
+
+        items = (
+            MenuItem.objects.filter(
+                branch=get_current_branch(), is_active=True, needs_repricing=False
+            )
+            .select_related("category")
+            .order_by("category__display_order", "category__name", "name")
+        )
+        return Response(
+            {
+                "items": [
+                    {
+                        "slug": item.slug,
+                        "name": item.name,
+                        "category": item.category.name if item.category else "",
+                        "is_available_now": item.is_available_now,
+                    }
+                    for item in items
+                ]
             }
         )

@@ -187,8 +187,8 @@ Notes:
 - [x] 100% coverage on money, tax, discount, payment and state-machine logic — enforced in CI: `apps.common.money`, and the money path (`carts`, `promotions`, `orders` and `payments` services, payment tasks and provider adapters, `loyalty.services`, `academy.services`) with `--cov-fail-under=100`
 - [x] Webhook forgery, amount-mismatch and replay tests passing — `payments/tests/test_webhooks.py`, `test_webhook_edges.py`, `test_payment_flows.py` (see `SECURITY.md` §8)
 - [ ] Backup restore actually performed on a staging database — run `scripts/restore-drill.sh` (see `DEPLOYMENT.md` §8.2) and record the date there; the scripts and `verify_restore` are built and exercised in CI
-- [ ] Staff trained on the KDS; a dry-run service completed
-- [ ] Phase 2/3 features hidden or marked "coming soon" — **not faked**
+- [ ] Staff trained on the KDS; a dry-run service completed — the screen now exists at `/kitchen` (ORDERS_AND_FULFILMENT.md §4); training and the dry run are the remaining work
+- [x] Phase 2/3 features hidden or marked "coming soon" — **not faked** — every Phase 2 and 3 feature is built on the API (Gate 3 sweep, FRONTEND_INTEGRATION.md §5.10); a 2026-09-15 sweep of `frontend/` found no simulated delays, random data or mock content (remaining timers are UI feedback and payment/tracking polling), and `alert()` is blocked in CI
 
 ---
 

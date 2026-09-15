@@ -3,9 +3,7 @@ import { connection } from "next/server";
 import { Inter, Playfair_Display, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import Navbar from "@/components/layouts/navbar/Navbar";
-import Footer from "@/components/layouts/footer";
-import ChatButton from "@/components/features/chat";
+import SiteChrome from "@/components/layouts/SiteChrome";
 import AuthProvider from "@/components/providers/AuthProvider";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -43,10 +41,7 @@ export default async function RootLayout({
     <html lang="en" className={cn("h-full", "antialiased", inter.variable, playfair.variable, "font-sans", geist.variable)}>
       <body className="min-h-full flex flex-col font-[var(--font-inter)]">
         <AuthProvider>
-          <Navbar />
-          {children}
-          <Footer />
-          <ChatButton />
+          <SiteChrome>{children}</SiteChrome>
         </AuthProvider>
       </body>
     </html>

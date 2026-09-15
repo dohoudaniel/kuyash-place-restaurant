@@ -796,8 +796,9 @@ Daphne with Redis as the channel layer (DEPLOYMENT.md).
 on the socket (a guest authenticates with their stored token in the first
 message), stops when the order is final, and falls back to 15-second polling
 whenever the socket is unavailable. `/orders/[id]` uses it and shows a "Live"
-badge while connected. There is still no kitchen display screen in the
-frontend; `ws/kds/` is ready for one.
+badge while connected. The kitchen display is `/kitchen`
+(`components/features/kitchen/`, `lib/kitchen/useKitchenQueue.ts`): live over
+`ws/kds/` with a 10-second polling fallback; see ORDERS_AND_FULFILMENT.md §4.
 
 ---
 

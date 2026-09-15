@@ -1042,6 +1042,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/KDSSummary'
           description: ''
+  /api/v1/kds/riders/:
+    get:
+      operationId: kds_riders_retrieve
+      description: Riders the kitchen can hand a ready order to, on shift first.
+      summary: Riders
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KDSRiders'
+          description: ''
+  /api/v1/kds/items/:
+    get:
+      operationId: kds_items_retrieve
+      description: |-
+        Every dish on sale, including the ones 86'd, so the kitchen can bring them back.
+
+        The public menu hides sold-out dishes; this list is how the kitchen sees them.
+      summary: Dishes and availability
+      tags:
+      - kds
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KDSItems'
+          description: ''
   /api/v1/kds/orders/{reference}/assign-rider/:
     post:
       operationId: kds_orders_assign_rider_create
@@ -5371,6 +5406,31 @@ components:
             $ref: '#/components/schemas/ModifierChoiceRequest'
       required:
       - menu_item
+    KDSItem:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        is_available_now:
+          type: boolean
+      required:
+      - category
+      - is_available_now
+      - name
+      - slug
+    KDSItems:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/KDSItem'
+      required:
+      - items
     KDSQueue:
       type: object
       properties:
@@ -5378,8 +5438,54 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/KDSTicket'
+        reject_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/KDSRejectReason'
       required:
       - orders
+      - reject_reasons
+    KDSRejectReason:
+      type: object
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+      required:
+      - code
+      - title
+    KDSRider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        vehicle_type:
+          type: string
+        is_on_shift:
+          type: boolean
+        zone:
+          type: string
+      required:
+      - id
+      - is_on_shift
+      - name
+      - phone
+      - vehicle_type
+      - zone
+    KDSRiders:
+      type: object
+      properties:
+        riders:
+          type: array
+          items:
+            $ref: '#/components/schemas/KDSRider'
+      required:
+      - riders
     KDSSummary:
       type: object
       properties:
@@ -5421,16 +5527,18 @@ components:
           type: string
         requires_cash_collection:
           type: boolean
+        rider:
+          allOf:
+          - $ref: '#/components/schemas/KDSTicketRider'
+          nullable: true
         items:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/KDSTicketLine'
         customer_note:
           type: string
         customer:
-          type: object
-          additionalProperties: {}
+          $ref: '#/components/schemas/KDSTicketCustomer'
         grand_total:
           $ref: '#/components/schemas/Money'
       required:
@@ -5446,8 +5554,47 @@ components:
       - placed_at
       - reference
       - requires_cash_collection
+      - rider
       - status
       - zone
+    KDSTicketCustomer:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+      required:
+      - name
+      - phone
+    KDSTicketLine:
+      type: object
+      properties:
+        quantity:
+          type: integer
+        name:
+          type: string
+        variant:
+          type: string
+        modifiers:
+          type: array
+          items:
+            type: string
+        special_instructions:
+          type: string
+      required:
+      - modifiers
+      - name
+      - quantity
+      - special_instructions
+      - variant
+    KDSTicketRider:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+      - name
     LabelEnum:
       enum:
       - home

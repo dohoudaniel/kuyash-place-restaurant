@@ -137,7 +137,7 @@ def test_rejecting_a_ticket_notifies_the_customer(api_client, kitchen_user, paid
         reverse(
             "v1:kds:transition", kwargs={"reference": paid_order.reference, "action": "reject"}
         ),
-        {"note": "Out of beef"},
+        {"reason": "item_unavailable", "note": "Out of beef"},
         format="json",
     )
     assert response.status_code == 200

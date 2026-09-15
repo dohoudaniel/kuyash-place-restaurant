@@ -257,6 +257,30 @@ def serialise_order(order: Order, *, include_token: bool = False) -> dict[str, A
     return payload
 
 
+#: Why the kitchen may reject an order (KDS-D). A fixed list, so the customer
+#: is always told something true and useful, never a blank.
+REJECT_REASONS: dict[str, str] = {
+    "item_unavailable": "An item in the order is no longer available",
+    "kitchen_closing": "The kitchen is closing",
+    "too_busy": "The kitchen is too busy to prepare it in time",
+    "cannot_deliver": "We cannot deliver to this address",
+    "suspicious_order": "The order could not be verified",
+}
+
+
+def reject_reason_choices() -> list[dict[str, str]]:
+    return [{"code": code, "title": title} for code, title in REJECT_REASONS.items()]
+
+
+def _kds_rider(order: Order) -> dict[str, str] | None:
+    from apps.delivery.models import DeliveryAssignment
+
+    assignment = (
+        DeliveryAssignment.objects.filter(order=order).select_related("rider__user").first()
+    )
+    return {"name": assignment.rider.user.get_short_name()} if assignment else None
+
+
 def kds_ticket(order: Order) -> dict[str, Any]:
     """The kitchen's view of an order.
 
@@ -283,6 +307,7 @@ def kds_ticket(order: Order) -> dict[str, Any]:
         "payment_status": order.payment_status,
         "payment_method": order.payment_method,
         "requires_cash_collection": order.payment_method == "cash",
+        "rider": _kds_rider(order),
         "items": [
             {
                 "quantity": line.quantity,
@@ -325,6 +350,32 @@ class OrderDetailResponseSerializer(serializers.Serializer):
         ref_name = "OrderDetail"
 
 
+class KDSTicketRiderSerializer(serializers.Serializer):
+    name = serializers.CharField()
+
+    class Meta:
+        ref_name = "KDSTicketRider"
+
+
+class KDSTicketLineSerializer(serializers.Serializer):
+    quantity = serializers.IntegerField()
+    name = serializers.CharField()
+    variant = serializers.CharField(allow_blank=True)
+    modifiers = serializers.ListField(child=serializers.CharField())
+    special_instructions = serializers.CharField(allow_blank=True)
+
+    class Meta:
+        ref_name = "KDSTicketLine"
+
+
+class KDSTicketCustomerSerializer(serializers.Serializer):
+    name = serializers.CharField(allow_blank=True)
+    phone = serializers.CharField(allow_blank=True)
+
+    class Meta:
+        ref_name = "KDSTicketCustomer"
+
+
 class KDSTicketSerializer(serializers.Serializer):
     """One kitchen ticket."""
 
@@ -338,17 +389,27 @@ class KDSTicketSerializer(serializers.Serializer):
     payment_status = serializers.CharField()
     payment_method = serializers.CharField()
     requires_cash_collection = serializers.BooleanField()
-    items = serializers.ListField(child=serializers.DictField())
+    rider = KDSTicketRiderSerializer(allow_null=True)
+    items = KDSTicketLineSerializer(many=True)
     customer_note = serializers.CharField(allow_blank=True)
-    customer = serializers.DictField()
+    customer = KDSTicketCustomerSerializer()
     grand_total = MoneySerializer()
 
     class Meta:
         ref_name = "KDSTicket"
 
 
+class KDSRejectReasonSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    title = serializers.CharField()
+
+    class Meta:
+        ref_name = "KDSRejectReason"
+
+
 class KDSQueueSerializer(serializers.Serializer):
     orders = KDSTicketSerializer(many=True)
+    reject_reasons = KDSRejectReasonSerializer(many=True)
 
     class Meta:
         ref_name = "KDSQueue"
@@ -378,3 +439,39 @@ class ItemAvailabilitySerializer(serializers.Serializer):
 
     class Meta:
         ref_name = "ItemAvailability"
+
+
+class KDSRiderSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    phone = serializers.CharField(allow_blank=True)
+    vehicle_type = serializers.CharField()
+    is_on_shift = serializers.BooleanField()
+    zone = serializers.CharField(allow_blank=True)
+
+    class Meta:
+        ref_name = "KDSRider"
+
+
+class KDSRidersSerializer(serializers.Serializer):
+    riders = KDSRiderSerializer(many=True)
+
+    class Meta:
+        ref_name = "KDSRiders"
+
+
+class KDSItemSerializer(serializers.Serializer):
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    category = serializers.CharField()
+    is_available_now = serializers.BooleanField()
+
+    class Meta:
+        ref_name = "KDSItem"
+
+
+class KDSItemsSerializer(serializers.Serializer):
+    items = KDSItemSerializer(many=True)
+
+    class Meta:
+        ref_name = "KDSItems"

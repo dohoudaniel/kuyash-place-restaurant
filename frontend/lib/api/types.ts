@@ -24,6 +24,16 @@ export type PaymentInitialised = Schemas["PaymentInitialised"];
 
 // Orders
 export type OrderStatus = Schemas["OrderStatusEnum"];
+
+// Kitchen Display System
+export type KDSTicket = Schemas["KDSTicket"];
+export type KDSQueue = Schemas["KDSQueue"];
+export type KDSSummary = Schemas["KDSSummary"];
+export type KDSRejectReason = Schemas["KDSRejectReason"];
+export type KDSRider = Schemas["KDSRider"];
+export type KDSRiders = Schemas["KDSRiders"];
+export type KDSItem = Schemas["KDSItem"];
+export type KDSItems = Schemas["KDSItems"];
 export type ReorderResponse = Schemas["ReorderResponse"];
 
 // Content

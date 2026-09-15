@@ -525,13 +525,15 @@ All require `kitchen`, `managers` or `admin` group membership.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/kds/orders/` | Live queue: `?status=confirmed,preparing,ready` |
+| GET | `/kds/orders/` | Live queue: `?status=confirmed,preparing,ready`. Also returns `reject_reasons: [{code, title}]` — the only reasons a rejection accepts. Each ticket carries typed `items` (quantity, name, variant, modifiers, special_instructions), `customer` and `rider: {name} \| null` |
 | GET | `/kds/orders/{reference}/` | Full ticket with modifiers and instructions |
 | POST | `/kds/orders/{reference}/accept/` | → `confirmed`; optional `prep_minutes` override |
-| POST | `/kds/orders/{reference}/reject/` | → `rejected` + reason; **auto-refunds prepaid orders** |
+| POST | `/kds/orders/{reference}/reject/` | `{ "reason": "<code>", "note"?: "…" }` → `rejected`; a missing or unknown reason code is refused. The reason's title (plus any note) is the event note the customer is told; **auto-refunds prepaid orders** |
 | POST | `/kds/orders/{reference}/advance/` | `{ "to": "preparing" \| "ready" \| "out_for_delivery" \| "delivered" }` |
 | POST | `/kds/orders/{reference}/assign-rider/` | `{ "rider": "<uuid>" }` |
 | POST | `/kds/items/{slug}/availability/` | `{ "is_available_now": false }` — "86 this item" |
+| GET | `/kds/items/` | Every priced dish with `is_available_now`, **including 86'd ones** (the public menu hides them), by category |
+| GET | `/kds/riders/` | Active riders — `id`, `name`, `phone`, `vehicle_type`, `is_on_shift`, `zone` — on shift first |
 | GET | `/kds/summary/` | Counts by status, open tickets, today's revenue — ✅ revenue uses the sales-report definition on the restaurant's local day (it summed unpaid kitchen orders by UTC date) |
 | GET | `/kds/reservations/today/` | 🟡 Today's book |
 
