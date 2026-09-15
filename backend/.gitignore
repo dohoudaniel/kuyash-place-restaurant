@@ -17,3 +17,8 @@ htmlcov/
 .ruff_cache/
 celerybeat-schedule*
 *.log
+
+# Database dumps from scripts/backup-db.sh hold customer data.
+/backups/
+*.dump
+*.dump.sha256

@@ -139,6 +139,24 @@ jobs:
             exit 1
           fi
 
+      - name: Backup and restore drill
+        # DEPLOYMENT.md §8: a backup you have never restored is not a backup. This
+        # proves the scripts on every change — dump a migrated, seeded database,
+        # restore it into an empty one, and run verify_restore against the copy.
+        # The drill on real staging data is still a launch task.
+        env:
+          DATABASE_URL: postgres://kuyash:kuyash@localhost:5432/kuyash_test
+          PGPASSWORD: kuyash
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16 >/dev/null
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          python manage.py migrate --noinput
+          python manage.py seed_initial
+          ./scripts/backup-db.sh "$RUNNER_TEMP/backups"
+          psql "$DATABASE_URL" -c "CREATE DATABASE kuyash_restore"
+          dump="$(ls "$RUNNER_TEMP"/backups/kuyash-*.dump)"
+          ./scripts/restore-drill.sh "$dump" postgres://kuyash:kuyash@localhost:5432/kuyash_restore
+
   security:
     name: Security gates
     runs-on: ubuntu-latest

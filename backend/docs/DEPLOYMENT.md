@@ -266,6 +266,41 @@ Expand-and-contract: add nullable columns first; backfill in a data migration; s
 
 **A backup you have never restored is not a backup.** Restore to a scratch database quarterly and record the date. This is a Gate 1 checklist item.
 
+### 8.1 Portable dump
+
+The platform's daily backups and PITR are the primary copy. Take a portable one before a risky migration, to keep off-platform, or for a drill:
+
+```bash
+DATABASE_URL=postgres://… ./scripts/backup-db.sh            # → backups/kuyash-<UTC>.dump + .sha256
+```
+
+It uses `pg_dump` custom format without owners or grants (restorable into any role's database), and reads the archive back to confirm it is complete and contains `django_migrations`. Dumps hold customer data: `backups/` and `*.dump` are git-ignored; store them encrypted and delete them after the retention period.
+
+### 8.2 Restore drill
+
+```bash
+# An EMPTY scratch database, never the live one; same SECRET_KEY as the source.
+./scripts/restore-drill.sh backups/kuyash-<UTC>.dump postgres://…/kuyash_restore --max-age-hours 26
+```
+
+The drill checks the checksum, refuses to restore over `DATABASE_URL` (compared without credentials, scheme spelling or query string) or into a database that already has tables, restores with `--exit-on-error`, then runs `manage.py verify_restore`:
+
+| Check | Fails when |
+|---|---|
+| `migrations` | the code has migrations the dump lacks (an old dump, a partial restore) |
+| `order_totals` | an order's `grand_total` no longer equals subtotal − discount + delivery + service charge (+ VAT when exclusive) + tip |
+| `order_lines` | an order's lines don't sum to its subtotal (missing or duplicated items) |
+| `paid_orders` | a card or transfer order marked paid has no successful payment record |
+| `loyalty_balances` | a points balance differs from the sum of its ledger |
+| `staff_mfa_secrets` | *warning only* — authenticator secrets don't decrypt with this `SECRET_KEY`; those staff would have to re-enrol |
+| `freshness` (`--max-age-hours`) | the newest order or sign-up is older than the limit (a stale dump) |
+
+`verify_restore` is read-only and can also be run against production as a consistency check. CI runs the whole drill on a seeded database on every change (the Postgres job), so the scripts are known to work; the drill on real staging data is the launch task.
+
+| Date | Dump | Duration | By |
+|---|---|---|---|
+| — | *no drill on real data yet* | | |
+
 ---
 
 ## 9. Monitoring and alerts
