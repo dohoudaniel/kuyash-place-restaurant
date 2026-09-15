@@ -535,7 +535,7 @@ All require `kitchen`, `managers` or `admin` group membership.
 | GET | `/kds/items/` | Every priced dish with `is_available_now`, **including 86'd ones** (the public menu hides them), by category |
 | GET | `/kds/riders/` | Active riders — `id`, `name`, `phone`, `vehicle_type`, `is_on_shift`, `zone` — on shift first |
 | GET | `/kds/summary/` | Counts by status, open tickets, today's revenue — ✅ revenue uses the sales-report definition on the restaurant's local day (it summed unpaid kitchen orders by UTC date) |
-| GET | `/kds/reservations/today/` | 🟡 Today's book |
+| GET | `/reservations/book/` | 🟡 Today's book, for any staff member (served under reservations, not `/kds/`) |
 
 `GET /kds/orders/` returns `elapsed_seconds` and an `is_late` flag per order — the numbers a kitchen actually runs on.
 
