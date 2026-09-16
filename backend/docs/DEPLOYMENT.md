@@ -327,6 +327,8 @@ The alerts above come from `apps/common/tasks.py` on the beat schedule. **Page**
 | `alert_queue_depth` (warning) | `ops.watch` | Redis `celery` queue longer than N | `OPS_QUEUE_DEPTH_WARN` (100) |
 | daily email | `ops.daily_report` | stuck orders, sent to the managers group and `OPS_ALERT_EMAILS` | — |
 
+**Logs go to stdout as JSON**, one stream per process, for the platform to collect — leave `LOG_DIR` unset. A log file inside a container is lost on the next deploy and can fill the disk; `LOG_DIR` exists for local development, where nothing collects stdout, and for a VPS deploy that has no collector (prefer systemd, so journald handles capture and rotation). Nothing currently stores logs beyond the platform's own retention: choose a destination and a retention period before launch.
+
 5xx rate, p95 latency, disk, pool and certificate alerts come from the platform and Sentry performance, not from code. After setting `SENTRY_DSN`, run `python manage.py sentry_check` and confirm the probe event arrives with its secrets redacted.
 
 ---

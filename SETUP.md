@@ -44,6 +44,20 @@ make run                     # http://localhost:8000
 
 **The admin asks for a second factor.** `STAFF_MFA_REQUIRED` defaults to on, so the first admin sign-in shows a QR code to scan with an authenticator app, then ten recovery codes. To skip it while developing locally, set `STAFF_MFA_REQUIRED=false` in `backend/.env` — never in a deployed environment (the deploy check warns with `kuyash.W020`).
 
+### Logs
+
+Development writes to the terminal **and** to `backend/logs/kuyash.log`, because the terminal scrolls away and "what happened in that request ten minutes ago" is the most common local question.
+
+```bash
+make logs                                   # follow it
+jq -r 'select(.levelname != "INFO")' logs/kuyash.log     # only warnings and worse
+jq -r 'select(.request_id == "<id>")' logs/kuyash.log    # one request, end to end
+```
+
+The file is JSON, one object per line, and every line carries a `request_id`: the API returns that same id in the `X-Request-ID` response header, so you can take an id from a failing call and pull out everything it did. It rotates at 5 MB, keeps five files, and `logs/` is git-ignored.
+
+To switch it off, or move it, set `LOG_DIR=` (or a path) in `backend/.env`. **Deployed environments leave `LOG_DIR` unset** and log JSON to stdout for the platform to collect — a file inside a container is lost on the next deploy and can fill the disk.
+
 ### Optional services
 
 Everything works without these; add them when you want to exercise the real thing.
@@ -162,6 +176,7 @@ Deploying is covered separately in [`backend/docs/DEPLOYMENT.md`](backend/docs/D
 | Order status never changes on `/orders/{ref}` | The live socket is unavailable and polling is covering; check `REDIS_URL` in production. Locally, `make run` serves WebSockets in the same process |
 | Types out of step with the API | `npm run api:sync` |
 | Emails never arrive locally | They are meant to print to the console; the outbox in the admin holds every message |
+| Nothing in `logs/kuyash.log` | Only development writes it, and only once something is logged. Check `LOG_DIR` in `backend/.env` |
 
 ---
 

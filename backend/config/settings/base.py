@@ -15,6 +15,13 @@ from apps.common.storage import supabase_public_domain
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+# Stdlib-only helper, safe to import while settings are still being read.
+from apps.common.logging import (  # noqa: E402
+    DEFAULT_BACKUPS,
+    DEFAULT_MAX_BYTES,
+    file_handler,
+)
+
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -541,6 +548,14 @@ DEFAULT_VAT_RATE_BPS = 750  # 7.5%
 LOG_LEVEL = env("LOG_LEVEL", default="INFO")
 LOG_FORMAT = env("LOG_FORMAT", default="console")  # "console" or "json"
 
+# Write a rotating log file as well as stdout. Empty (the default) means stdout
+# only, which is what every deployed environment wants — the platform collects
+# it. dev.py points this at backend/logs/. See apps/common/logging.file_handler.
+LOG_DIR = env("LOG_DIR", default="")
+LOG_FILE_FORMAT = env("LOG_FILE_FORMAT", default="json")  # searchable with jq
+LOG_FILE_MAX_BYTES = env.int("LOG_FILE_MAX_BYTES", default=DEFAULT_MAX_BYTES)
+LOG_FILE_BACKUPS = env.int("LOG_FILE_BACKUPS", default=DEFAULT_BACKUPS)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -570,3 +585,13 @@ LOGGING = {
         "apps": {"level": LOG_LEVEL, "propagate": True},
     },
 }
+
+_log_file = file_handler(
+    LOG_DIR,
+    formatter=LOG_FILE_FORMAT,
+    max_bytes=LOG_FILE_MAX_BYTES,
+    backups=LOG_FILE_BACKUPS,
+)
+if _log_file is not None:
+    LOGGING["handlers"]["file"] = _log_file
+    LOGGING["root"]["handlers"] = [*LOGGING["root"]["handlers"], "file"]

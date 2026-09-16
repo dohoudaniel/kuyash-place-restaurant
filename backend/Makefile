@@ -2,7 +2,7 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: help venv install migrate seed run test lint fmt typecheck check gate coverage clean
+.PHONY: help venv install migrate seed run logs test lint fmt typecheck check gate coverage clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -21,6 +21,10 @@ seed: ## Create the baseline branch, hours, settings and role groups
 
 run: ## Start the development server
 	$(PY) manage.py runserver
+
+logs: ## Follow the development log file (dev writes logs/kuyash.log)
+	@test -f logs/kuyash.log || echo "No logs/kuyash.log yet — start the server first."
+	@tail -f logs/kuyash.log
 
 test: ## Run the test suite
 	$(PY) -m pytest

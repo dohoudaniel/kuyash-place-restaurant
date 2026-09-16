@@ -4,6 +4,8 @@ Deliberately dependency-free: SQLite, in-memory cache, eager Celery, console ema
 Point DATABASE_URL / REDIS_URL at real services when you want them.
 """
 
+from apps.common.logging import file_handler
+
 from .base import *
 
 DEBUG = True
@@ -24,3 +26,20 @@ CSRF_COOKIE_SECURE = False
 ACCOUNT_EMAIL_VERIFICATION = env("ACCOUNT_EMAIL_VERIFICATION", default="mandatory")
 
 INTERNAL_IPS = ["127.0.0.1"]
+
+# ── Logs on disk ──────────────────────────────────────────────────────────────
+# Locally there is no platform collecting stdout, and the terminal scrolls away,
+# so development also writes backend/logs/kuyash.log (rotating, 5 MB × 5). The
+# folder is git-ignored. Set LOG_DIR= (empty) in .env to switch it off, or point
+# it somewhere else. Deployed environments leave LOG_DIR unset.
+LOG_DIR = env("LOG_DIR", default=str(BASE_DIR / "logs"))
+_dev_log_file = file_handler(
+    LOG_DIR,
+    formatter=LOG_FILE_FORMAT,
+    max_bytes=LOG_FILE_MAX_BYTES,
+    backups=LOG_FILE_BACKUPS,
+)
+if _dev_log_file is not None:
+    LOGGING["handlers"]["file"] = _dev_log_file
+    if "file" not in LOGGING["root"]["handlers"]:
+        LOGGING["root"]["handlers"] = [*LOGGING["root"]["handlers"], "file"]
