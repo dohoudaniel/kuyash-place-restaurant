@@ -35,6 +35,12 @@ export async function bookTable(input: BookingInput, idempotencyKey: string): Pr
   return booking;
 }
 
+/** One booking. Guests prove it is theirs with the token from their email. */
+export const fetchReservation = (reference: string) =>
+  api<Reservation>(`/reservations/${encodeURIComponent(reference)}/`, {
+    headers: reservationHeaders(reference),
+  });
+
 export const cancelReservation = (reference: string, reason = "") =>
   api<Reservation>(`/reservations/${encodeURIComponent(reference)}/cancel/`, {
     method: "POST",
