@@ -310,7 +310,9 @@ def test_the_phase_one_success_criteria_hold_end_to_end(  # type: ignore[no-unty
     monkeypatch.setattr(broadcast, "get_channel_layer", lambda: layer)
     with request_commits():
         verify_url = reverse("v1:payments:verify", kwargs={"reference": record.our_reference})
-        paid = APIClient().get(verify_url).json()  # the provider's redirect lands here
+        # The provider's redirect lands here — in the customer's own browser,
+        # which is what carries the session the verify endpoint now gates on.
+        paid = laptop.get(verify_url).json()
     assert paid["order_status"] == "paid"
     assert payloads.kitchen_group(branch.id) in layer.groups, (
         "(8) the kitchen screen is pushed the ticket"

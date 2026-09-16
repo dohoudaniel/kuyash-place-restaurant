@@ -33,7 +33,7 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 # How many proxies sit in front of Django and append to X-Forwarded-For. 0 ignores
 # the header (it is client-supplied); behind one load balancer or Nginx, set 1.
 # Throttles, allauth rate limits and the admin allowlist all read the client IP
-# through apps/common/client_ip.py. SECURITY.md §8, kuyash.W021.
+# through apps/common/client_ip.py. SECURITY.md §8, kuyash.E021.
 TRUSTED_PROXY_COUNT = env.int("TRUSTED_PROXY_COUNT", default=0)
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 
@@ -91,6 +91,15 @@ INSTALLED_APPS = ["daphne", *DJANGO_APPS, *THIRD_PARTY_APPS, *LOCAL_APPS]
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Compresses the finished body, so it belongs near the top: the response
+    # phase runs bottom-to-top, and this must be the last thing to touch the
+    # body. WhiteNoise serves pre-compressed static files and sets its own
+    # Content-Encoding, which GZipMiddleware leaves alone.
+    #
+    # On BREACH: compressing a response that reflects a secret back into its body
+    # can leak that secret to someone watching the network. This API's CSRF token
+    # travels in a cookie, and no endpoint echoes a token into a compressed body.
+    "django.middleware.gzip.GZipMiddleware",
     "apps.common.client_ip.AdminIPAllowlistMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -239,6 +248,12 @@ for _provider, _prefix in (("google", "GOOGLE"), ("facebook", "FACEBOOK")):
         }
 
 HEADLESS_ONLY = True
+# Browser only. allauth's default is ("browser", "app"), and the "app" client
+# mounts a second copy of the entire auth surface at /_allauth/app/v1/ that
+# hands out session tokens — for a client that does not exist. The frontend
+# talks to /_allauth/browser/v1/ and nothing else (frontend/lib/auth/social.ts).
+# Two of the browser routes are shadowed in config/urls.py; see the note there.
+HEADLESS_CLIENTS = ["browser"]
 HEADLESS_FRONTEND_URLS = {
     "account_confirm_email": FRONTEND_URL + "/verify-email?key={key}",
     "account_reset_password": FRONTEND_URL + "/reset-password",
@@ -460,7 +475,24 @@ SESSION_COOKIE_NAME = "kuyash_session"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
-SESSION_SAVE_EVERY_REQUEST = True
+# Read from the cache, written through to the database. The database stays the
+# record of truth (a Redis restart does not sign everybody out) while a warm
+# signed-in request costs no session SELECT at all. Redis is mandatory in
+# production — prod.py refuses to start without REDIS_URL; locally the cache is
+# in-memory, which is exactly right for one process.
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+# Off, deliberately. It was on so that every request slid the fourteen-day
+# expiry forward, which made django_session the most-written table in the
+# system: one UPDATE per request per signed-in customer, at 5,000 of them. Note
+# that `cached_db` alone would not have fixed that — a session save still writes
+# through to the database.
+#
+# The trade-off is real and is the reason this is a comment and not a one-line
+# change: the fourteen days now run from sign-in rather than from last use, so a
+# customer who visits daily is asked to sign in again a fortnight after they
+# first did, instead of never. If rolling expiry is wanted back, do it by saving
+# the session only when it is more than a day old, not on every request.
+SESSION_SAVE_EVERY_REQUEST = False
 
 CSRF_COOKIE_NAME = "kuyash_csrftoken"
 CSRF_COOKIE_HTTPONLY = False  # the frontend must read this to echo it back
@@ -510,6 +542,17 @@ STAFF_MFA_REQUIRED = env.bool("STAFF_MFA_REQUIRED", default=True)
 # Addresses or CIDR ranges allowed to reach the admin at all; everyone else gets a
 # 404. Empty switches it off. A second layer behind any network allowlist or VPN.
 ADMIN_ALLOWED_IPS = env.list("ADMIN_ALLOWED_IPS", default=[])
+
+# How long a staff member's second factor stays good for. The admin session can
+# live for days; the elevation should not — a kitchen tablet used daily would
+# otherwise never be asked again. One shift by default.
+STAFF_MFA_ELEVATION_SECONDS = env.int("STAFF_MFA_ELEVATION_SECONDS", default=8 * 60 * 60)
+
+# Reservation guest tokens belong in the X-Reservation-Token header: a token in
+# the query string lands in access logs, browser history and Referer. Emailed
+# links still carry ?token=, so this switch buys one release for the frontend to
+# read it from the URL and send it as a header. Turn it off once that ships.
+RESERVATIONS_ACCEPT_TOKEN_IN_QUERY = env.bool("RESERVATIONS_ACCEPT_TOKEN_IN_QUERY", default=False)
 MFA_ADAPTER = "apps.accounts.mfa_adapter.KuyashMFAAdapter"
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
 MFA_TOTP_ISSUER = "Kuyash Place"
@@ -519,11 +562,11 @@ ADMIN_INDEX_TITLE = "Restaurant administration"
 
 # ── Payments ──────────────────────────────────────────────────────────────────
 # Secret keys are server-side only and must never appear in a NEXT_PUBLIC_*
-# variable. Only the PUBLIC keys are safe to hand to a browser.
+# variable. The providers' PUBLIC keys are deliberately not read here: the
+# browser gets them from its own NEXT_PUBLIC_* variables, and a setting nothing
+# reads is a trap for whoever sets it expecting an effect.
 PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="")
-PAYSTACK_PUBLIC_KEY = env("PAYSTACK_PUBLIC_KEY", default="")
 FLUTTERWAVE_SECRET_KEY = env("FLUTTERWAVE_SECRET_KEY", default="")
-FLUTTERWAVE_PUBLIC_KEY = env("FLUTTERWAVE_PUBLIC_KEY", default="")
 FLUTTERWAVE_WEBHOOK_SECRET_HASH = env("FLUTTERWAVE_WEBHOOK_SECRET_HASH", default="")
 DEFAULT_PAYMENT_PROVIDER = env("DEFAULT_PAYMENT_PROVIDER", default="paystack")
 PAYMENT_CALLBACK_URL = env("PAYMENT_CALLBACK_URL", default=f"{FRONTEND_URL}/checkout/complete")
@@ -541,8 +584,12 @@ LOYALTY_KOBO_PER_POINT = env.int("LOYALTY_KOBO_PER_POINT", default=10_000)
 LOYALTY_EXPIRY_INACTIVE_DAYS = env.int("LOYALTY_EXPIRY_INACTIVE_DAYS", default=365)
 
 # ── Domain defaults ───────────────────────────────────────────────────────────
-DEFAULT_CURRENCY = "NGN"
-DEFAULT_VAT_RATE_BPS = 750  # 7.5%
+# The currency and the VAT rate deliberately do NOT live here. They were
+# declared in this file with zero readers: every consumer imports them from
+# apps/common/money.py, and pricing uses the per-branch `Branch.vat_rate_bps`
+# anyway. An operator who changed the rate in the obvious place changed nothing,
+# tax silently stayed at 7.5%, and there was no error to tell them. Change the
+# rate on the branch, in the admin.
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_LEVEL = env("LOG_LEVEL", default="INFO")

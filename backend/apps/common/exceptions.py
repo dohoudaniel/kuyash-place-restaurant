@@ -85,6 +85,28 @@ class IdempotencyConflict(DomainError):
     title = "An identical request is still being processed"
 
 
+class IdempotencyKeyReuse(DomainError):
+    """The same Idempotency-Key was sent with a different body.
+
+    Standard Idempotency-Key semantics require a 4xx here rather than treating
+    it as a new request: the two payloads disagree about what the customer
+    asked for, and guessing which one they meant is how you place a second
+    order at a different price.
+    """
+
+    code = "idempotency_key_reuse"
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    title = "That Idempotency-Key was already used for a different request"
+
+
+class MissingIdempotencyKey(DomainError):
+    """Defined once here; the three write views that need it all import it."""
+
+    code = "idempotency_key_required"
+    status_code = status.HTTP_400_BAD_REQUEST
+    title = "An Idempotency-Key header is required"
+
+
 class PaymentFailed(DomainError):
     code = "payment_failed"
     status_code = status.HTTP_402_PAYMENT_REQUIRED

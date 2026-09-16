@@ -127,7 +127,9 @@ def test_a_replayed_event_settles_once(transaction, paystack_keys) -> None:  # t
     first = send(payload, paystack_keys)
     second = send(payload, paystack_keys)
 
-    assert first.detail == "settled"
+    # "queued", not "settled": the request hands the work to a task (WH-8).
+    # Celery runs eagerly under test, so the settlement below has still happened.
+    assert first.detail == "queued"
     assert second.duplicate is True
     assert WebhookEvent.objects.filter(signature_valid=True).count() == 1
     assert transaction.order.events.filter(to_status=OrderStatus.PAID).count() == 1
@@ -143,7 +145,8 @@ def test_an_underpayment_never_marks_the_order_paid(transaction, paystack_keys) 
 
     outcome = send(paystack_payload(transaction.our_reference), paystack_keys)
 
-    assert outcome.detail == "amount mismatch"
+    assert outcome.detail == "queued"
+    assert WebhookEvent.objects.get(signature_valid=True).processing_error
     transaction.refresh_from_db()
     assert transaction.status == TransactionStatus.FAILED
     assert transaction.failure_reason == "amount_mismatch"
@@ -191,7 +194,7 @@ def test_a_valid_webhook_settles_the_order(transaction, paystack_keys) -> None: 
 
     outcome = send(paystack_payload(transaction.our_reference), paystack_keys)
 
-    assert outcome.detail == "settled"
+    assert outcome.detail == "queued"
     transaction.refresh_from_db()
     assert transaction.status == TransactionStatus.SUCCESS
     assert transaction.amount_verified == transaction.amount
@@ -222,7 +225,11 @@ def test_an_unknown_reference_is_acknowledged(paystack_keys) -> None:  # type: i
     """Acknowledged, not 500'd — otherwise the provider retries forever."""
     outcome = send(paystack_payload("KYS-NOSUCH-000"), paystack_keys)
     assert outcome.accepted is True
-    assert outcome.detail == "unknown reference"
+    assert outcome.detail == "queued"
+
+    event = WebhookEvent.objects.get(signature_valid=True)
+    assert event.processed_at is not None  # dealt with, by the task
+    assert "no transaction for reference" in event.processing_error
 
 
 def test_an_unhandled_event_type_is_acknowledged(transaction, paystack_keys) -> None:  # type: ignore[no-untyped-def]

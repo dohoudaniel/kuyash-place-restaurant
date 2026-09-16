@@ -87,13 +87,18 @@ def test_the_amount_sent_comes_from_the_order_not_the_caller(order, paystack_key
 
 
 @responses.activate
-def test_each_attempt_gets_a_fresh_reference(order, paystack_keys) -> None:  # type: ignore[no-untyped-def]
-    """Providers reject reused references, so a retry needs a new one."""
-    mock_init()
+def test_a_retry_reuses_the_live_attempt_rather_than_minting_another(order, paystack_keys) -> None:  # type: ignore[no-untyped-def]
+    """Providers reject reused references, so a genuinely new attempt needs a new
+    one — but a second tap while the first link is still live is not a new
+    attempt, it is a second chargeable link on the same bill.
+
+    The whole rule, including when a fresh reference *is* minted, is in
+    test_duplicate_charges.py.
+    """
     mock_init()
     first = initialise_payment(order=order)
     second = initialise_payment(order=order)
-    assert first.our_reference != second.our_reference
+    assert first.our_reference == second.our_reference
 
 
 @responses.activate

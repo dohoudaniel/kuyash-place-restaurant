@@ -107,6 +107,25 @@ class PaymentTransaction(TimeStampedModel):
     raw_response = models.JSONField(default=dict, blank=True)
     failure_reason = models.CharField(max_length=255, blank=True)
 
+    idempotency_key = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=(
+            "Caller-supplied key for payments recorded by staff. Unique per payable, "
+            "so a double-clicked “transfer received” cannot be banked twice."
+        ),
+    )
+
+    needs_review = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Money settled in a way a person must look at — a second charge on an "
+            "already-paid order, or a seat that no longer exists. Never set by a customer."
+        ),
+    )
+    review_reason = models.CharField(max_length=255, blank=True)
+
     initialised_at = models.DateTimeField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
 
@@ -120,7 +139,14 @@ class PaymentTransaction(TimeStampedModel):
                     | models.Q(order__isnull=True, enrolment__isnull=False)
                 ),
                 name="transaction_pays_for_exactly_one_thing",
-            )
+            ),
+            # The database backstop for staff-recorded payments: the cache is not
+            # the only guard, because two clicks can race it.
+            models.UniqueConstraint(
+                fields=["order", "idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="unique_manual_payment_per_order_key",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -141,6 +167,12 @@ class WebhookEvent(TimeStampedModel):
 
     ``event_id`` is unique: that constraint *is* the idempotency guard.
     Providers retry, and a duplicate delivery must not credit an order twice.
+
+    An **invalid** signature is nobody's event, so it gets a synthetic id built
+    from the caller's address and the hour (see ``services/webhooks.py``). That
+    keeps the same guard working in the one case it used to miss: junk from one
+    address collapses onto a single row with a count, rather than writing an
+    unbounded row per request.
     """
 
     provider = models.CharField(max_length=20, choices=Provider.choices)
@@ -148,6 +180,10 @@ class WebhookEvent(TimeStampedModel):
     event_type = models.CharField(max_length=80, blank=True)
     signature_valid = models.BooleanField(default=False)
     payload = models.JSONField(default=dict, blank=True)
+    attempt_count = models.PositiveIntegerField(
+        default=1,
+        help_text="Deliveries that collapsed onto this row — an attack shows up here as a count.",
+    )
     processed_at = models.DateTimeField(null=True, blank=True)
     processing_error = models.TextField(blank=True)
     remote_addr = models.GenericIPAddressField(null=True, blank=True)
@@ -177,6 +213,14 @@ class Refund(TimeStampedModel):
         max_length=20, choices=RefundStatus.choices, default=RefundStatus.PENDING
     )
     provider_reference = models.CharField(max_length=120, blank=True)
+    idempotency_key = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=(
+            "Caller-supplied key. Unique per order, so two managers double-clicking "
+            "Refund cannot send the customer's money back twice."
+        ),
+    )
     initiated_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
@@ -188,6 +232,13 @@ class Refund(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order", "idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="unique_refund_per_order_key",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"Refund {self.amount} on {self.order.reference}"

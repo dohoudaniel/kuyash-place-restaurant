@@ -437,3 +437,114 @@ def test_report_admin_is_read_only(rf, manager) -> None:  # type: ignore[no-unty
     assert not model_admin.has_change_permission(request)
     assert not model_admin.has_delete_permission(request)
     assert str(Report()) == "Reports"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CSV formula injection
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    ["=cmd|'/c calc'!A1", "+1+1", "-2+3", "@SUM(A1)", "\tsneaky", "\rsneaky"],
+)
+def test_a_value_a_spreadsheet_would_run_is_neutralised(hostile: str) -> None:
+    from apps.reporting.views import csv_cell
+
+    assert csv_cell(hostile) == f"'{hostile}"
+
+
+def test_ordinary_values_are_left_exactly_as_they_are() -> None:
+    from apps.reporting.views import csv_cell
+
+    assert csv_cell("Jollof") == "Jollof"
+    assert csv_cell(12) == 12
+    assert csv_cell("2026-09-10") == "2026-09-10"
+
+
+def test_a_rider_cannot_smuggle_a_formula_into_a_managers_spreadsheet(  # type: ignore[no-untyped-def]
+    api_client, branch, manager
+) -> None:
+    """Rider to manager, through a spreadsheet.
+
+    `full_name` is set by the rider through `PATCH /accounts/me/` and nothing
+    validates it. A manager opening the rider export in Excel used to get a DDE
+    prompt — the lowest staff role reaching the highest.
+    """
+    hostile = "=cmd|'/c calc.exe'!A1"
+    rider = RiderProfile.objects.create(
+        user=User.objects.create_user(
+            email="hostile@example.com", password="x" * 16, full_name=hostile
+        )
+    )
+    delivered = order(branch, placed=at(10, 19))
+    assign(delivered, rider, picked=at(10, 19, 10), delivered=at(10, 19, 40))
+
+    api_client.force_authenticate(manager)
+    rows = read_csv(
+        api_client.get(url("riders"), {"from": "2026-09-07", "to": "2026-09-13", "export": "csv"})
+    )
+
+    assert rows[1][0] == f"'{hostile}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# The reports are SQL, not Python
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def query_cost(work) -> int:  # type: ignore[no-untyped-def]
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as captured:
+        work()
+    return len(captured)
+
+
+def test_the_sales_report_does_not_grow_with_the_order_count(branch, week) -> None:  # type: ignore[no-untyped-def]
+    """It used to pull every order of up to 366 days into Python and bucket them
+    one row at a time, in a synchronous request."""
+    for day in range(7, 13):
+        order(branch, placed=at(day, 12))
+    few = query_cost(lambda: services.sales(branch, week, refresh=True))
+
+    for day in range(7, 13):
+        for hour in range(10, 20):
+            order(branch, placed=at(day, hour))
+    many = query_cost(lambda: services.sales(branch, week, refresh=True))
+
+    assert few == many
+
+
+def test_peak_hours_does_not_grow_with_the_order_count(branch, week) -> None:  # type: ignore[no-untyped-def]
+    order(branch, placed=at(11, 19))
+    few = query_cost(lambda: services.peak_hours(branch, week))
+    for day in range(7, 13):
+        for hour in range(10, 20):
+            order(branch, placed=at(day, hour))
+    assert query_cost(lambda: services.peak_hours(branch, week)) == few == 1
+
+
+def test_rider_performance_is_three_queries_whatever_the_volume(branch, week, riders) -> None:  # type: ignore[no-untyped-def]
+    ade, _ = riders
+    for day in range(8, 11):
+        assign(
+            order(branch, placed=at(day, 12)),
+            ade,
+            picked=at(day, 12, 10),
+            delivered=at(day, 12, 40),
+        )
+    assert query_cost(lambda: services.rider_performance(branch, week)) == 3
+
+
+def test_todays_sales_are_briefly_cached_for_the_kitchen_poll(branch, week) -> None:  # type: ignore[no-untyped-def]
+    """The kitchen display asks for this every ten seconds, per screen."""
+    order(branch, placed=at(8, 12), total=1_000_000)
+    assert services.sales(branch, week)["orders"] == 1
+
+    order(branch, placed=at(8, 13), total=2_000_000)
+    assert services.sales(branch, week)["orders"] == 1  # served from the cache
+    assert query_cost(lambda: services.sales(branch, week)) == 0
+
+    assert services.sales(branch, week, refresh=True)["orders"] == 2

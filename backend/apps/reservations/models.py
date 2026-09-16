@@ -248,6 +248,19 @@ class Reservation(TimeStampedModel):
             models.Index(fields=["branch", "status", "reserved_for"]),
             models.Index(fields=["table", "reserved_for"]),
         ]
+        constraints = [
+            # The durable half of the idempotency guarantee. The cache is a
+            # cache: it evicts, it can be flushed, and a Redis failover loses
+            # the claim — at which point a retried submission books a second
+            # table. This refuses that at the database, whatever the cache
+            # believes. Partial, because staff and phone bookings legitimately
+            # carry no key and several blanks are not a duplicate.
+            models.UniqueConstraint(
+                fields=["idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="unique_reservation_idempotency_key",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.reference} — {self.guest_name} ×{self.party_size}"

@@ -27,14 +27,17 @@ class DummyProvider:
         email: str,
         reference: str,
         callback_url: str,
+        currency: str = "NGN",
         metadata: Mapping[str, Any] | None = None,
     ) -> InitResult:
-        self.initialised.append({"reference": reference, "amount": amount_kobo})
+        self.initialised.append(
+            {"reference": reference, "amount": amount_kobo, "currency": currency}
+        )
         return InitResult(
             ok=True,
             authorization_url=f"{callback_url}?reference={reference}&simulated=1",
             provider_reference=reference,
-            raw={"simulated": True, "amount": amount_kobo},
+            raw={"simulated": True, "amount": amount_kobo, "currency": currency},
         )
 
     def verify(self, reference: str) -> VerifyResult:
@@ -56,6 +59,7 @@ class DummyProvider:
             status="success" if self.succeed else "failed",
             amount_kobo=record.amount if record else 0,
             currency=record.currency if record else "NGN",
+            provider_reference=reference,
             channel="simulated",
             message="simulated",
             raw={"simulated": True},

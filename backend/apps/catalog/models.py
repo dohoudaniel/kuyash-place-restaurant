@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+from django.conf import settings
+from django.contrib.postgres.search import SearchVectorField
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
@@ -15,6 +17,12 @@ from django.utils import timezone
 from apps.common.fields import MoneyField, SignedMoneyField
 from apps.common.models import SoftDeleteModel, TimeStampedModel, UUIDModel
 from apps.core.models import Branch, Weekday
+
+#: The text-search dictionary. Stated explicitly rather than left to the
+#: database's `default_text_search_config`, because the stored vector and the
+#: query have to agree: if they disagree the index matches nothing and the bug
+#: looks like "search is broken for some words".
+SEARCH_CONFIG = "english"
 
 
 class TaxClass(models.TextChoices):
@@ -170,6 +178,13 @@ class MenuItem(TimeStampedModel, SoftDeleteModel):
         help_text="When the item first went live. Powers 'sort by newest'.",
     )
 
+    # Maintained on save, Postgres only, never edited by hand. With the GIN index
+    # added in migration 0003 this turns a menu search from a sequential scan
+    # that builds a SearchVector for every row and ranks it, into an index
+    # lookup. SQLite has no tsvector, so the column stays NULL there and
+    # `selectors._apply_search` falls back to substring matching (ADR-015).
+    search_vector = SearchVectorField(null=True, editable=False)
+
     objects = MenuItemQuerySet.as_manager()
 
     class Meta:
@@ -190,6 +205,23 @@ class MenuItem(TimeStampedModel, SoftDeleteModel):
         if self.is_active and self.published_at is None and not self.needs_repricing:
             self.published_at = timezone.now()
         super().save(*args, **kwargs)  # type: ignore[arg-type]
+        self.refresh_search_vector()
+
+    def refresh_search_vector(self) -> None:
+        """Recompute the stored search vector for this row. No-op off Postgres.
+
+        A second statement rather than a database trigger: the cost lands on
+        staff editing the menu, which happens a few times a day, instead of on
+        customers searching it, which happens constantly.
+        """
+        if not settings.USING_POSTGRES:  # pragma: no cover - exercised in Postgres CI
+            return
+        from django.contrib.postgres.search import SearchVector
+
+        MenuItem.objects.filter(pk=self.pk).update(
+            search_vector=SearchVector("name", weight="A", config=SEARCH_CONFIG)
+            + SearchVector("description", weight="B", config=SEARCH_CONFIG)
+        )
 
     @property
     def is_orderable(self) -> bool:

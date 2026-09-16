@@ -44,10 +44,9 @@ function ResetPassword() {
       setDone(true);
     } catch (err) {
       if (err instanceof ApiError) {
-        // Weak passwords come back as `invalid_token` with the validator's message,
-        // so only treat it as a dead link when the message says so.
-        const deadLink = err.code === "invalid_token" && /link/i.test(err.message);
-        setLinkInvalid(deadLink);
+        // `invalid_token` now means only a dead or expired link: a rejected
+        // password arrives as `weak_password`, so there is no prose to parse.
+        setLinkInvalid(err.code === "invalid_token");
         setError(err.fieldErrors.new_password ?? err.message);
       } else {
         setError("Something went wrong. Please try again.");

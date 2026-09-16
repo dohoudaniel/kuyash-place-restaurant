@@ -151,11 +151,40 @@ class Order(TimeStampedModel):
     customer_note = models.TextField(blank=True)
     idempotency_key = models.CharField(max_length=64, blank=True, db_index=True)
 
+    cart = models.ForeignKey(
+        "carts.Cart",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        help_text=(
+            "The basket this order was placed from, so confirming payment "
+            "empties that basket and no other customer's."
+        ),
+    )
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["branch", "status", "-created_at"]),
             models.Index(fields=["user", "-created_at"]),
+            # Every report and the KDS summary range-filter on placed_at.
+            models.Index(fields=["branch", "placed_at"]),
+            # The KDS queue filters on branch and status and sorts on
+            # placed_at; without this it filtered on one index and sorted on
+            # another.
+            models.Index(fields=["branch", "status", "placed_at"]),
+        ]
+        constraints = [
+            # The durable backstop behind the idempotency cache: if the cache is
+            # evicted or a second worker races the claim, the database still
+            # refuses a second order for the same key. Partial, so the blank
+            # default on older rows cannot collide.
+            models.UniqueConstraint(
+                fields=["idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="unique_order_idempotency_key",
+            )
         ]
 
     def __str__(self) -> str:

@@ -19,9 +19,12 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
         "status",
         "amount_display",
         "card_summary",
+        "needs_review",
         "verified_at",
     )
-    list_filter = ("provider", "status", "channel")
+    # `needs_review` first: a double charge or a seat sold twice is the one thing
+    # on this page somebody has to act on today.
+    list_filter = ("needs_review", "provider", "status", "channel")
     search_fields = (
         "our_reference",
         "provider_reference",
@@ -57,6 +60,7 @@ class WebhookEventAdmin(admin.ModelAdmin):
         "event_type",
         "event_id",
         "signature_valid",
+        "attempt_count",
         "processed_at",
         "created_at",
     )

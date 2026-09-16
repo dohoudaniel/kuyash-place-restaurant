@@ -92,6 +92,42 @@ def test_password_reset_is_throttled_per_email(  # type: ignore[no-untyped-def]
     assert 429 in codes
 
 
+def test_resend_verification_is_throttled_per_ip(api_client, throttle_rates) -> None:  # type: ignore[no-untyped-def]
+    """One host must not be able to mail-bomb unlimited addresses.
+
+    Declaring ``throttle_classes`` on a view replaces the global anon throttle,
+    and the only class declared here keyed on the email in the *body* — so a
+    different address each time was unlimited, pointed at the restaurant's
+    sending reputation.
+    """
+    with throttle_rates(resend_verification="2/hour"):
+        codes = [
+            api_client.post(
+                reverse("v1:auth:resend-verification"),
+                {"email": f"victim{index}@example.com"},  # a new address each time
+                format="json",
+            ).status_code
+            for index in range(4)
+        ]
+    assert codes[:2] == [200, 200]
+    assert 429 in codes
+
+
+def test_resend_verification_is_still_throttled_per_email(api_client, throttle_rates) -> None:  # type: ignore[no-untyped-def]
+    """The per-IP limit must not have replaced the per-address one."""
+    with throttle_rates(resend_verification="3/hour"):
+        codes = [
+            api_client.post(
+                reverse("v1:auth:resend-verification"),
+                {"email": "ada@example.com"},
+                format="json",
+                REMOTE_ADDR=f"203.0.113.{index}",  # a different source each time
+            ).status_code
+            for index in range(5)
+        ]
+    assert 429 in codes
+
+
 def test_throttling_is_off_by_default_in_tests(api_client, verified_user: User) -> None:  # type: ignore[no-untyped-def]
     """Guard the guard: if rates leak into the suite, unrelated tests get 429s."""
     payload = {"email": "ada@example.com", "password": WRONG}

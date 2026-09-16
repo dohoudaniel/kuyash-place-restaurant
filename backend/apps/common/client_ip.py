@@ -24,7 +24,7 @@ from functools import lru_cache
 from typing import Any
 
 from django.conf import settings
-from django.core.checks import Warning, register
+from django.core.checks import Error, register
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404, HttpRequest, HttpResponse
 
@@ -89,17 +89,22 @@ class AdminIPAllowlistMiddleware:
 
 @register("kuyash", deploy=True)
 def check_proxy_count(app_configs: Any, **kwargs: Any) -> list[Any]:
-    """Behind a TLS-terminating proxy, a count of 0 puts every visitor on one IP."""
+    """Behind a TLS-terminating proxy, a count of 0 puts every visitor on one IP.
+
+    An error, not a warning: at 0 every request appears to come from the load
+    balancer, so ``order_create: 10/hour`` becomes ten orders per hour for the
+    whole restaurant. That is a dead site, not a degraded one.
+    """
     if settings.SECURE_PROXY_SSL_HEADER and settings.TRUSTED_PROXY_COUNT <= 0:
         return [
-            Warning(
+            Error(
                 "Django trusts a proxy for HTTPS but TRUSTED_PROXY_COUNT is 0.",
                 hint=(
                     "Every request would appear to come from the proxy, so one visitor's "
                     "failed logins throttle everyone. Set TRUSTED_PROXY_COUNT to the number "
                     "of proxies in front of Django (usually 1)."
                 ),
-                id="kuyash.W021",
+                id="kuyash.E021",
             )
         ]
     return []

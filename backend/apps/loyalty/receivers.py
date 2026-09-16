@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from apps.accounts.signals import user_anonymised
+from apps.core import cache as core_cache
+from apps.loyalty.models import LoyaltyTier
 from apps.orders.models import OrderStatus
 from apps.orders.signals import order_status_changed
 
@@ -39,3 +42,10 @@ def close_on_anonymise(sender: Any, user: Any, **kwargs: Any) -> None:
     from apps.loyalty import services
 
     services.close_account(user)
+
+
+@receiver(post_save, sender=LoyaltyTier, dispatch_uid="loyalty.cache.tier_saved")
+@receiver(post_delete, sender=LoyaltyTier, dispatch_uid="loyalty.cache.tier_deleted")
+def drop_programme_cache(sender: Any, instance: LoyaltyTier, **kwargs: Any) -> None:
+    """The tiers and earning rules the public rewards page shows."""
+    core_cache.invalidate(core_cache.LOYALTY_PROGRAMME_KEY)

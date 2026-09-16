@@ -21,7 +21,7 @@ function localToday(): string {
  * ever saw the request.
  */
 export default function CateringPage() {
-  const { branch, settings } = useSiteInfo();
+  const { branch } = useSiteInfo();
   const formRef = useRef<HTMLElement>(null);
   const [packages, setPackages] = useState<CateringPackage[]>([]);
   const [packagesState, setPackagesState] = useState<"loading" | "ready" | "error">("loading");
@@ -100,7 +100,7 @@ export default function CateringPage() {
   const guestRange = packages.length
     ? `${Math.min(...packages.map((p) => p.min_guests))} - ${Math.max(...packages.map((p) => p.max_guests))} Guests`
     : null;
-  const email = settings?.support_email || branch?.email || "";
+  const email = branch?.email || "";
   const errorFor = (name: string) =>
     fieldErrors[name] ? <p className="text-xs font-semibold mt-1" style={{ color: "var(--red)" }}>{fieldErrors[name]}</p> : null;
   const borderFor = (name: string) => ({ borderColor: fieldErrors[name] ? "var(--red)" : "var(--gray-mid)" });

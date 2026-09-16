@@ -165,6 +165,10 @@ class PointsLedgerEntry(UUIDModel):
     class Meta:
         ordering = ["-created_at"]
         verbose_name_plural = "points ledger entries"
+        # "My points history", newest first, is the only way this table is ever
+        # read. Without the composite, a member with a long history means
+        # scanning every entry of theirs and sorting it.
+        indexes = [models.Index(fields=["account", "-created_at"])]
 
     def __str__(self) -> str:
         return f"{self.points:+d} {self.get_entry_type_display()}: {self.description}"

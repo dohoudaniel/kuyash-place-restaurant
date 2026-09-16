@@ -119,6 +119,49 @@ def test_a_failed_attempt_releases_the_key(api_client, dining_room, booking_time
     assert good.status_code == 201
 
 
+def test_the_same_key_with_a_different_body_is_refused(
+    api_client, dining_room, booking_time
+) -> None:  # type: ignore[no-untyped-def]
+    """Previously this booked a *second* table.
+
+    The body fingerprint used to be folded into the cache key, so a reused key
+    carrying a changed payload simply missed the cache and sailed through as a
+    brand new request.
+    """
+    key = str(uuid.uuid4())
+    assert create(api_client, booking_time, key=key).status_code == 201
+
+    changed = create(api_client, booking_time, key=key, party_size=4)
+    assert changed.status_code == 422
+    assert changed.json()["code"] == "idempotency_key_reuse"
+    assert Reservation.objects.count() == 1
+
+
+def test_the_database_refuses_a_duplicate_the_cache_lost(
+    api_client, dining_room, booking_time
+) -> None:  # type: ignore[no-untyped-def]
+    """**The durable backstop.**
+
+    The cache is a cache: it evicts, it can be flushed, and a Redis failover
+    loses the claim outright — at which point a retried submission used to book
+    a second table, because nothing else was guarding it. Clearing the cache
+    here is exactly that failure, and the unique constraint must still hand back
+    the original booking.
+    """
+    from django.core.cache import cache
+
+    key = str(uuid.uuid4())
+    first = create(api_client, booking_time, key=key)
+    assert first.status_code == 201
+
+    cache.clear()
+
+    second = create(api_client, booking_time, key=key)
+    assert second.status_code == 201
+    assert second.json()["reference"] == first.json()["reference"]
+    assert Reservation.objects.count() == 1
+
+
 def test_a_full_slot_returns_409(api_client, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
     create(api_client, booking_time, guest_email="a@example.com")
     create(api_client, booking_time, guest_email="b@example.com")
@@ -146,8 +189,24 @@ def test_a_guest_needs_the_token_to_view(api_client, dining_room, booking_time) 
     assert api_client.get(url, HTTP_X_RESERVATION_TOKEN="wrong").status_code == 404
 
 
-def test_the_token_also_works_as_a_query_parameter(api_client, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
-    """The emailed link carries it in the URL."""
+def test_a_token_in_the_query_string_is_refused(api_client, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
+    """Tokens must not travel in URLs (SECURITY.md).
+
+    A query-string token is written into every access log it passes, leaks
+    through ``Referer`` on any outbound link, and sits in browser history. This
+    endpoint accepted one, contradicting the project's own rule.
+    """
+    body = create(api_client, booking_time).json()
+    url = reverse("v1:reservations:detail", kwargs={"reference": body["reference"]})
+    assert api_client.get(url, {"token": body["confirmation_token"]}).status_code == 404
+
+
+def test_the_query_string_token_can_be_re_enabled_for_one_release(  # type: ignore[no-untyped-def]
+    api_client, dining_room, booking_time, settings
+) -> None:
+    """The emailed management link still carries ``?token=``, so operators get a
+    bridge while the frontend moves to sending the header. Off by default."""
+    settings.RESERVATIONS_ACCEPT_TOKEN_IN_QUERY = True
     body = create(api_client, booking_time).json()
     url = reverse("v1:reservations:detail", kwargs={"reference": body["reference"]})
     assert api_client.get(url, {"token": body["confirmation_token"]}).status_code == 200

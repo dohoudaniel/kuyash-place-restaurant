@@ -123,6 +123,40 @@ def blackout_for(branch: Any, date: dt.date) -> BlackoutDate | None:
     return BlackoutDate.objects.filter(branch=branch, date=date).first()
 
 
+def _bookings_for_day(
+    branch: Any,
+    date: dt.date,
+    *,
+    tables: list[RestaurantTable],
+    schedule: list[tuple[ServicePeriod, list[dt.time]]],
+) -> list[Reservation]:
+    """Every booking that could clash with any slot in the day — in one query.
+
+    Availability used to run ``overlapping_reservations`` per slot: about 24
+    queries per request, on a public and unthrottled endpoint, which is the
+    cheapest denial-of-service in the codebase. The day's bookings are few, so
+    fetching them once and bucketing in Python is strictly better.
+
+    The upper bound is the end of the last sitting offered. There is no lower
+    bound: a long turn that started earlier can still cover the first slot, and
+    the ``(table, reserved_for)`` index keeps the scan cheap either way.
+    """
+    if not tables:
+        return []
+    ends = [
+        _aware(branch, date, times[-1]) + dt.timedelta(minutes=period.turn_time_minutes)
+        for period, times in schedule
+        if times
+    ]
+    if not ends:
+        return []
+    return list(
+        Reservation.objects.filter(
+            table__in=tables, status__in=OCCUPYING_STATUSES, reserved_for__lt=max(ends)
+        ).only("table_id", "reserved_for", "duration_minutes")
+    )
+
+
 def slots_for(
     branch: Any, *, date: dt.date, party_size: int, area: TableArea | None = None
 ) -> list[Slot]:
@@ -133,21 +167,24 @@ def slots_for(
     if not periods:
         return []
 
+    schedule = [(period, period.slot_times()) for period in periods]
+
     blackout = blackout_for(branch, date)
     if blackout is not None and blackout.full_day:
         return [
             Slot(time=time, available=False, tables_left=0, reason="closed")
-            for period in periods
-            for time in period.slot_times()
+            for _period, times in schedule
+            for time in times
         ]
 
     tables = candidate_tables(branch, party_size=party_size, area=area)
     now = timezone.now()
     earliest = now + dt.timedelta(minutes=MIN_LEAD_MINUTES)
+    bookings = _bookings_for_day(branch, date, tables=tables, schedule=schedule)
 
     slots: list[Slot] = []
-    for period in periods:
-        for time in period.slot_times():
+    for period, times in schedule:
+        for time in times:
             start = _aware(branch, date, time)
             end = start + dt.timedelta(minutes=period.turn_time_minutes)
 
@@ -162,7 +199,13 @@ def slots_for(
                     slots.append(Slot(time, False, 0, "closed"))
                     continue
 
-            occupied = overlapping_reservations(tables=tables, start=start, end=end)
+            # Two bookings overlap when each starts before the other ends —
+            # the same test overlapping_reservations applies, in memory.
+            occupied = {
+                booking.table_id
+                for booking in bookings
+                if booking.reserved_for < end and booking.ends_at > start
+            }
             free = len(tables) - len(occupied)
             slots.append(
                 Slot(

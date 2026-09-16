@@ -77,7 +77,13 @@ class Review(TimeStampedModel):
                 fields=["user", "order_item"], name="one_review_per_order_line"
             ),
         ]
-        indexes = [models.Index(fields=["menu_item", "status", "-created_at"])]
+        indexes = [
+            models.Index(fields=["menu_item", "status", "-created_at"]),
+            # The moderation queue: every pending review, oldest first. The index
+            # above leads on `menu_item`, so it cannot serve a query that does
+            # not name one.
+            models.Index(fields=["status", "created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"{self.rating}★ {self.title}"

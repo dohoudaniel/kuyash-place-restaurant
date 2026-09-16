@@ -7,4 +7,7 @@ class CoreConfig(AppConfig):
     verbose_name = "Core"
 
     def ready(self) -> None:
-        from apps.core import checks  # noqa: F401
+        from apps.core import checks, receivers  # noqa: F401
+        from apps.core.cache import connect_memo
+
+        connect_memo()

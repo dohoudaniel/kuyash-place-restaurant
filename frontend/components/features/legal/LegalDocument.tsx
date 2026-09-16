@@ -21,7 +21,7 @@ interface LegalDocumentProps {
  * a placeholder phone number, and in places contradicting what checkout charged.
  */
 export default function LegalDocument({ slug, fallbackTitle }: LegalDocumentProps) {
-  const { branch, settings } = useSiteInfo();
+  const { branch } = useSiteInfo();
   const [page, setPage] = useState<LegalPage | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -35,7 +35,7 @@ export default function LegalDocument({ slug, fallbackTitle }: LegalDocumentProp
     };
   }, [slug]);
 
-  const email = settings?.support_email || branch?.email;
+  const email = branch?.email;
 
   return (
     <div className="min-h-screen pt-20 sm:pt-24 pb-12" style={{ background: "var(--gray-light)" }}>

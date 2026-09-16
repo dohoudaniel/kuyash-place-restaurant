@@ -103,9 +103,32 @@ class BranchSerializer(serializers.ModelSerializer):
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):
+    """What `/core/settings/` publishes to anyone who asks.
+
+    An explicit allowlist, not ``exclude``. With ``exclude`` this endpoint served
+    ``support_email`` and ``orders_email`` — the internal mailboxes alerts are
+    delivered to — unauthenticated, and every field added to the model later
+    would have been published automatically by the same omission. Adding a field
+    to this list is now a deliberate act.
+    """
+
     class Meta:
         model = SiteSettings
-        exclude = ("id", "created_at", "updated_at")
+        fields = (
+            "site_name",
+            "tagline",
+            "meta_description",
+            "instagram_url",
+            "facebook_url",
+            "twitter_url",
+            "tiktok_url",
+            "established_year",
+            "stat_customers",
+            "stat_dishes",
+            "stat_years",
+            "stat_rating",
+        )
+        read_only_fields = fields
 
 
 class OpeningHoursResponseSerializer(serializers.Serializer):

@@ -13,6 +13,7 @@ from typing import Any
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -111,14 +112,37 @@ def queue_email(
         html_body=html_body,
         context=context or {},
     )
-    from apps.notifications.tasks import deliver_notification
-
-    deliver_notification.delay(str(notification.pk))
-    # The worker loads its own copy, so ours is stale the moment the task runs
-    # (which is immediately when Celery is eager). Refresh so callers see the
-    # real outcome rather than a permanent "queued".
+    dispatch(notification)
+    # The worker loads its own copy, so ours is stale the moment the task runs.
+    # Refresh so callers see the real outcome rather than a stale "queued" —
+    # though inside a transaction the send is deliberately deferred to COMMIT,
+    # so "queued" is the honest answer until then.
     notification.refresh_from_db()
     return notification
+
+
+def dispatch(notification: Notification) -> None:
+    """Hand a recorded notification to the worker, once the row is committed.
+
+    ``register_user`` and ``place_order`` are ``@transaction.atomic``, and a
+    task published inside an open transaction is visible to workers *before*
+    ``COMMIT``. A worker that picked it up first found no such row, returned
+    ``"missing"`` and exited — no exception, no retry, no log. The customer was
+    told to check their email and never received it, and because verification is
+    mandatory they could then never sign in.
+
+    ``transaction.on_commit`` is the pattern ``apps/realtime`` already uses for
+    the same reason. Outside a transaction it runs the callback immediately, so
+    callers that are not in one are unaffected.
+    """
+    from apps.notifications.tasks import deliver_notification
+
+    notification_id = str(notification.pk)
+
+    def publish() -> None:
+        deliver_notification.delay(notification_id)
+
+    transaction.on_commit(publish)
 
 
 def deliver(notification: Notification) -> Notification:

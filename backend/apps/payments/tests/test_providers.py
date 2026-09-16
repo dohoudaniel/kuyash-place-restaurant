@@ -77,8 +77,13 @@ def test_paystack_maps_unknown_states_to_pending() -> None:
 
 
 @responses.activate
-def test_paystack_verify_reports_a_refusal_as_failed() -> None:
-    """Paystack answers ``status: false`` for a reference it won't verify."""
+def test_paystack_verify_reports_a_refusal_as_retryable() -> None:
+    """``status: false`` is the envelope refusing to answer, not a verdict.
+
+    Paystack says this for a bad key, a rate limit, and a reference that has not
+    propagated yet. Calling it "failed" marked real, paid transactions failed
+    forever: the reconciliation sweep never looks at a failed record again.
+    """
     responses.add(
         responses.GET,
         f"{PS}/transaction/verify/ref-1",
@@ -86,7 +91,7 @@ def test_paystack_verify_reports_a_refusal_as_failed() -> None:
         status=400,
     )
     result = PaystackProvider("sk_test").verify("ref-1")
-    assert result.status == "failed"
+    assert result.status == "pending"
     assert result.succeeded is False
     assert "not found" in result.message
 
@@ -227,7 +232,8 @@ def test_flutterwave_failure_paths() -> None:
         json={"status": "error", "message": "no"},
         status=404,
     )
-    assert FlutterwaveProvider("k", "h").verify("r").status == "failed"
+    # Retryable, not terminal — same reasoning as the Paystack envelope.
+    assert FlutterwaveProvider("k", "h").verify("r").status == "pending"
 
 
 @responses.activate
@@ -377,3 +383,95 @@ def test_the_simulated_provider_reports_nothing_for_an_unknown_reference(db) -> 
 
     result = DummyProvider().verify("no-such-reference")
     assert result.amount_kobo == 0
+
+
+# ── Currency, identifiers and unreadable answers ──────────────────────────────
+
+
+@responses.activate
+def test_paystack_charges_in_the_records_currency() -> None:
+    """Hardcoding NGN would charge a non-naira branch in naira, and then fail
+    every verification against it — the amount would match and the currency
+    would not, forever."""
+    import json
+
+    responses.add(
+        responses.POST,
+        f"{PS}/transaction/initialize",
+        json={"status": True, "data": {"authorization_url": "https://pay", "reference": "r"}},
+        status=200,
+    )
+    PaystackProvider("sk_test").initialise(
+        amount_kobo=1000, email="a@b.com", reference="r", callback_url="https://x", currency="GHS"
+    )
+    assert json.loads(responses.calls[0].request.body)["currency"] == "GHS"
+
+
+@responses.activate
+def test_flutterwave_charges_in_the_records_currency() -> None:
+    import json
+
+    responses.add(
+        responses.POST,
+        f"{FLW}/payments",
+        json={"status": "success", "data": {"link": "https://pay"}},
+        status=200,
+    )
+    FlutterwaveProvider("k", "h").initialise(
+        amount_kobo=1000, email="a@b.com", reference="r", callback_url="https://x", currency="GHS"
+    )
+    assert json.loads(responses.calls[0].request.body)["currency"] == "GHS"
+
+
+@responses.activate
+def test_flutterwave_reports_its_own_transaction_id() -> None:
+    """Refunds address this id, not the ``tx_ref`` we sent, so settlement has to
+    keep it — otherwise a refund is raised against an identifier Flutterwave
+    does not recognise."""
+    responses.add(
+        responses.GET,
+        f"{FLW}/transactions/verify_by_reference",
+        json={
+            "status": "success",
+            "data": {
+                "status": "successful",
+                "amount": 100,
+                "currency": "NGN",
+                "id": 285959875,
+                "card": {},
+            },
+        },
+        status=200,
+    )
+    result = FlutterwaveProvider("k", "h").verify("KYS-X-1")
+    assert result.provider_reference == "285959875"
+
+
+@responses.activate
+def test_an_unreadable_body_is_an_outage_not_a_crash() -> None:
+    """A 502 HTML page raised ValueError out of json.loads — not a
+    RequestException — so no handler caught it and it surfaced as an unhandled
+    500 on the customer's return from checkout."""
+    responses.add(
+        responses.GET,
+        f"{PS}/transaction/verify/ref-1",
+        body="<html><body>502 Bad Gateway</body></html>",
+        status=502,
+        content_type="text/html",
+    )
+    assert PaystackProvider("sk_test").verify("ref-1").status == "pending"
+
+
+@responses.activate
+def test_a_provider_body_that_is_not_an_object_is_unreadable() -> None:
+    """Valid JSON is not necessarily a provider response.
+
+    A proxy or WAF can answer with a bare string or list. Treating that as a
+    readable body would let `body.get(...)` explode far from the cause.
+    """
+    from apps.payments.providers.base import ProviderResponseUnreadable, read_json
+
+    responses.add(responses.GET, f"{PS}/probe", json=["not", "an", "object"], status=200)
+    response = requests.get(f"{PS}/probe", timeout=5)
+    with pytest.raises(ProviderResponseUnreadable, match="not an object"):
+        read_json(response)

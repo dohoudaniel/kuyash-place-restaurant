@@ -13,6 +13,7 @@ from apps.common.exceptions import BranchClosed, ItemUnavailable, PriceChanged
 from apps.orders.models import Order, OrderStatus, PaymentStatus
 from apps.orders.services.placement import CheckoutBlocked, place_order
 from apps.orders.services.state import transition
+from apps.payments.models import PaymentTransaction, Provider, TransactionStatus
 from apps.promotions.models import PromoRedemption, RedemptionStatus
 
 pytestmark = pytest.mark.django_db
@@ -269,3 +270,225 @@ def test_a_transfer_order_is_accepted_once_bank_details_exist(ready_cart) -> Non
 
     assert order.payment_method == "transfer"
     assert order.status == "pending_payment"
+
+
+# ── Whose basket gets cleared ─────────────────────────────────────────────────
+
+
+def test_payment_clears_only_the_basket_that_order_came_from(ready_cart, cart) -> None:  # type: ignore[no-untyped-def]
+    """A guest sitting on the payment page keeps their items when someone else pays.
+
+    The receiver used to find carts by customer identity and branch rather than
+    by the order's own cart, so it emptied every converted basket that matched.
+    """
+    from apps.carts.services import cart as svc
+
+    svc.add_item(cart=cart, item_slug="classic-smash-burger")
+    cart.status = CartStatus.CONVERTED
+    cart.save(update_fields=["status", "updated_at"])
+
+    transition(place(ready_cart), OrderStatus.PAID)
+
+    ready_cart.refresh_from_db()
+    assert not ready_cart.items.exists()
+    assert cart.items.exists(), "another customer's basket was emptied"
+
+
+def test_paying_one_order_leaves_the_customers_other_basket_alone(  # type: ignore[no-untyped-def]
+    ready_cart, verified_user, branch, address
+) -> None:
+    """A customer with two outstanding orders keeps the unpaid one's basket."""
+    from apps.carts.models import Cart
+    from apps.carts.services import cart as svc
+
+    unpaid = place(ready_cart)
+
+    second = Cart.objects.create(branch=branch, user=verified_user)
+    svc.add_item(cart=second, item_slug="classic-smash-burger", quantity=2)
+    second.delivery_address = address
+    second.save()
+
+    transition(place(second), OrderStatus.PAID)
+
+    ready_cart.refresh_from_db()
+    assert not second.items.exists()
+    assert ready_cart.items.exists(), "the unpaid order's basket was emptied"
+    assert unpaid.status == OrderStatus.PENDING_PAYMENT
+
+
+# ── What was actually received ────────────────────────────────────────────────
+
+
+def settle(order, suffix: str, *, verified: int, status: str = TransactionStatus.SUCCESS):  # type: ignore[no-untyped-def]
+    return PaymentTransaction.objects.create(
+        order=order,
+        provider=Provider.PAYSTACK,
+        our_reference=f"{order.reference}-{suffix}",
+        amount=order.grand_total,
+        amount_verified=verified,
+        currency=order.currency,
+        status=status,
+    )
+
+
+def test_amount_paid_sums_every_settled_transaction(ready_cart) -> None:  # type: ignore[no-untyped-def]
+    """Two tabs produce two live checkout URLs and two charges.
+
+    ``amount_paid`` used to be the order total regardless, and refunds are
+    capped at it — so the second charge could not be refunded through the API.
+    """
+    order = place(ready_cart)
+    settle(order, "a", verified=order.grand_total)
+    settle(order, "b", verified=order.grand_total)
+
+    transition(order, OrderStatus.PAID)
+
+    order.refresh_from_db()
+    assert order.amount_paid == order.grand_total * 2
+
+
+def test_amount_paid_ignores_a_transaction_that_never_settled(ready_cart) -> None:  # type: ignore[no-untyped-def]
+    order = place(ready_cart)
+    settle(order, "failed", verified=500_000, status=TransactionStatus.FAILED)
+
+    transition(order, OrderStatus.PAID)
+
+    order.refresh_from_db()
+    # Nothing settled, so there is nothing to derive from and the total stands.
+    assert order.amount_paid == order.grand_total
+
+
+# ── The promo ledger ──────────────────────────────────────────────────────────
+
+
+def free_delivery_code(branch, **kwargs):  # type: ignore[no-untyped-def]
+    from apps.promotions.models import DiscountType, PromoCode
+
+    return PromoCode.objects.create(
+        branch=branch, code="FREESHIP", discount_type=DiscountType.FREE_DELIVERY, **kwargs
+    )
+
+
+def test_a_free_delivery_code_is_written_to_the_ledger(ready_cart, branch) -> None:  # type: ignore[no-untyped-def]
+    """It takes nothing off the goods, so it used to be recorded nowhere at all —
+    and ``times_used`` is derived purely from this ledger."""
+    code = free_delivery_code(branch, usage_limit=1)
+    ready_cart.promo_code = code
+    ready_cart.save()
+
+    order = place(ready_cart)
+
+    redemption = PromoRedemption.objects.get(order=order)
+    assert redemption.discount_amount == 0
+    assert redemption.status == RedemptionStatus.PENDING
+    assert code.times_used == 1
+
+
+def test_a_free_delivery_codes_usage_limit_is_enforceable(  # type: ignore[no-untyped-def]
+    ready_cart, branch, verified_user, address
+) -> None:
+    """Infinite-use, by everyone, forever, with no audit trail, was the old behaviour."""
+    from apps.carts.models import Cart
+    from apps.carts.services import cart as svc
+
+    code = free_delivery_code(branch, usage_limit=1)
+    ready_cart.promo_code = code
+    ready_cart.save()
+    first = place(ready_cart)
+    assert first.promo_code_snapshot == "FREESHIP"
+
+    second_cart = Cart.objects.create(branch=branch, user=verified_user)
+    svc.add_item(cart=second_cart, item_slug="classic-smash-burger", quantity=2)
+    second_cart.delivery_address = address
+    second_cart.promo_code = code
+    second_cart.save()
+
+    second = place(second_cart)
+
+    # One redemption, and the second order does not carry the code at all.
+    assert PromoRedemption.objects.filter(promo_code=code).count() == 1
+    assert second.promo_code_snapshot == "", "the code was honoured past its usage limit"
+
+
+@pytest.mark.parametrize("abandoned", [OrderStatus.EXPIRED, OrderStatus.FAILED])
+def test_abandoning_payment_gives_the_promo_use_back(ready_cart, promo, abandoned) -> None:  # type: ignore[no-untyped-def]
+    """Loyalty already reversed points on both of these and the promo ledger did
+    not, so the two ledgers disagreed about the same event: walking away from
+    the provider's page permanently burned a one-per-customer code."""
+    ready_cart.promo_code = promo
+    ready_cart.save()
+    order = place(ready_cart)
+
+    transition(order, abandoned)
+
+    assert PromoRedemption.objects.get(order=order).status == RedemptionStatus.REVERSED
+    assert promo.times_used == 0
+
+
+def test_placement_rechecks_a_promo_after_claiming_it(ready_cart, branch, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The cart priced while the last use was free; another checkout took it a
+    moment later. Re-reading the limit under the row lock is what catches that —
+    it used to be read once, before anything was written."""
+    from apps.common.exceptions import PromoInvalid
+    from apps.promotions.models import DiscountType, PromoCode
+
+    code = PromoCode.objects.create(
+        branch=branch,
+        code="LASTONE",
+        discount_type=DiscountType.FIXED,
+        value=100_000,
+        usage_limit=1,
+    )
+    ready_cart.promo_code = code
+    ready_cart.save()
+
+    reads = {"count": 0}
+
+    def times_used(self) -> int:  # type: ignore[no-untyped-def]
+        reads["count"] += 1
+        return 0 if reads["count"] == 1 else 1
+
+    monkeypatch.setattr(PromoCode, "times_used", property(times_used))
+
+    with pytest.raises(PromoInvalid, match="fully redeemed"):
+        place(ready_cart)
+    assert not Order.objects.exists()
+
+
+def test_placement_does_not_cost_a_query_per_line(branch, category) -> None:  # type: ignore[no-untyped-def]
+    """Around forty INSERTs where two bulk_creates do, on the single most
+    important path in the system."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from apps.carts.models import Cart, FulfilmentType
+    from apps.carts.services import cart as svc
+    from apps.catalog.models import MenuItem
+
+    for slug in ("one", "two", "three"):
+        MenuItem.objects.create(
+            branch=branch,
+            category=category,
+            name=slug,
+            slug=slug,
+            base_price=1_000_000,
+            needs_repricing=False,
+        )
+
+    def basket(slugs: list[str]) -> Cart:
+        created = Cart.objects.create(branch=branch)
+        for slug in slugs:
+            svc.add_item(cart=created, item_slug=slug)
+        created.fulfilment_type = FulfilmentType.PICKUP
+        created.save()
+        return created
+
+    guest = {"email": "guest@example.com", "phone": "+2348012345678"}
+    one_line, three_lines = basket(["one"]), basket(["one", "two", "three"])
+
+    with CaptureQueriesContext(connection) as small:
+        place(one_line, guest=guest)
+    with CaptureQueriesContext(connection) as large:
+        place(three_lines, guest=guest)
+
+    assert len(large) == len(small), "the line snapshots cost a query each"

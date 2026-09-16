@@ -197,6 +197,41 @@ def test_turn_time_comes_from_the_period(branch, dining_room, booking_time) -> N
     assert turn_time_for(branch, booking_time) == 120
 
 
+def test_availability_fetches_the_days_bookings_once(  # type: ignore[no-untyped-def]
+    branch, dining_room, booking_time, django_assert_max_num_queries
+) -> None:
+    """It used to run one query *per slot* — about 24 per request, on a public
+    and unthrottled endpoint. The day's bookings are fetched once and bucketed
+    in Python instead.
+
+    The budget: service periods, the blackout lookup, candidate tables, and the
+    day's bookings. Four queries, and crucially it does not grow with the number
+    of slots.
+    """
+    book_one(branch, dining_room, booking_time, email="a@example.com")
+
+    with django_assert_max_num_queries(5):
+        slots = slots_for(branch, date=booking_time.date(), party_size=2)
+
+    assert len(slots) == 8  # 18:00–21:30 every half hour
+    assert any(slot.tables_left == 1 for slot in slots)
+
+
+def test_the_query_count_does_not_grow_with_the_number_of_slots(  # type: ignore[no-untyped-def]
+    branch, dining_room, booking_time, django_assert_max_num_queries
+) -> None:
+    """Widen the service period to 24 slots; the query count must not move."""
+    from apps.reservations.models import ServicePeriod
+
+    ServicePeriod.objects.filter(branch=branch).update(
+        starts_at=dt.time(10, 0), ends_at=dt.time(21, 30)
+    )
+    with django_assert_max_num_queries(5):
+        slots = slots_for(branch, date=booking_time.date(), party_size=2)
+
+    assert len(slots) == 24
+
+
 def test_candidate_tables_respect_the_area(branch, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
     from apps.reservations.models import RestaurantTable, TableArea
 

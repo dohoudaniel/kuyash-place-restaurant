@@ -1,4 +1,10 @@
-"""Catalogue endpoints. All public, all read-only."""
+"""Catalogue endpoints. All public, all read-only.
+
+Public and identical for every visitor, so every one of these carries a
+``Cache-Control``. The category list, which the menu page asks for on every
+visit and which costs an aggregate per category, is read through the cache and
+dropped whenever a category or a dish changes.
+"""
 
 from __future__ import annotations
 
@@ -22,7 +28,12 @@ from apps.catalog.serializers import (
     MenuItemListSerializer,
 )
 from apps.common.pagination import PagePagination
+from apps.core.cache import CATEGORIES_KEY, TTL_MEDIUM, PublicCacheMixin, cached
 from apps.core.selectors import get_current_branch
+
+#: The menu changes when staff change it, which is rarely, but a stale price on
+#: a shared cache is a customer quoted the wrong number — so this is short.
+MENU_MAX_AGE = 60
 
 
 def _int_param(request: Request, name: str) -> int | None:
@@ -51,35 +62,49 @@ def _decimal_param(request: Request, name: str) -> Decimal | None:
         return None
 
 
-class CategoryListView(ListAPIView):
+class CategoryListView(PublicCacheMixin, APIView):
     """Menu categories with orderable-item counts."""
 
     permission_classes = [AllowAny]
-    serializer_class = CategorySerializer
-    pagination_class = None
+    cache_max_age = MENU_MAX_AGE
 
-    @extend_schema(summary="List menu categories", tags=["catalog"])
-    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        return super().get(request, *args, **kwargs)
+    @extend_schema(
+        summary="List menu categories",
+        responses={200: CategorySerializer(many=True)},
+        tags=["catalog"],
+    )
+    def get(self, request: Request) -> Response:
+        branch = get_current_branch()
+        return Response(
+            cached(
+                CATEGORIES_KEY.format(branch=branch.pk),
+                TTL_MEDIUM,
+                lambda: _categories_payload(branch),
+            )
+        )
 
-    def get_queryset(self) -> Any:
-        return categories_with_counts(get_current_branch())
+
+def _categories_payload(branch: Any) -> list[dict[str, Any]]:
+    # Plain dicts, not DRF's ReturnList: what goes into the cache must not hold
+    # a reference to a serializer instance.
+    return [dict(row) for row in CategorySerializer(categories_with_counts(branch), many=True).data]
 
 
-class DietaryTagListView(ListAPIView):
+class DietaryTagListView(PublicCacheMixin, ListAPIView):
     """The dietary filter vocabulary."""
 
     permission_classes = [AllowAny]
     serializer_class = DietaryTagSerializer
     pagination_class = None
     queryset = DietaryTag.objects.all()
+    cache_max_age = TTL_MEDIUM
 
     @extend_schema(summary="List dietary tags", tags=["catalog"])
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return super().get(request, *args, **kwargs)
 
 
-class MenuItemListView(ListAPIView):
+class MenuItemListView(PublicCacheMixin, ListAPIView):
     """The menu, filtered and sorted server-side.
 
     Items with unconfirmed placeholder prices are excluded entirely.
@@ -90,6 +115,7 @@ class MenuItemListView(ListAPIView):
     # Page, not cursor: cursor pagination imposes its own ordering and would
     # silently override the caller's `sort` parameter.
     pagination_class = PagePagination
+    cache_max_age = MENU_MAX_AGE
 
     @extend_schema(
         summary="List menu items",
@@ -129,12 +155,13 @@ class MenuItemListView(ListAPIView):
         )
 
 
-class MenuItemDetailView(RetrieveAPIView):
+class MenuItemDetailView(PublicCacheMixin, RetrieveAPIView):
     """One dish, with its variants and per-item modifier groups."""
 
     permission_classes = [AllowAny]
     serializer_class = MenuItemDetailSerializer
     lookup_field = "slug"
+    cache_max_age = MENU_MAX_AGE
 
     @extend_schema(summary="Retrieve a menu item", tags=["catalog"])
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -144,10 +171,11 @@ class MenuItemDetailView(RetrieveAPIView):
         return base_queryset()
 
 
-class FeaturedItemsView(APIView):
+class FeaturedItemsView(PublicCacheMixin, APIView):
     """What's Hot."""
 
     permission_classes = [AllowAny]
+    cache_max_age = MENU_MAX_AGE
 
     @extend_schema(
         summary="Featured items",

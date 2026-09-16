@@ -42,6 +42,7 @@ from apps.accounts.throttles import (
     PasswordResetEmailThrottle,
     PasswordResetIPThrottle,
     RegisterThrottle,
+    ResendVerificationIPThrottle,
     ResendVerificationThrottle,
 )
 from apps.common.exceptions import DomainError
@@ -66,10 +67,38 @@ class InvalidToken(DomainError):
     title = "That link is invalid or has expired"
 
 
+class WeakPassword(DomainError):
+    """A rejected password is not a dead link.
+
+    ``invalid_token`` used to cover both, so the frontend had to regex the prose
+    to tell "your reset link expired, request a new one" from "pick a stronger
+    password" — in a codebase whose own contract is to branch on the code and
+    never on the message.
+    """
+
+    code = "weak_password"
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    title = "That password is not strong enough"
+
+
+class AlreadyVerified(DomainError):
+    """The second click on a verification link is a success story, not an error.
+
+    Distinguishing it lets the frontend say "you're all set — sign in" instead
+    of "that link is invalid", followed by an offer to resend an email the API
+    has already decided not to send.
+    """
+
+    code = "already_verified"
+    status_code = status.HTTP_409_CONFLICT
+    title = "That email address is already confirmed"
+
+
 _ERROR_MAP = {
     "email_not_verified": EmailNotVerified,
     "invalid_token": InvalidToken,
-    "weak_password": InvalidToken,
+    "weak_password": WeakPassword,
+    "already_verified": AlreadyVerified,
 }
 
 
@@ -230,7 +259,10 @@ class ResendVerificationView(CsrfEnforcedMixin, APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = [ResendVerificationThrottle]
+    # Per IP *and* per address, as PasswordResetView does. The email-keyed class
+    # alone let one host mail-bomb unlimited addresses, because declaring
+    # throttle_classes replaces the global anon throttle.
+    throttle_classes = [ResendVerificationIPThrottle, ResendVerificationThrottle]
 
     @extend_schema(
         summary="Resend verification email",
@@ -296,7 +328,7 @@ class PasswordResetConfirmView(CsrfEnforcedMixin, APIView):
         except services.AuthError as error:
             _raise(error)
         except DjangoValidationError as exc:  # Django's password validators
-            raise InvalidToken(" ".join(exc.messages)) from exc
+            raise WeakPassword(" ".join(exc.messages)) from exc
 
         # Every session for this user has just been deleted — including this
         # request's own, if the visitor was signed in. Log the request out too,
@@ -329,7 +361,7 @@ class PasswordChangeView(APIView):
         except services.AuthError as error:
             _raise(error)
         except DjangoValidationError as exc:  # Django's password validators
-            raise InvalidToken(" ".join(exc.messages)) from exc
+            raise WeakPassword(" ".join(exc.messages)) from exc
 
         # Keep this session signed in; other devices are unaffected here because
         # the user proved knowledge of the current password.

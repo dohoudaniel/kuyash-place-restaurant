@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 
 from apps.promotions.models import DiscountType, PromoCode, PromoRedemption, RedemptionStatus
@@ -199,3 +200,77 @@ def test_codes_are_normalised_to_uppercase(branch) -> None:  # type: ignore[no-u
         branch=branch, code="  lower10 ", discount_type=DiscountType.FIXED, value=1
     )
     assert code.code == "LOWER10"
+
+
+# ── First-order-only, against the real order history ──────────────────────────
+
+
+def order_for(user, branch, status):  # type: ignore[no-untyped-def]
+    from apps.orders.models import Order
+
+    return Order.objects.create(
+        branch=branch, user=user, payment_method="card", grand_total=1_000_000, status=status
+    )
+
+
+def test_first_order_only_refuses_a_customer_who_has_ordered_before(  # type: ignore[no-untyped-def]
+    promo, verified_user, branch
+) -> None:
+    """It used to ask only whether *this code* had been redeemed, so a customer
+    with two hundred orders behind them still qualified for the new-customer
+    discount."""
+    from apps.orders.models import OrderStatus
+
+    promo.first_order_only = True
+    promo.save()
+    order_for(verified_user, branch, OrderStatus.DELIVERED)
+
+    result = check(promo, user=verified_user)
+    assert result.ok is False
+    assert "first orders only" in result.reason
+
+
+def test_first_order_only_ignores_orders_that_never_happened(  # type: ignore[no-untyped-def]
+    promo, verified_user, branch
+) -> None:
+    """A cancelled, rejected, expired or failed order fed nobody; it is not a
+    first order."""
+    from apps.orders.models import OrderStatus
+
+    promo.first_order_only = True
+    promo.save()
+    for status in (
+        OrderStatus.CANCELLED,
+        OrderStatus.REJECTED,
+        OrderStatus.EXPIRED,
+        OrderStatus.FAILED,
+    ):
+        order_for(verified_user, branch, status)
+
+    assert check(promo, user=verified_user).ok is True
+
+
+def test_a_reversed_redemption_does_not_burn_first_order_only(promo, verified_user) -> None:  # type: ignore[no-untyped-def]
+    """Refunding the order gave the use back everywhere else; here it did not."""
+    promo.first_order_only = True
+    promo.save()
+    PromoRedemption.objects.create(
+        promo_code=promo,
+        user=verified_user,
+        discount_amount=100_000,
+        status=RedemptionStatus.REVERSED,
+    )
+
+    assert check(promo, user=verified_user).ok is True
+
+
+@pytest.mark.parametrize("user", [None, AnonymousUser()])
+def test_a_guest_has_no_order_history(user) -> None:  # type: ignore[no-untyped-def]
+    """A first-order-only code cannot bind someone with no account.
+
+    Answering False here (rather than True) keeps the code unusable by guests,
+    which is what `validate_promo` relies on.
+    """
+    from apps.promotions.services import has_ordered_before
+
+    assert has_ordered_before(user) is False

@@ -5,8 +5,8 @@ import { todaysHours } from "@/lib/site/hours";
 import { useSiteInfo } from "@/lib/site/useSiteInfo";
 
 export default function ContactHero() {
-  const { branch, settings, hours } = useSiteInfo();
-  const email = settings?.support_email || branch?.email || "";
+  const { branch, hours } = useSiteInfo();
+  const email = branch?.email || "";
 
   const quickInfo = [
     branch?.phone && { icon: Phone, label: "Call Us", value: branch.phone, href: `tel:${branch.phone}`, color: "var(--red)" },

@@ -539,3 +539,55 @@ def test_a_complete_cart_can_check_out(branch, category, user_cart, address) -> 
     priced = price_cart(user_cart)
     assert priced.blockers == []
     assert priced.can_checkout is True
+
+
+def test_a_targeted_discount_is_allocated_only_to_the_lines_it_applies_to(  # type: ignore[no-untyped-def]
+    branch, category, cart
+) -> None:
+    """A targeted code is *sized* by the matching lines but was *allocated*
+    across all of them, so part of it was written off a dish the code does not
+    apply to — and that line's VAT computed on an amount nobody discounted.
+    With mixed tax classes in one cart, that over- or under-remits tax.
+    """
+    from apps.catalog.models import Category
+    from apps.common.money import extract_vat
+    from apps.promotions.models import DiscountType, PromoCode
+
+    drinks = Category.objects.create(branch=branch, name="Drinks", slug="drinks")
+    burger = MenuItem.objects.create(
+        branch=branch,
+        category=category,
+        name="Burger",
+        slug="burger",
+        base_price=1_000_000,
+        needs_repricing=False,
+    )
+    water = MenuItem.objects.create(
+        branch=branch,
+        category=drinks,
+        name="Water",
+        slug="water",
+        base_price=1_000_000,
+        needs_repricing=False,
+        tax_class=TaxClass.ZERO_RATED,
+    )
+    add_line(cart, burger)
+    add_line(cart, water)
+
+    code = PromoCode.objects.create(
+        branch=branch, code="BURGERS", discount_type=DiscountType.FIXED, value=200_000
+    )
+    code.applicable_categories.add(category)
+    cart.promo_code = code
+    cart.fulfilment_type = FulfilmentType.PICKUP
+    cart.save()
+
+    priced = price_cart(cart)
+    lines = {line.slug: line for line in priced.lines}
+
+    assert priced.promo_eligible_subtotal == 1_000_000
+    assert lines["burger"].discount == 200_000
+    assert lines["water"].discount == 0
+    assert lines["burger"].vat == extract_vat(800_000, 750)
+    # The parts still sum exactly to the whole.
+    assert sum(line.discount for line in priced.lines) == priced.discount_total

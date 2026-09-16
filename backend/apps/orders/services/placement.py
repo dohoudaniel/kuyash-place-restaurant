@@ -14,7 +14,13 @@ from django.db import transaction
 
 from apps.carts.models import CartStatus
 from apps.carts.services.pricing import price_cart
-from apps.common.exceptions import BranchClosed, DomainError, ItemUnavailable, PriceChanged
+from apps.common.exceptions import (
+    BranchClosed,
+    DomainError,
+    ItemUnavailable,
+    PriceChanged,
+    PromoInvalid,
+)
 from apps.orders.models import (
     EventSource,
     Order,
@@ -110,6 +116,36 @@ def place_order(
     if cart.user is None and not (guest and guest.get("email")):
         raise CheckoutBlocked("An email address is required to place an order.")
 
+    # ── Promo: claim the code before anything is written ──────────────────────
+    # Two simultaneous checkouts both read ``times_used`` as 0 and both redeem a
+    # ``usage_limit=1`` code. Locking the row serialises them: the loser blocks
+    # until the winner's redemption is committed, then re-reads the count and is
+    # refused. Claimed *before* the order row exists so that the loser writes
+    # nothing at all, and so that ``first_order_only`` cannot mistake this very
+    # order for the customer's order history.
+    locked_promo = None
+    if cart.promo_code_id is not None and priced.promo_code:
+        from django.conf import settings
+
+        from apps.promotions.models import PromoCode
+        from apps.promotions.services import validate_promo
+
+        promo_queryset = PromoCode.objects.filter(pk=cart.promo_code_id)
+        if settings.USING_POSTGRES:  # pragma: no cover - exercised in Postgres CI
+            # SQLite has no row locking; the surrounding transaction is the best
+            # it offers, which is sufficient for local development (ADR-015).
+            promo_queryset = promo_queryset.select_for_update()
+        locked_promo = promo_queryset.get()
+
+        recheck = validate_promo(
+            promo=locked_promo,
+            subtotal=priced.subtotal,
+            user=cart.user,
+            eligible_subtotal=priced.promo_eligible_subtotal,
+        )
+        if not recheck.ok:
+            raise PromoInvalid(recheck.reason)
+
     # ── Address snapshot ──────────────────────────────────────────────────────
     address = cart.delivery_address
     guest = guest or {}
@@ -117,6 +153,9 @@ def place_order(
     order = Order(
         branch=branch,
         user=cart.user,
+        # Snapshotted so that confirming payment empties *this* basket and no
+        # other customer's.
+        cart=cart,
         guest_email="" if cart.user else guest.get("email", ""),
         guest_phone="" if cart.user else guest.get("phone", ""),
         guest_name="" if cart.user else guest.get("full_name", ""),
@@ -164,40 +203,57 @@ def place_order(
     order.save()
 
     # ── Line snapshots ────────────────────────────────────────────────────────
+    # Two statements rather than two per line: a ten-line order with options
+    # cost around forty INSERTs on the most important path in the system.
     cart_items = {str(item.pk): item for item in cart.items.select_related("menu_item", "variant")}
+    order_items = []
     for line in priced.lines:
-        cart_item = cart_items[line.cart_item_id]
-        menu_item = cart_item.menu_item
-        order_item = OrderItem.objects.create(
-            order=order,
-            menu_item=menu_item,
-            name_snapshot=line.name,
-            description_snapshot=menu_item.description,
-            variant_name_snapshot=line.variant_name,
-            slug_snapshot=line.slug,
-            image_url_snapshot=(line.image_url or "")[:500],
-            tax_class_snapshot=line.tax_class,
-            unit_price=line.unit_price,
-            quantity=line.quantity,
-            line_subtotal=line.line_subtotal,
-            line_discount=line.discount,
-            line_vat=line.vat,
-            special_instructions=line.special_instructions,
-        )
-        for modifier in line.modifiers:
-            OrderItemModifier.objects.create(
-                order_item=order_item,
-                name_snapshot=modifier.name,
-                price_delta=modifier.price_delta,
-                quantity=modifier.quantity,
+        menu_item = cart_items[line.cart_item_id].menu_item
+        order_items.append(
+            OrderItem(
+                order=order,
+                menu_item=menu_item,
+                name_snapshot=line.name,
+                description_snapshot=menu_item.description,
+                variant_name_snapshot=line.variant_name,
+                slug_snapshot=line.slug,
+                image_url_snapshot=(line.image_url or "")[:500],
+                tax_class_snapshot=line.tax_class,
+                unit_price=line.unit_price,
+                quantity=line.quantity,
+                line_subtotal=line.line_subtotal,
+                line_discount=line.discount,
+                line_vat=line.vat,
+                special_instructions=line.special_instructions,
             )
+        )
+    OrderItem.objects.bulk_create(order_items)
+
+    chosen_options = [
+        OrderItemModifier(
+            order_item=order_item,
+            name_snapshot=modifier.name,
+            price_delta=modifier.price_delta,
+            quantity=modifier.quantity,
+        )
+        for order_item, line in zip(order_items, priced.lines, strict=True)
+        for modifier in line.modifiers
+    ]
+    if chosen_options:
+        OrderItemModifier.objects.bulk_create(chosen_options)
 
     # ── Promo ledger ──────────────────────────────────────────────────────────
-    if cart.promo_code is not None and priced.promo_discount:
+    # Written whenever a code validated, not only when it took money off the
+    # goods. ``calculate_discount`` returns 0 for a free-delivery code, so the
+    # old ``and priced.promo_discount`` guard meant free-delivery codes were
+    # recorded nowhere: ``times_used`` is derived from this ledger, so a
+    # ``usage_limit=1`` free-delivery code was infinite-use, by everyone,
+    # forever, with no audit trail.
+    if locked_promo is not None:
         from apps.promotions.models import PromoRedemption, RedemptionStatus
 
         PromoRedemption.objects.create(
-            promo_code=cart.promo_code,
+            promo_code=locked_promo,
             user=cart.user,
             order=order,
             order_reference=order.reference,

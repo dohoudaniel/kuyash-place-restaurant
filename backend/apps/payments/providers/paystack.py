@@ -18,7 +18,7 @@ from apps.payments.providers.base import (
     InitResult,
     RefundResult,
     VerifyResult,
-    parse_money_json,
+    read_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,11 +57,11 @@ class PaystackProvider:
         response = requests.post(
             f"{API_ROOT}{path}", json=payload, headers=self._headers(), timeout=TIMEOUT
         )
-        return parse_money_json(response.content)
+        return read_json(response)
 
     def _get(self, path: str) -> dict[str, Any]:
         response = requests.get(f"{API_ROOT}{path}", headers=self._headers(), timeout=TIMEOUT)
-        return parse_money_json(response.content)
+        return read_json(response)
 
     # ── Interface ─────────────────────────────────────────────────────────────
 
@@ -72,9 +72,15 @@ class PaystackProvider:
         email: str,
         reference: str,
         callback_url: str,
+        currency: str = "NGN",
         metadata: Mapping[str, Any] | None = None,
     ) -> InitResult:
-        """Start a payment. Paystack takes the amount in kobo already."""
+        """Start a payment. Paystack takes the amount in kobo already.
+
+        The currency is the record's, not a constant: charging in naira and then
+        verifying against a branch trading in anything else fails every
+        comparison in :func:`verify_and_settle`, forever.
+        """
         try:
             body = self._post(
                 "/transaction/initialize",
@@ -83,7 +89,7 @@ class PaystackProvider:
                     "email": email,
                     "reference": reference,
                     "callback_url": callback_url,
-                    "currency": "NGN",
+                    "currency": currency,
                     "metadata": dict(metadata or {}),
                 },
             )
@@ -110,7 +116,12 @@ class PaystackProvider:
             return VerifyResult(status="pending", message=f"{exc.__class__.__name__}: {exc}")
 
         if not body.get("status"):
-            return VerifyResult(status="failed", message=str(body.get("message", "")))
+            # `status: false` is the *envelope* refusing to answer — a bad key, a
+            # rate limit, or a reference that has not propagated yet. None of
+            # those mean the customer did not pay, so this is retryable. Calling
+            # it "failed" stranded real, paid transactions permanently: the
+            # reconciliation sweep never looks at a failed record again.
+            return VerifyResult(status="pending", message=str(body.get("message", "")))
 
         data = body.get("data") or {}
         authorization = data.get("authorization") or {}
@@ -119,6 +130,7 @@ class PaystackProvider:
             # Paystack reports kobo; coerce through int() in case it arrives as Decimal.
             amount_kobo=int(data.get("amount") or 0),
             currency=data.get("currency", "NGN"),
+            provider_reference=str(data.get("reference", "")),
             channel=data.get("channel", ""),
             authorization_code=authorization.get("authorization_code", ""),
             card_last4=authorization.get("last4", ""),

@@ -235,3 +235,47 @@ def test_cash_orders_are_flagged_for_collection(api_client, kitchen_user, ready_
     ticket = next(t for t in tickets if t["reference"] == order.reference)
     assert ticket["requires_cash_collection"] is True
     assert ticket["payment_status"] == "unpaid"
+
+
+def test_the_queue_does_not_query_a_rider_per_ticket(api_client, kitchen_user, branch) -> None:  # type: ignore[no-untyped-def]
+    """The kitchen's primary screen, polled every ten seconds per screen, and
+    worst exactly when the restaurant is busiest."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+    from django.utils import timezone
+
+    from apps.accounts.models import User
+    from apps.delivery.models import DeliveryAssignment, RiderProfile
+    from apps.orders.models import Order
+
+    rider = RiderProfile.objects.create(
+        user=User.objects.create_user(
+            email="emeka@kuyashplace.com", password="x" * 16, full_name="Emeka Rider"
+        )
+    )
+
+    def ticket(index: int) -> None:
+        order = Order.objects.create(
+            branch=branch,
+            payment_method="card",
+            grand_total=1_000_000,
+            guest_email=f"guest{index}@example.com",
+            status=OrderStatus.PAID,
+            placed_at=timezone.now(),
+        )
+        DeliveryAssignment.objects.create(order=order, rider=rider)
+
+    api_client.force_authenticate(user=kitchen_user)
+    url = reverse("v1:kds:queue")
+
+    ticket(0)
+    api_client.get(url)  # warm per-process caches, so the tickets are what differs
+    with CaptureQueriesContext(connection) as one_ticket:
+        assert api_client.get(url).status_code == 200
+
+    for index in (1, 2, 3):
+        ticket(index)
+    with CaptureQueriesContext(connection) as four_tickets:
+        assert api_client.get(url).status_code == 200
+
+    assert len(four_tickets) == len(one_ticket), "the rider lookup scales per ticket"

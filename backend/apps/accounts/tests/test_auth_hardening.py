@@ -61,16 +61,48 @@ def test_a_signed_in_visitor_can_reset_their_password(verified_user: User) -> No
 def test_a_weak_new_password_is_reported_as_json(
     api_client: APIClient, verified_user: User
 ) -> None:
+    """A rejected password gets its own code.
+
+    It used to share ``invalid_token`` with a dead link, so the frontend had to
+    regex the prose to decide between "request a new link" and "pick a stronger
+    password" — in a codebase whose contract is to branch on the code.
+    """
     uid, token = reset_link_parts(api_client, verified_user.email)
     response = api_client.post(
         reverse("v1:auth:password-reset-confirm"),
         {"uid": uid, "token": token, "new_password": "1234567890"},
         format="json",
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     body = response.json()
-    assert body["code"] == "invalid_token"
+    assert body["code"] == "weak_password"
     assert "numeric" in body["detail"].lower() or "common" in body["detail"].lower()
+
+
+def test_a_dead_reset_link_is_still_invalid_token(
+    api_client: APIClient, verified_user: User
+) -> None:
+    """The guard on the split above: the two codes must not drift back together."""
+    response = api_client.post(
+        reverse("v1:auth:password-reset-confirm"),
+        {"uid": "bogus", "token": "bogus", "new_password": "a-brand-new-long-passphrase"},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_token"
+
+
+def test_a_weak_password_on_change_is_also_weak_password(
+    api_client: APIClient, verified_user: User
+) -> None:
+    api_client.force_authenticate(user=verified_user)
+    response = api_client.post(
+        reverse("v1:auth:password-change"),
+        {"current_password": "correct-horse-battery-staple", "new_password": "1234567890"},
+        format="json",
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "weak_password"
 
 
 # ── CSRF on the sign-in endpoints ─────────────────────────────────────────────

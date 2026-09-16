@@ -18,22 +18,45 @@ from apps.orders.signals import order_paid, order_status_changed
 logger = logging.getLogger(__name__)
 
 
+#: An order in any of these states did not, in the end, feed anyone, so the
+#: customer gets their promo use back. ``loyalty.receivers.UNDONE_STATUSES``
+#: holds the same set for points: the two ledgers used to disagree about
+#: EXPIRED and FAILED, so abandoning a payment permanently burned a
+#: one-per-customer code while refunding the very same order returned it.
+UNDONE_STATUSES = frozenset(
+    {
+        OrderStatus.REFUNDED,
+        OrderStatus.CANCELLED,
+        OrderStatus.REJECTED,
+        OrderStatus.EXPIRED,
+        OrderStatus.FAILED,
+    }
+)
+
+
 @receiver(order_paid, dispatch_uid="orders.clear_cart_on_payment")
 def clear_cart_on_payment(sender: type[Order], order: Order, **kwargs: Any) -> None:
-    """Empty the basket once the money is confirmed — not before (ORD-4).
+    """Empty the basket this order came from — and no other (ORD-4).
 
     The frontend clears the cart at submit, so a failed payment loses the
-    customer's basket with no way back.
-    """
-    from apps.carts.models import Cart, CartStatus
+    customer's basket with no way back; ``place_order`` therefore leaves a
+    converted cart's items in place until the money is confirmed.
 
-    carts = Cart.objects.filter(status=CartStatus.CONVERTED)
-    if order.user_id:
-        carts = carts.filter(user_id=order.user_id)
-    else:
-        carts = carts.filter(user__isnull=True)
-    for cart in carts.filter(branch=order.branch):
-        cart.items.all().delete()
+    This used to select carts by *customer identity and branch* rather than by
+    the order's own cart, so paying for one order emptied every converted
+    basket that matched: a guest sitting on the payment page lost their items
+    when an unrelated guest paid, and a signed-in customer with two outstanding
+    orders lost the basket attached to the other one.
+    """
+    if order.cart_id is None:
+        # Orders placed before the cart was snapshotted, and any order whose
+        # cart has since been purged. Nothing identifies a basket to clear, and
+        # guessing is what caused the bug above.
+        return
+
+    from apps.carts.models import CartItem
+
+    CartItem.objects.filter(cart_id=order.cart_id).delete()
 
 
 @receiver(order_paid, dispatch_uid="orders.confirm_promo_redemption")
@@ -50,8 +73,8 @@ def confirm_promo_redemption(sender: type[Order], order: Order, **kwargs: Any) -
 def reverse_promo_on_refund(
     sender: type[Order], order: Order, from_status: str, to_status: str, **kwargs: Any
 ) -> None:
-    """Refunding or cancelling gives the customer their promo use back (RF-4)."""
-    if to_status not in {OrderStatus.REFUNDED, OrderStatus.CANCELLED, OrderStatus.REJECTED}:
+    """Refunding, cancelling or abandoning gives the promo use back (RF-4)."""
+    if to_status not in UNDONE_STATUSES:
         return
     from apps.promotions.models import PromoRedemption, RedemptionStatus
 
@@ -174,9 +197,33 @@ def notify_customer(
     queue_templated_email(template_key=key, recipient=recipient, context={**base, **extra})
 
 
+def _amount_received(order: Order) -> int:
+    """What was actually collected against this order, in kobo.
+
+    A read-only query into ``payments``. ``amount_paid`` used to be set to
+    ``grand_total`` regardless of what settled, which is why a duplicate charge
+    could not be refunded through the API at all: refunds are capped at
+    ``amount_paid``, so a second settlement's money was invisible to them.
+
+    ``amount_verified`` is what the provider says arrived; ``amount`` is what we
+    asked for, used only where the provider reported no figure. With no
+    successful transaction at all — a cash order, or money recorded outside the
+    system — there is nothing to derive from and the order total stands.
+    """
+    from django.db.models import Sum
+    from django.db.models.functions import Coalesce
+
+    from apps.payments.models import PaymentTransaction, TransactionStatus
+
+    received = PaymentTransaction.objects.filter(
+        order_id=order.pk, status=TransactionStatus.SUCCESS
+    ).aggregate(total=Sum(Coalesce("amount_verified", "amount")))["total"]
+    return int(received) if received is not None else order.grand_total
+
+
 @receiver(order_paid, dispatch_uid="orders.mark_payment_status")
 def mark_payment_status(sender: type[Order], order: Order, **kwargs: Any) -> None:
     if order.payment_status != PaymentStatus.PAID:
         order.payment_status = PaymentStatus.PAID
-        order.amount_paid = order.grand_total
+        order.amount_paid = _amount_received(order)
         order.save(update_fields=["payment_status", "amount_paid", "updated_at"])

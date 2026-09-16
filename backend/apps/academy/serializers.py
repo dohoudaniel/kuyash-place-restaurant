@@ -65,6 +65,16 @@ class CohortSerializer(serializers.ModelSerializer):
     def get_seats_left(self, obj: Cohort) -> int:
         if obj.status != CohortStatus.OPEN:
             return 0
+        taken = getattr(obj, "seats_taken", None)
+        if taken is not None:
+            # Annotated by the course queryset: one aggregate for every cohort
+            # on the page, instead of a COUNT(*) per cohort on a course list
+            # that is deliberately unpaginated.
+            return max(0, obj.capacity - int(taken))
+        # No annotation (a serializer built by hand, or a nested enrolment):
+        # fall back to the query. The enrolment path never comes through here —
+        # it counts seats under a row lock in `services.enrol`, which is the
+        # only count allowed to decide whether a seat exists.
         return services.seats_left(obj, now=self.context.get("now"))
 
 

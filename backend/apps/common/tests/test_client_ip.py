@@ -190,7 +190,7 @@ def test_the_deploy_check_warns_behind_a_proxy_with_no_count(settings) -> None: 
     settings.SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     settings.TRUSTED_PROXY_COUNT = 0
     [warning] = check_proxy_count(None)
-    assert warning.id == "kuyash.W021"
+    assert warning.id == "kuyash.E021"
 
     settings.TRUSTED_PROXY_COUNT = 1
     assert check_proxy_count(None) == []

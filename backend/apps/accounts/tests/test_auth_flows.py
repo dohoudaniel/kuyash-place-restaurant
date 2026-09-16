@@ -48,8 +48,19 @@ def test_registration_creates_an_unverified_user(api_client) -> None:  # type: i
     assert user.full_name == "Ada Obi"
 
 
-def test_registration_queues_and_records_a_verification_email(api_client) -> None:  # type: ignore[no-untyped-def]
-    api_client.post(reverse("v1:auth:register"), register_payload(), format="json")
+def test_registration_queues_and_records_a_verification_email(  # type: ignore[no-untyped-def]
+    api_client, django_capture_on_commit_callbacks
+) -> None:
+    """The row is written inside the transaction; the send waits for the commit.
+
+    ``register_user`` is ``@transaction.atomic``, and publishing the task inside
+    it let a worker read the row before it existed — the email was then lost
+    silently, and since verification is mandatory the customer could never sign
+    in.
+    """
+    with django_capture_on_commit_callbacks(execute=True):
+        api_client.post(reverse("v1:auth:register"), register_payload(), format="json")
+
     notification = Notification.objects.get(template_key="verify_email")
     assert notification.recipient == "ada@example.com"
     assert notification.status == NotificationStatus.SENT
@@ -116,6 +127,45 @@ def test_a_bogus_verification_key_is_rejected(api_client) -> None:  # type: igno
     )
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_token"
+
+
+def test_a_second_click_says_already_verified_rather_than_invalid(api_client) -> None:  # type: ignore[no-untyped-def]
+    """The ordinary second click must not be a dead end.
+
+    allauth's key lookup filters on ``verified=False``, so a link clicked from a
+    second device, prefetched by a mail client, or simply refreshed returned the
+    same "invalid or expired" as a forged key. The page then offered a resend,
+    and the resend endpoint silently did nothing for a verified address while
+    claiming an email was on its way. A distinct code lets the frontend say
+    "you're all set — sign in".
+    """
+    api_client.post(reverse("v1:auth:register"), register_payload(), format="json")
+    key = verification_key()
+
+    first = api_client.post(reverse("v1:auth:verify-email"), {"key": key}, format="json")
+    assert first.status_code == 200
+
+    second = api_client.post(reverse("v1:auth:verify-email"), {"key": key}, format="json")
+    assert second.status_code == 409
+    assert second.json()["code"] == "already_verified"
+
+
+def test_a_deactivated_account_cannot_verify_its_way_into_a_session(api_client) -> None:  # type: ignore[no-untyped-def]
+    """Django's backend refuses to load an inactive user, so the session was
+    inert rather than a real bypass. The check is now explicit instead."""
+    api_client.post(reverse("v1:auth:register"), register_payload(), format="json")
+    key = verification_key()
+
+    user = User.objects.get(email="ada@example.com")
+    user.is_active = False
+    user.save(update_fields=["is_active"])
+
+    response = api_client.post(reverse("v1:auth:verify-email"), {"key": key}, format="json")
+    assert response.status_code == 401
+    assert api_client.get(reverse("v1:auth:session")).json()["user"] is None
+
+    user.refresh_from_db()
+    assert user.is_email_verified is False
 
 
 def test_resend_verification_does_not_reveal_account_existence(api_client) -> None:  # type: ignore[no-untyped-def]
@@ -296,3 +346,41 @@ def test_password_change_requires_authentication(api_client) -> None:  # type: i
         format="json",
     )
     assert response.status_code in (401, 403)
+
+
+# ── Sessions ──────────────────────────────────────────────────────────────────
+
+
+def test_invalidating_sessions_drops_only_that_users_own(  # type: ignore[no-untyped-def]
+    verified_user: User, django_assert_max_num_queries
+) -> None:
+    """AS-1, plus the shape of the fix.
+
+    Django's session table has no user column, so this has to decode every
+    unexpired row — that cost is the documented ceiling. What changed is the
+    deletes: one statement for the whole set, where it used to be one round trip
+    per session, inside the password-reset transaction.
+    """
+    from django.contrib.sessions.backends.db import SessionStore
+    from django.contrib.sessions.models import Session
+
+    from apps.accounts import services
+
+    other = User.objects.create_user(email="ben@example.com", password="x" * 16)
+
+    def make_session(owner: User) -> None:
+        store = SessionStore()
+        store["_auth_user_id"] = str(owner.pk)
+        store.create()
+
+    for _ in range(5):
+        make_session(verified_user)
+    make_session(other)
+    assert Session.objects.count() == 6
+
+    with django_assert_max_num_queries(3):
+        services._invalidate_sessions(verified_user)
+
+    remaining = list(Session.objects.all())
+    assert len(remaining) == 1
+    assert remaining[0].get_decoded()["_auth_user_id"] == str(other.pk)

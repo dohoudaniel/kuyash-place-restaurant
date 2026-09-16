@@ -85,30 +85,36 @@ def test_an_empty_recipient_is_skipped() -> None:
     assert queue_templated_email(template_key="order_delivered", recipient="") is None
 
 
-def test_html_is_sent_as_an_alternative_part(mailoutbox) -> None:  # type: ignore[no-untyped-def]
+def test_html_is_sent_as_an_alternative_part(  # type: ignore[no-untyped-def]
+    mailoutbox, django_capture_on_commit_callbacks
+) -> None:
     EmailTemplate.objects.create(
         key="order_delivered",
         subject="Order {reference}",
         text_body="Plain text for {reference}",
         html_body="<p>HTML for {reference}</p>",
     )
-    queue_templated_email(
-        template_key="order_delivered",
-        recipient="ada@example.com",
-        context={"reference": "KYS-AAA111", "name": "Ada"},
-    )
+    with django_capture_on_commit_callbacks(execute=True):
+        queue_templated_email(
+            template_key="order_delivered",
+            recipient="ada@example.com",
+            context={"reference": "KYS-AAA111", "name": "Ada"},
+        )
     message = mailoutbox[0]
     assert message.body == "Plain text for KYS-AAA111"
     assert message.alternatives[0][0] == "<p>HTML for KYS-AAA111</p>"
     assert message.alternatives[0][1] == "text/html"
 
 
-def test_the_outbox_records_the_rendered_body(mailoutbox) -> None:  # type: ignore[no-untyped-def]
-    queue_templated_email(
-        template_key="order_delivered",
-        recipient="ada@example.com",
-        context={"name": "Ada", "reference": "KYS-AAA111"},
-    )
+def test_the_outbox_records_the_rendered_body(  # type: ignore[no-untyped-def]
+    mailoutbox, django_capture_on_commit_callbacks
+) -> None:
+    with django_capture_on_commit_callbacks(execute=True):
+        queue_templated_email(
+            template_key="order_delivered",
+            recipient="ada@example.com",
+            context={"name": "Ada", "reference": "KYS-AAA111"},
+        )
     record = Notification.objects.get(template_key="order_delivered")
     assert "KYS-AAA111" in record.body
     assert record.status == "sent"

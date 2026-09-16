@@ -10,7 +10,7 @@ from django.utils.crypto import constant_time_compare
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,7 +20,14 @@ from apps.carts.views import CART_TOKEN_HEADER
 from apps.common import idempotency
 from apps.common.exceptions import DomainError, IllegalTransition
 from apps.common.pagination import CursorPagination
-from apps.common.permissions import IsKitchenStaff, current_user
+from apps.common.permissions import (
+    GROUP_KITCHEN,
+    GROUP_MANAGERS,
+    GROUP_RIDERS,
+    IsKitchenStaff,
+    current_user,
+    in_group,
+)
 from apps.common.throttling import SCOPED_THROTTLES
 from apps.core.selectors import get_current_branch
 from apps.orders.models import EventSource, Order, OrderStatus
@@ -58,19 +65,37 @@ def _order_etag(order: Order) -> str:
 
     Lets a polling client send ``If-None-Match`` and get a 304 with no body
     while nothing has happened.
+
+    Computed from the events the caller already prefetched. ``order_by()`` here
+    discarded that prefetch and went back to the database on the single most
+    polled endpoint in the system — the endpoint this ETag exists to make cheap.
     """
-    latest = order.events.order_by("-created_at", "-id").first()
+    events = list(order.events.all())
+    latest = max(events, key=lambda event: (event.created_at, event.pk)) if events else None
     seed = f"{order.reference}:{order.status}:{latest.pk if latest else 0}"
     return f'W/"{hashlib.sha256(seed.encode()).hexdigest()[:32]}"'
 
 
 def _may_read(request: Request, order: Order) -> bool:
+    """Whether the caller may see this order, including its customer's details."""
     user = request.user
     if user.is_authenticated:
         if order.user_id and order.user_id == user.pk:
             return True
-        if user.is_staff or user.groups.filter(name__in=["managers", "kitchen", "riders"]).exists():
+        if user.is_staff or in_group(user, GROUP_MANAGERS, GROUP_KITCHEN):
+            # Managers run the business, and the kitchen needs every ticket in
+            # the queue — and takes the call when a customer rings about one.
             return True
+        if in_group(user, GROUP_RIDERS):
+            # A rider sees the orders they are actually carrying. Group
+            # membership alone used to expose every customer's name, phone,
+            # street, area, landmark, delivery notes and receipt PDF, for every
+            # order in the business.
+            from apps.delivery.models import DeliveryAssignment
+
+            return DeliveryAssignment.objects.filter(
+                order_id=order.pk, rider__user_id=user.pk
+            ).exists()
     supplied = request.headers.get(GUEST_TOKEN_HEADER, "")
     return (
         bool(order.guest_token)
@@ -79,12 +104,39 @@ def _may_read(request: Request, order: Order) -> bool:
     )
 
 
-class OrderCreateListView(APIView):
-    """Place an order, or list the caller's own."""
+def _own_orders(request: Request) -> Any:
+    """The caller's own orders, with lines prefetched for the history previews."""
+    return Order.objects.filter(user=current_user(request)).prefetch_related("items")
+
+
+class OrderCreateListView(ListAPIView):
+    """Place an order, or list the caller's own.
+
+    ``GET`` returns exactly what ``/orders/mine/`` returns. The route and this
+    class have always been named for both verbs, and the scoped throttle
+    deliberately counts writes only so that reading your own orders cannot use
+    up the allowance for placing one — but only ``post`` was ever implemented,
+    so listing answered 405.
+    """
 
     permission_classes = [AllowAny]
+    serializer_class = OrderListSerializer
+    pagination_class = CursorPagination
     throttle_scope = "order_create"
     throttle_classes = SCOPED_THROTTLES
+
+    def get_permissions(self) -> list[BasePermission]:
+        # Placing an order is open to guests; listing orders is never.
+        if self.request.method == "POST":
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self) -> Any:
+        return _own_orders(self.request)
+
+    @extend_schema(summary="List my orders", tags=["orders"])
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return super().get(request, *args, **kwargs)
 
     @extend_schema(
         summary="Place an order",
@@ -113,7 +165,7 @@ class OrderCreateListView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        cache_key, replayed = idempotency.begin("orders", key, request.data)
+        claim, replayed = idempotency.begin("orders", key, request.data)
         if replayed is not None:
             response = Response(replayed, status=status.HTTP_201_CREATED)
             response["Idempotency-Replayed"] = "true"
@@ -135,11 +187,11 @@ class OrderCreateListView(APIView):
             )
         except Exception:
             # Release the claim so the customer can correct and retry.
-            idempotency.abandon(cache_key)
+            idempotency.abandon(claim)
             raise
 
         body = serialise_order(order, include_token=order.user_id is None)
-        idempotency.complete(cache_key, body)
+        idempotency.complete(claim, body)
         return Response(body, status=status.HTTP_201_CREATED)
 
 
@@ -151,7 +203,7 @@ class OrderHistoryView(ListAPIView):
     pagination_class = CursorPagination
 
     def get_queryset(self) -> Any:
-        return Order.objects.filter(user=current_user(self.request)).prefetch_related("items")
+        return _own_orders(self.request)
 
     @extend_schema(summary="List my orders", tags=["orders"])
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -184,7 +236,9 @@ class OrderDetailView(APIView):
     )
     def get(self, request: Request, reference: str) -> Response:
         order = get_object_or_404(
-            Order.objects.prefetch_related("items__modifiers", "items__reviews", "events"),
+            Order.objects.select_related("delivery_assignment__rider__user").prefetch_related(
+                "items__modifiers", "items__reviews", "events"
+            ),
             reference=reference,
         )
         if not _may_read(request, order):
@@ -262,6 +316,9 @@ class KDSQueueView(APIView):
         statuses = [value for value in wanted.split(",") if value]
         orders = (
             Order.objects.filter(branch=get_current_branch(), status__in=statuses)
+            # The rider is a reverse one-to-one, so it joins rather than costing
+            # a query per ticket on the screen the kitchen polls every 10s.
+            .select_related("delivery_assignment__rider__user")
             .prefetch_related("items__modifiers")
             .order_by("placed_at", "created_at")
         )

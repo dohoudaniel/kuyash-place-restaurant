@@ -190,3 +190,31 @@ def test_admin_upload_creates_a_photo(admin_client_logged_in, branch, signature)
     assert response.status_code == 302, response.content.decode()[:2000]
     created = GalleryImage.objects.get(title="Wedding")
     assert list(created.tags.all()) == [signature]
+
+
+# ── Query cost ────────────────────────────────────────────────────────────────
+
+
+def test_finding_the_neighbours_does_not_grow_with_the_gallery(api_client, branch) -> None:  # type: ignore[no-untyped-def]
+    """It used to load every matching image id, on every detail request, to find
+    the two either side."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    photos = [photo(branch, f"Photo {index}", order=index) for index in range(1, 6)]
+    api_client.get(LIST)  # warm the branch cache so it is not counted below
+
+    def cost() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            assert api_client.get(detail_url(photos[2])).status_code == 200
+        return len(captured)
+
+    small = cost()
+    for index in range(6, 46):
+        photo(branch, f"Photo {index}", order=index)
+    assert cost() == small
+
+
+def test_the_gallery_tells_caches_it_may_be_cached(api_client, branch) -> None:  # type: ignore[no-untyped-def]
+    header = api_client.get(LIST)["Cache-Control"]
+    assert "public" in header and "max-age=" in header

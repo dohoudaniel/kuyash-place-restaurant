@@ -206,7 +206,13 @@ def ensure_payable(enrolment: Enrolment) -> None:
 
 
 def confirm_payment(enrolment: Enrolment, record: Any) -> Enrolment:
-    """Mark an enrolment paid. Called from payment settlement, inside its transaction."""
+    """Mark an enrolment paid. Called from payment settlement, inside its transaction.
+
+    The money is always recorded. Confirming the *seat* is conditional: a
+    payment that lands after its hold lapsed, into a cohort that filled
+    meanwhile, used to be confirmed anyway and sold one seat twice — a student
+    who turns up to a class with no place for them.
+    """
     enrolment = Enrolment.objects.select_for_update().get(pk=enrolment.pk)
     if enrolment.paid_at is not None:
         return enrolment
@@ -219,14 +225,34 @@ def confirm_payment(enrolment: Enrolment, record: Any) -> Enrolment:
         logger.critical("payment_for_cancelled_enrolment", extra={"enrolment": enrolment.reference})
         return enrolment
 
+    cohort = Cohort.objects.select_for_update().get(pk=enrolment.cohort_id)
+    if not hold_is_live(enrolment, now=now) and seats_left(cohort, now=now) <= 0:
+        # Paid, but there is no seat to give. Leave it unconfirmed rather than
+        # overbook: the fee is on record and flagged, and a person decides
+        # between a refund and opening another place.
+        enrolment.save(update_fields=["amount_paid", "paid_at", "updated_at"])
+        _flag_payment(
+            record,
+            f"cohort {cohort.pk} was full when this payment landed and the hold had lapsed; "
+            "refund or seat decision needed",
+        )
+        return enrolment
+
     enrolment.status = EnrolmentStatus.CONFIRMED
     enrolment.hold_expires_at = None
     enrolment.save(
         update_fields=["amount_paid", "paid_at", "status", "hold_expires_at", "updated_at"]
     )
-    _refresh_cohort(Cohort.objects.select_for_update().get(pk=enrolment.cohort_id))
+    _refresh_cohort(cohort)
     _notify_confirmed(enrolment)
     return enrolment
+
+
+def _flag_payment(record: Any, reason: str) -> None:
+    """Put a paid-but-seatless enrolment in front of staff, loudly."""
+    from apps.payments.services.payments import flag_for_review
+
+    flag_for_review(record, event="payment_for_unavailable_seat", reason=reason)
 
 
 @transaction.atomic

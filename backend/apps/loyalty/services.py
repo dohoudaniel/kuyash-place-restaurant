@@ -9,7 +9,8 @@ from typing import Any
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models import F, Max, Q
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status
 
@@ -411,29 +412,73 @@ def grant_birthday_bonuses(*, today: dt.date | None = None) -> int:
     return granted
 
 
+#: How many accounts to look at per round trip. The scan is two queries per
+#: batch regardless of size; this bounds how much is held in memory at once.
+EXPIRY_BATCH_SIZE = 500
+
+
 def expire_inactive(*, now: dt.datetime | None = None) -> int:
-    """Expire balances untouched by an order or redemption for the configured period."""
+    """Expire balances untouched by an order or redemption for the configured period.
+
+    The candidate scan is a single annotated aggregate per batch. It used to be
+    one query per account to find each one's last activity: at 50,000 members
+    that is 50,000 queries inside a task with a 240-second soft limit, so the
+    task would be killed long before it reached the members whose points were
+    actually due to expire — silently, every night.
+
+    Batches are walked by primary key rather than by re-running the filter,
+    because an account that is skipped (its expiry was already posted today)
+    stays in the result set and would otherwise be looked at forever.
+    """
     now = now or timezone.now()
     cutoff = now - dt.timedelta(days=settings.LOYALTY_EXPIRY_INACTIVE_DAYS)
-    expired = 0
-    for account in LoyaltyAccount.objects.filter(points_balance__gt=0, is_closed=False):
-        last_activity = (
-            account.entries.filter(entry_type__in=[LedgerEntryType.EARN, LedgerEntryType.REDEEM])
-            .order_by("-created_at")
-            .values_list("created_at", flat=True)
-            .first()
-        ) or account.created_at
-        if last_activity >= cutoff:
-            continue
-        entry = post_entry(
-            account=account,
-            entry_type=LedgerEntryType.EXPIRE,
-            points=-account.points_balance,
-            description="Points expired after a period without activity",
-            idempotency_key=f"expire:{account.pk}:{now.date().isoformat()}",
+    stamp = now.date().isoformat()
+
+    candidates = (
+        LoyaltyAccount.objects.filter(points_balance__gt=0, is_closed=False)
+        .annotate(
+            last_activity=Coalesce(
+                Max(
+                    "entries__created_at",
+                    filter=Q(
+                        entries__entry_type__in=[LedgerEntryType.EARN, LedgerEntryType.REDEEM]
+                    ),
+                ),
+                "created_at",
+            )
         )
-        expired += int(entry is not None)
-    return expired
+        .filter(last_activity__lt=cutoff)
+        .order_by("pk")
+    )
+
+    expired = 0
+    after: Any = None
+    while True:
+        page = candidates.filter(pk__gt=after) if after is not None else candidates
+        batch = list(page[:EXPIRY_BATCH_SIZE])
+        if not batch:
+            return expired
+
+        # One query for the whole batch, rather than letting `post_entry` find
+        # out one account at a time that there is nothing to do.
+        keys = {account.pk: f"expire:{account.pk}:{stamp}" for account in batch}
+        already = set(
+            PointsLedgerEntry.objects.filter(idempotency_key__in=keys.values()).values_list(
+                "idempotency_key", flat=True
+            )
+        )
+        for account in batch:
+            if keys[account.pk] in already:
+                continue
+            entry = post_entry(
+                account=account,
+                entry_type=LedgerEntryType.EXPIRE,
+                points=-account.points_balance,
+                description="Points expired after a period without activity",
+                idempotency_key=keys[account.pk],
+            )
+            expired += int(entry is not None)
+        after = batch[-1].pk
 
 
 def close_account(user: Any) -> None:

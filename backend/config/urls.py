@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -22,6 +25,16 @@ from apps.common.views import (
     health_check,
 )
 from apps.payments.urls import webhook_urlpatterns
+
+
+def headless_route_not_published(request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+    """An allauth headless route this project does not expose.
+
+    A 404 in the project's own problem+json shape, so it is indistinguishable
+    from any other path that does not exist.
+    """
+    return api_not_found(request)
+
 
 admin.site.site_header = settings.ADMIN_SITE_HEADER
 admin.site.site_title = settings.ADMIN_SITE_TITLE
@@ -66,6 +79,18 @@ urlpatterns = [
         name="redoc",
     ),
     # allauth headless: JSON auth endpoints for the decoupled frontend.
+    #
+    # Two of its routes are deliberately not published, and are shadowed here
+    # rather than unmounted so that the rest of the surface — above all
+    # `auth/provider/redirect`, which every social sign-in goes through — is
+    # untouched. `account/email` lets a signed-in customer add an address and
+    # promote it to primary, and `account/phone` does the same for a number:
+    # both walk straight past this project's rule that changing an email must
+    # re-verify it and notify the old address, which is why
+    # `apps/accounts/serializers.py` makes `email` read-only. The complementary
+    # half is HEADLESS_CLIENTS in base.py, which drops /_allauth/app/v1/.
+    path("_allauth/browser/v1/account/email", headless_route_not_published),
+    path("_allauth/browser/v1/account/phone", headless_route_not_published),
     path("_allauth/", include("allauth.headless.urls")),
     # Provider callbacks (e.g. /accounts/google/login/callback/). Under
     # HEADLESS_ONLY this include exposes nothing but those routes — and without

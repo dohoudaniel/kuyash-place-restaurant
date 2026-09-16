@@ -261,6 +261,144 @@ def test_only_superusers_can_reset(client, staff, settings) -> None:  # type: ig
     assert "Only a superuser" in response.content.decode()
 
 
+def test_the_cli_can_reset_a_lost_authenticator(client, staff) -> None:  # type: ignore[no-untyped-def]
+    """Break-glass. The admin action is superuser-only and sits *behind* the
+    very gate it would unlock, so a sole superuser who loses their phone locks
+    the whole admin — mid-service — with no way back in."""
+    import io
+
+    enrol(client, staff)
+    assert Authenticator.objects.filter(user=staff).exists()
+
+    out = io.StringIO()
+    call_command("reset_staff_mfa", "staff@example.com", stdout=out)
+
+    assert not Authenticator.objects.filter(user=staff).exists()
+    assert "Cleared two-factor authentication" in out.getvalue()
+
+
+def test_the_cli_normalises_the_email(client, staff) -> None:  # type: ignore[no-untyped-def]
+    import io
+
+    enrol(client, staff)
+    call_command("reset_staff_mfa", "  STAFF@example.com ", stdout=io.StringIO())
+    assert not Authenticator.objects.filter(user=staff).exists()
+
+
+def test_the_cli_refuses_an_unknown_email() -> None:
+    from django.core.management.base import CommandError
+
+    with pytest.raises(CommandError, match="No account"):
+        call_command("reset_staff_mfa", "nobody@example.com")
+
+
+def test_the_cli_is_safe_to_run_twice(client, staff) -> None:  # type: ignore[no-untyped-def]
+    import io
+
+    enrol(client, staff)
+    call_command("reset_staff_mfa", "staff@example.com", stdout=io.StringIO())
+
+    out = io.StringIO()
+    call_command("reset_staff_mfa", "staff@example.com", stdout=out)
+    assert "nothing to reset" in out.getvalue()
+
+
+def test_a_reset_staff_member_re_enrols_at_the_next_sign_in(client, staff) -> None:  # type: ignore[no-untyped-def]
+    """It clears the enrolment rather than disabling the second factor."""
+    import io
+
+    enrol(client, staff)
+    call_command("reset_staff_mfa", "staff@example.com", stdout=io.StringIO())
+
+    client.logout()
+    client.force_login(staff)
+    assert client.get(ADMIN)["Location"].startswith(SETUP)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Elevation expiry
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def expire_elevation(client, seconds_ago: float) -> None:  # type: ignore[no-untyped-def]
+    session = client.session
+    session[staff_mfa.SESSION_VERIFIED_AT] = time.time() - seconds_ago
+    session.save()
+
+
+def test_elevation_expires_and_the_code_is_asked_for_again(client, staff, settings) -> None:  # type: ignore[no-untyped-def]
+    """Sessions roll for 14 days, so a permanent elevation made the second
+    factor a one-time gate rather than an ongoing control — a laptop left open
+    on the pass stayed admin-authenticated for a fortnight."""
+    settings.STAFF_MFA_ELEVATION_SECONDS = 8 * 60 * 60
+    enrol(client, staff)
+    assert client.get(ADMIN).status_code == 200
+
+    expire_elevation(client, 8 * 60 * 60 + 60)
+
+    held = client.get(ADMIN)
+    assert held.status_code == 302
+    assert held["Location"].startswith(VERIFY)
+
+
+def test_a_recent_elevation_is_still_accepted(client, staff, settings) -> None:  # type: ignore[no-untyped-def]
+    settings.STAFF_MFA_ELEVATION_SECONDS = 8 * 60 * 60
+    enrol(client, staff)
+    expire_elevation(client, 60)
+    assert client.get(ADMIN).status_code == 200
+
+
+def test_re_verifying_restores_access(client, staff, settings) -> None:  # type: ignore[no-untyped-def]
+    settings.STAFF_MFA_ELEVATION_SECONDS = 8 * 60 * 60
+    secret, _ = enrol(client, staff)
+    expire_elevation(client, 8 * 60 * 60 + 60)
+    cache.clear()  # forget the enrolment code so the current one is accepted
+
+    assert client.post(VERIFY, {"code": current_code(secret), "next": ADMIN}).status_code == 302
+    assert client.get(ADMIN).status_code == 200
+
+
+def test_the_elevation_window_is_configurable(settings) -> None:  # type: ignore[no-untyped-def]
+    settings.STAFF_MFA_ELEVATION_SECONDS = 900
+    assert staff_mfa.elevation_max_age() == 900
+
+
+def test_the_elevation_window_defaults_to_a_shift(settings) -> None:  # type: ignore[no-untyped-def]
+    del settings.STAFF_MFA_ELEVATION_SECONDS
+    assert staff_mfa.elevation_max_age() == staff_mfa.DEFAULT_ELEVATION_SECONDS == 8 * 60 * 60
+
+
+def test_a_session_elevated_before_timestamps_existed_must_verify_again(client, staff) -> None:  # type: ignore[no-untyped-def]
+    """Sessions already live at deploy time carry no timestamp."""
+    enrol(client, staff)
+    session = client.session
+    del session[staff_mfa.SESSION_VERIFIED_AT]
+    session.save()
+
+    assert client.get(ADMIN)["Location"].startswith(VERIFY)
+
+
+def test_a_tampered_timestamp_must_verify_again(client, staff) -> None:  # type: ignore[no-untyped-def]
+    enrol(client, staff)
+    session = client.session
+    session[staff_mfa.SESSION_VERIFIED_AT] = "not-a-number"
+    session.save()
+
+    assert client.get(ADMIN)["Location"].startswith(VERIFY)
+
+
+def test_the_recovery_codes_page_offers_a_download(client, staff) -> None:  # type: ignore[no-untyped-def]
+    """Shown once, so "write these down quickly" was the only option."""
+    client.force_login(staff)
+    secret = client.get(SETUP).context["secret"]
+    response = client.post(SETUP, {"code": current_code(secret), "next": ADMIN})
+
+    body = response.content.decode()
+    assert 'download="kuyash-recovery-codes.txt"' in body
+    assert "data:text/plain" in body
+    assert "reset_staff_mfa" in body  # the break-glass path is documented there
+
+
 def test_rotating_the_secret_key_makes_old_secrets_unreadable(client, staff, settings) -> None:  # type: ignore[no-untyped-def]
     from cryptography.fernet import InvalidToken
 

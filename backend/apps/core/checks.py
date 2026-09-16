@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from django.conf import settings
 from django.core.checks import Error, Warning, register
 
 #: Phrases that assert VAT-inclusive pricing, each with the wording to quote back.
@@ -115,6 +116,66 @@ def check_legal_pages_are_published(app_configs: Any, **kwargs: Any) -> list[Any
                     "in the admin. A footer link to a page that 404s is worse than no link."
                 ),
                 id="kuyash.W003",
+            )
+        ]
+    return []
+
+
+#: Cache backends that are private to one worker process.
+PER_PROCESS_CACHE_BACKENDS = ("locmem", "dummy", "filebased")
+
+
+@register("kuyash", deploy=True)
+def check_proxy_count_behind_a_proxy(app_configs: Any, **kwargs: Any) -> list[Any]:
+    """Behind a load balancer, a proxy count of 0 puts every visitor on one IP.
+
+    This is the launch-day landmine: ``anon: 100/min`` becomes a hundred requests
+    a minute for the entire site, and ``order_create: 10/hour`` becomes **ten
+    orders an hour, in total**. It is an Error, not a Warning, because the site
+    looks healthy while refusing almost everybody — there is no symptom to
+    notice and no gradual degradation to catch it.
+
+    Trusting a proxy for HTTPS (``SECURE_PROXY_SSL_HEADER``) is the giveaway that
+    a proxy is in front of Django, so the two settings must agree.
+    """
+    if settings.SECURE_PROXY_SSL_HEADER and settings.TRUSTED_PROXY_COUNT <= 0:
+        return [
+            Error(
+                "Django trusts a proxy for HTTPS but TRUSTED_PROXY_COUNT is 0.",
+                hint=(
+                    "Every request would appear to come from the proxy, so the whole site "
+                    "shares one throttle bucket: ten orders per hour, site-wide. Set "
+                    "TRUSTED_PROXY_COUNT to the number of proxies in front of Django "
+                    "(usually 1). See apps/common/client_ip.py and SECURITY.md §8."
+                ),
+                id="kuyash.E021",
+            )
+        ]
+    return []
+
+
+@register("kuyash", deploy=True)
+def check_cache_is_shared(app_configs: Any, **kwargs: Any) -> list[Any]:
+    """A per-process cache is not a cache, it is N caches that disagree.
+
+    Throttle counters multiply by the number of workers — ``5/min`` across eight
+    processes is forty attempts a minute — and idempotency breaks outright: the
+    claim a second request must see was written into a different process's
+    memory, so a double-tapped Confirm Order places two orders.
+    """
+    if settings.DEBUG:
+        return []
+    backend = str(settings.CACHES.get("default", {}).get("BACKEND", "")).lower()
+    if any(name in backend for name in PER_PROCESS_CACHE_BACKENDS):
+        return [
+            Error(
+                "The default cache is not shared between processes.",
+                hint=(
+                    "Throttles would multiply by worker count and idempotency would stop "
+                    "working, so a double-tapped Confirm Order could place two orders. "
+                    "Set REDIS_URL so CACHES uses django.core.cache.backends.redis.RedisCache."
+                ),
+                id="kuyash.E022",
             )
         ]
     return []

@@ -17,6 +17,7 @@ in through the public API still has to pass this step to reach the admin.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -37,9 +38,14 @@ from django.utils.http import url_has_allowed_host_and_scheme
 logger = logging.getLogger(__name__)
 
 SESSION_VERIFIED = "kuyash.staff_mfa.user"
+SESSION_VERIFIED_AT = "kuyash.staff_mfa.verified_at"
 SESSION_PENDING_SECRET = "kuyash.staff_mfa.pending_secret"  # noqa: S105 - a session key name
 MAX_FAILURES = 5
 LOCKOUT_SECONDS = 15 * 60
+
+#: How long one verification lasts: a shift. Override with
+#: ``STAFF_MFA_ELEVATION_SECONDS``.
+DEFAULT_ELEVATION_SECONDS = 8 * 60 * 60
 
 
 def admin_prefix() -> str:
@@ -54,8 +60,25 @@ def _is_staff(user: Any) -> bool:
     return bool(user and user.is_authenticated and user.is_active and user.is_staff)
 
 
+def elevation_max_age() -> int:
+    """How long an admin session stays elevated before the code is asked for again."""
+    return int(getattr(settings, "STAFF_MFA_ELEVATION_SECONDS", DEFAULT_ELEVATION_SECONDS))
+
+
 def is_verified(request: HttpRequest) -> bool:
-    return request.session.get(SESSION_VERIFIED) == str(request.user.pk)
+    """Whether this session passed the second step, recently enough to still count.
+
+    Sessions roll for 14 days, so treating an elevation as permanent made the
+    second factor a one-time gate rather than an ongoing control: a laptop left
+    open on the pass stayed admin-authenticated for a fortnight. The timestamp
+    is what turns it back into a control.
+    """
+    if request.session.get(SESSION_VERIFIED) != str(request.user.pk):
+        return False
+    verified_at = request.session.get(SESSION_VERIFIED_AT)
+    if not isinstance(verified_at, int | float):
+        return False  # pre-timestamp session, or tampered: verify again
+    return (time.time() - float(verified_at)) < elevation_max_age()
 
 
 def totp_authenticator(user: Any) -> Authenticator | None:
@@ -110,6 +133,7 @@ def _mark_verified(request: HttpRequest) -> None:
     # A new session key at the moment of elevation, as at login.
     request.session.cycle_key()
     request.session[SESSION_VERIFIED] = str(request.user.pk)
+    request.session[SESSION_VERIFIED_AT] = time.time()
 
 
 def _context(request: HttpRequest, **extra: Any) -> dict[str, Any]:
@@ -191,7 +215,14 @@ def setup(request: HttpRequest) -> HttpResponse:
             return TemplateResponse(
                 request,
                 "admin/staff_mfa/recovery_codes.html",
-                _context(request, title="Save your recovery codes", codes=codes),
+                _context(
+                    request,
+                    title="Save your recovery codes",
+                    codes=codes,
+                    # Backs the download link. Shown once, so "write these down
+                    # quickly" was the only previous option.
+                    codes_text="\n".join(codes),
+                ),
             )
         else:
             _record_failure(request.user)

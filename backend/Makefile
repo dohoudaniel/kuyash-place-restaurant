@@ -51,7 +51,10 @@ gate: ## PCI card-field gate
 	./scripts/check-no-card-fields.sh
 
 check: lint typecheck test gate ## Everything CI runs
-	$(PY) manage.py check --deploy --fail-level WARNING --settings=config.settings.prod || true
+	# No `|| true`. The deploy checks exist to stop a launch, and one of them
+	# (kuyash.E021) catches the misconfiguration that rate-limits the entire site
+	# to ten orders an hour. A gate that cannot fail is not a gate.
+	$(PY) manage.py check --deploy --fail-level WARNING --settings=config.settings.prod
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true

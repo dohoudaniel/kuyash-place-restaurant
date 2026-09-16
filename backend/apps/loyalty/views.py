@@ -15,6 +15,13 @@ from rest_framework.views import APIView
 from apps.carts.serializers import CartResponseSerializer
 from apps.carts.views import CartBaseView
 from apps.common.permissions import current_user
+from apps.core.cache import (
+    LOYALTY_PROGRAMME_KEY,
+    TTL_LONG,
+    TTL_MEDIUM,
+    PublicCacheMixin,
+    cached,
+)
 from apps.core.selectors import get_current_branch
 from apps.loyalty import services
 from apps.loyalty.models import PointsLedgerEntry, Reward
@@ -27,16 +34,27 @@ from apps.loyalty.serializers import (
 )
 
 
-class ProgrammeView(APIView):
+class ProgrammeView(PublicCacheMixin, APIView):
     """Tiers and earning rules. Public: the rewards page shows them to everyone."""
 
     permission_classes = [AllowAny]
+    cache_max_age = TTL_MEDIUM
 
     @extend_schema(
         summary="Loyalty tiers and rules", responses={200: ProgrammeSerializer}, tags=["loyalty"]
     )
     def get(self, request: Request) -> Response:
-        return Response(programme_payload())
+        return Response(cached(LOYALTY_PROGRAMME_KEY, TTL_LONG, _programme_payload))
+
+
+def _programme_payload() -> dict[str, Any]:
+    """The programme as plain data, so it can be cached.
+
+    Tiers change when the owner decides they do — a handful of times ever — and
+    the rewards page asks for them on every visit.
+    """
+    payload = programme_payload()
+    return {**payload, "tiers": [dict(tier) for tier in payload["tiers"]]}
 
 
 class AccountView(CartBaseView):

@@ -6,11 +6,23 @@ Phase 1B needs zones so an address can be resolved to a fee and an ETA.
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 from django.db import models
 
 from apps.common.fields import MoneyField
 from apps.common.models import SoftDeleteModel, TimeStampedModel
 from apps.core.models import Branch
+
+#: Everything that is not a letter or a digit becomes a space, so
+#: "Adeola Odeku, VI" and "adeola-odeku vi" normalise the same way.
+_NOT_WORD = re.compile(r"[^0-9a-z]+")
+
+
+def normalise_area(text: Any) -> str:
+    """Fold an area name or an address line into comparable words."""
+    return _NOT_WORD.sub(" ", str(text).lower()).strip()
 
 
 class DeliveryZone(TimeStampedModel, SoftDeleteModel):
@@ -38,7 +50,9 @@ class DeliveryZone(TimeStampedModel, SoftDeleteModel):
         blank=True,
         help_text=(
             "Area or district names matched against a customer's address, "
-            'e.g. ["Victoria Island", "VI", "Eko Atlantic"]. Case-insensitive.'
+            'e.g. ["Victoria Island", "VI", "Eko Atlantic"]. Case-insensitive. '
+            "Saving mirrors this list into the indexed DeliveryArea table that "
+            "address matching actually queries."
         ),
     )
     polygon = models.TextField(
@@ -58,7 +72,68 @@ class DeliveryZone(TimeStampedModel, SoftDeleteModel):
 
     @property
     def area_names(self) -> list[str]:
-        return [str(area).strip().lower() for area in (self.areas or []) if str(area).strip()]
+        return [name for name in (normalise_area(area) for area in (self.areas or [])) if name]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        super().save(*args, **kwargs)
+        self.sync_areas()
+
+    def sync_areas(self) -> None:
+        """Mirror ``areas`` into the indexed table the matcher queries.
+
+        Staff carry on editing the JSON list in the admin — that workflow is
+        deliberately untouched — and this keeps :class:`DeliveryArea` in step
+        with it. A queryset ``.update(areas=…)`` bypasses ``save()`` and so
+        bypasses this; call ``sync_areas()`` yourself after one.
+        """
+        wanted: dict[str, str] = {}
+        for raw in self.areas or []:
+            name = str(raw).strip()
+            normalised = normalise_area(name)
+            if normalised:
+                wanted.setdefault(normalised, name)
+
+        existing = {row.normalised: row for row in self.area_rows.all()}
+        stale = [row.pk for key, row in existing.items() if key not in wanted]
+        if stale:
+            DeliveryArea.objects.filter(pk__in=stale).delete()
+        DeliveryArea.objects.bulk_create(
+            [
+                DeliveryArea(zone=self, name=name, normalised=key)
+                for key, name in wanted.items()
+                if key not in existing
+            ]
+        )
+
+
+class DeliveryArea(models.Model):
+    """One area name of one zone, normalised and indexed.
+
+    ``DeliveryZone.areas`` — a JSON list — was substring-matched in Python on
+    every address save and every checkout price: load every active zone, loop
+    over every name, ask whether it appears anywhere in the address. Nothing
+    about that can use an index, and it cost a scan per checkout.
+
+    These rows are that list's indexed mirror. Matching is now by whole word
+    rather than by raw substring, which is also more correct: "VI" no longer
+    matches inside "Victoria Island" by accident.
+    """
+
+    zone = models.ForeignKey(DeliveryZone, on_delete=models.CASCADE, related_name="area_rows")
+    name = models.CharField(max_length=120, help_text="As staff typed it.")
+    normalised = models.CharField(
+        max_length=120, help_text="Lower-cased, punctuation folded to spaces. Matched against."
+    )
+
+    class Meta:
+        ordering = ["normalised"]
+        constraints = [
+            models.UniqueConstraint(fields=["zone", "normalised"], name="unique_area_per_zone")
+        ]
+        indexes = [models.Index(fields=["normalised"])]
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class VehicleType(models.TextChoices):

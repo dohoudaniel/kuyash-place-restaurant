@@ -113,8 +113,9 @@ def test_card_details_in_a_request_body_go_nowhere(  # type: ignore[no-untyped-d
 
 
 @responses.activate
-def test_verify_endpoint_settles(api_client, transaction, paystack_keys) -> None:  # type: ignore[no-untyped-def]
+def test_verify_endpoint_settles(api_client, transaction, paystack_keys, verified_user) -> None:  # type: ignore[no-untyped-def]
     mock_verify(transaction.our_reference, transaction.amount)
+    api_client.force_authenticate(user=verified_user)
     response = api_client.get(
         reverse("v1:payments:verify", kwargs={"reference": transaction.our_reference})
     )
@@ -127,6 +128,100 @@ def test_verify_endpoint_settles(api_client, transaction, paystack_keys) -> None
 def test_verify_unknown_reference_is_404(api_client, db, paystack_keys) -> None:  # type: ignore[no-untyped-def]
     response = api_client.get(reverse("v1:payments:verify", kwargs={"reference": "KYS-NOPE-0000"}))
     assert response.status_code == 404
+
+
+def test_verify_refuses_someone_elses_payment(api_client, transaction, paystack_keys) -> None:  # type: ignore[no-untyped-def]
+    """404, not 403 — and no provider call at all.
+
+    This endpoint had no ownership check: a reference was enough to read any
+    order's status, and to spend one outbound provider call per request doing
+    it. No response is registered here, so the autouse HTTP guard fails the test
+    if anything reaches the network.
+    """
+    from apps.accounts.models import User
+
+    intruder = User.objects.create_user(
+        email="mallory@example.com", password="correct-horse-battery-staple"
+    )
+    api_client.force_authenticate(user=intruder)
+
+    response = api_client.get(
+        reverse("v1:payments:verify", kwargs={"reference": transaction.our_reference})
+    )
+
+    assert response.status_code == 404
+    transaction.refresh_from_db()
+    assert transaction.status == TransactionStatus.PENDING
+
+
+@responses.activate
+def test_a_guest_verifies_their_own_payment_with_their_token(  # type: ignore[no-untyped-def]
+    api_client, ready_cart, paystack_keys
+) -> None:
+    """Guest checkout has no session; the token is how a guest proves it is theirs."""
+    from django.utils import timezone
+
+    from apps.carts.models import FulfilmentType
+    from apps.orders.services.placement import place_order
+    from apps.payments.models import PaymentTransaction
+
+    ready_cart.user = None
+    ready_cart.fulfilment_type = FulfilmentType.PICKUP
+    ready_cart.delivery_address = None
+    ready_cart.save()
+    order = place_order(
+        cart=ready_cart,
+        payment_method="card",
+        guest={"email": "guest@example.com", "phone": "+2348012345678"},
+    )
+    record = PaymentTransaction.objects.create(
+        order=order,
+        provider="paystack",
+        our_reference=f"{order.reference}-g",
+        provider_reference=f"{order.reference}-g",
+        amount=order.grand_total,
+        status=TransactionStatus.PENDING,
+        initialised_at=timezone.now(),
+    )
+    url = reverse("v1:payments:verify", kwargs={"reference": record.our_reference})
+
+    assert api_client.get(url).status_code == 404
+
+    mock_verify(record.our_reference, record.amount)
+    response = api_client.get(url, HTTP_X_GUEST_TOKEN=order.guest_token)
+
+    assert response.status_code == 200
+    assert response.json()["order_status"] == OrderStatus.PAID
+
+
+@responses.activate
+def test_verify_is_rate_limited(  # type: ignore[no-untyped-def]
+    api_client, transaction, paystack_keys, verified_user, throttle_rates
+) -> None:
+    """Every call here is an outbound provider call on our own account."""
+    mock_verify(transaction.our_reference, transaction.amount)
+    api_client.force_authenticate(user=verified_user)
+    url = reverse("v1:payments:verify", kwargs={"reference": transaction.our_reference})
+
+    with throttle_rates(anon="1/min"):
+        first = api_client.get(url)
+        second = api_client.get(url)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+
+def test_the_webhook_endpoint_is_rate_limited(api_client, paystack_keys, throttle_rates) -> None:  # type: ignore[no-untyped-def]
+    """Unauthenticated by design is not the same as unlimited."""
+    url = reverse("v1:webhooks:paystack")
+    payload = {"event": "charge.success", "data": {"id": 1}}
+
+    with throttle_rates(anon="1/min"):
+        first = api_client.post(url, payload, format="json")
+        second = api_client.post(url, payload, format="json")
+
+    assert first.status_code == 401  # unsigned: let through to be judged, then refused
+    assert second.status_code == 429  # never even judged
 
 
 def test_webhook_endpoints_are_unauthenticated_but_signature_gated(  # type: ignore[no-untyped-def]

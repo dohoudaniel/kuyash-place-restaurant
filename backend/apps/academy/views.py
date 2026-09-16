@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any
 
 from django.db.models import Count, Prefetch, Q, QuerySet
@@ -27,6 +28,7 @@ from apps.academy.models import (
     CourseLevel,
     CourseType,
     Enrolment,
+    EnrolmentStatus,
 )
 from apps.academy.serializers import (
     CohortSerializer,
@@ -54,7 +56,24 @@ class MissingIdempotencyKey(DomainError):
     status_code = status.HTTP_400_BAD_REQUEST
 
 
-def _courses(today: Any) -> QuerySet[Course]:
+def _seats_taken(now: dt.datetime) -> Count:
+    """Seats a cohort has given away: paid ones, plus holds that are still live.
+
+    One aggregate across the whole page. ``CohortSerializer`` used to ask
+    ``services.seats_left`` per cohort — a ``COUNT(*)`` each, three per course,
+    on a course list with no pagination.
+    """
+    return Count(
+        "enrolments",
+        filter=Q(enrolments__status__in=SEATED_STATUSES)
+        | Q(
+            enrolments__status=EnrolmentStatus.PENDING_PAYMENT,
+            enrolments__hold_expires_at__gt=now,
+        ),
+    )
+
+
+def _courses(*, today: dt.date, now: dt.datetime) -> QuerySet[Course]:
     return (
         Course.objects.filter(branch=get_current_branch(), is_active=True)
         .select_related("instructor", "branch")
@@ -66,7 +85,9 @@ def _courses(today: Any) -> QuerySet[Course]:
                 "cohorts",
                 queryset=Cohort.objects.filter(
                     status__in=[CohortStatus.OPEN, CohortStatus.FULL], starts_on__gt=today
-                ).order_by("starts_on"),
+                )
+                .annotate(seats_taken=_seats_taken(now))
+                .order_by("starts_on"),
                 to_attr="upcoming_cohorts",
             )
         )
@@ -90,7 +111,7 @@ class CourseListView(ListAPIView):
 
     def get_queryset(self) -> Any:
         params = self.request.query_params
-        queryset = _courses(_context()["today"])
+        queryset = _courses(**_context())
         for param, field, choices in (
             ("level", "level", CourseLevel.values),
             ("type", "course_type", CourseType.values),
@@ -134,7 +155,7 @@ class CourseDetailView(APIView):
     )
     def get(self, request: Request, slug: str) -> Response:
         context = _context()
-        course = get_object_or_404(_courses(context["today"]), slug=slug)
+        course = get_object_or_404(_courses(**context), slug=slug)
         return Response(CourseDetailSerializer(course, context=context).data)
 
 
@@ -148,7 +169,7 @@ class CourseCohortsView(APIView):
     )
     def get(self, request: Request, slug: str) -> Response:
         context = _context()
-        course = get_object_or_404(_courses(context["today"]), slug=slug)
+        course = get_object_or_404(_courses(**context), slug=slug)
         return Response(
             CohortSerializer(course.upcoming_cohorts, many=True, context=context).data  # type: ignore[attr-defined]
         )

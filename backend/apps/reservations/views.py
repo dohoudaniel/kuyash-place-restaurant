@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Any
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import constant_time_compare
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -16,7 +18,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common import idempotency
-from apps.common.exceptions import DomainError
 from apps.common.permissions import IsStaffMember, current_user
 from apps.core.selectors import get_current_branch
 from apps.reservations.models import Reservation, TableArea
@@ -33,13 +34,37 @@ from apps.reservations.serializers import (
 from apps.reservations.services import booking
 from apps.reservations.services.availability import slots_for
 
+logger = logging.getLogger(__name__)
+
 GUEST_TOKEN_HEADER = "X-Reservation-Token"  # noqa: S105 - a header name, not a credential
 
 
-class MissingIdempotencyKey(DomainError):
-    code = "idempotency_key_required"
-    title = "An Idempotency-Key header is required"
-    status_code = status.HTTP_400_BAD_REQUEST
+def _supplied_token(request: Request, reservation: Reservation) -> str:
+    """The guest's token, from the header.
+
+    A token in the query string is written to every access log it passes,
+    leaks through ``Referer`` on any outbound link, and sits in browser history
+    — which is why the project's own rule (SECURITY.md) is that tokens must not
+    travel in URLs. This endpoint accepted one anyway.
+
+    The emailed management link still carries ``?token=``, so the deprecation
+    path is kept but **off by default**: an operator can set
+    ``RESERVATIONS_ACCEPT_TOKEN_IN_QUERY = True`` for a single release while the
+    frontend moves to sending the header, and every use is logged so the
+    migration can be seen to finish.
+    """
+    supplied = request.headers.get(GUEST_TOKEN_HEADER, "")
+    if supplied:
+        return supplied
+    if getattr(settings, "RESERVATIONS_ACCEPT_TOKEN_IN_QUERY", False):
+        from_query = request.query_params.get("token", "")
+        if from_query:
+            logger.warning(
+                "reservation_token_in_query_string",
+                extra={"reservation": reservation.reference},
+            )
+        return from_query
+    return ""
 
 
 def _may_access(request: Request, reservation: Reservation) -> bool:
@@ -49,7 +74,7 @@ def _may_access(request: Request, reservation: Reservation) -> bool:
             return True
         if user.is_staff or user.groups.filter(name__in=["managers", "kitchen"]).exists():
             return True
-    supplied = request.headers.get(GUEST_TOKEN_HEADER, "") or request.query_params.get("token", "")
+    supplied = _supplied_token(request, reservation)
     return bool(supplied) and constant_time_compare(reservation.confirmation_token, supplied)
 
 
@@ -138,47 +163,32 @@ class ReservationCreateView(APIView):
         ],
         tags=["reservations"],
     )
+    @idempotency.idempotent(
+        "reservations",
+        message="Send an Idempotency-Key header so a repeated submission cannot book two tables.",
+    )
     def post(self, request: Request) -> Response:
-        key = request.headers.get(idempotency.HEADER, "").strip()
-        if not key:
-            raise MissingIdempotencyKey(
-                "Send an Idempotency-Key header so a repeated submission cannot book two tables."
-            )
-
         serializer = CreateReservationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-
-        cache_key, replayed = idempotency.begin("reservations", key, request.data)
-        if replayed is not None:
-            response = Response(replayed, status=status.HTTP_201_CREATED)
-            response["Idempotency-Replayed"] = "true"
-            return response
 
         branch = get_current_branch()
         area = get_object_or_404(TableArea, branch=branch, slug=data["area"], is_active=True)
         reserved_for = dt.datetime.combine(data["date"], data["time"], tzinfo=branch.tzinfo())
 
-        try:
-            reservation = booking.book(
-                branch=branch,
-                area=area,
-                reserved_for=reserved_for,
-                party_size=data["party_size"],
-                guest_name=data["guest_name"],
-                guest_email=data["guest_email"],
-                guest_phone=data["guest_phone"],
-                user=request.user,
-                special_requests=data.get("special_requests", ""),
-                idempotency_key=key,
-            )
-        except Exception:
-            idempotency.abandon(cache_key)
-            raise
-
-        body = serialise_with_token(reservation)
-        idempotency.complete(cache_key, body)
-        return Response(body, status=status.HTTP_201_CREATED)
+        reservation = booking.book(
+            branch=branch,
+            area=area,
+            reserved_for=reserved_for,
+            party_size=data["party_size"],
+            guest_name=data["guest_name"],
+            guest_email=data["guest_email"],
+            guest_phone=data["guest_phone"],
+            user=request.user,
+            special_requests=data.get("special_requests", ""),
+            idempotency_key=idempotency.key_of(request),
+        )
+        return Response(serialise_with_token(reservation), status=status.HTTP_201_CREATED)
 
 
 class ReservationDetailView(APIView):

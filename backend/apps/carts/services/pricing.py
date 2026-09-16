@@ -80,6 +80,10 @@ class PricedCart:
     promo_code: str = ""
     #: The promo code's share of ``discount_total``; the rest is the reward's.
     promo_discount: int = 0
+    #: The part of the subtotal the promo code actually applies to — the whole
+    #: of it for an untargeted code, only the matching lines for a targeted one.
+    #: Placement re-validates against this under a row lock.
+    promo_eligible_subtotal: int = 0
     #: The applied loyalty reward, whether or not it currently takes anything off.
     reward: dict[str, Any] | None = None
     delivery_note: str = ""
@@ -135,7 +139,7 @@ def price_cart(cart: Any) -> PricedCart:
     Called on every read, so a stale cart can never lock in a stale price.
     """
     from apps.carts.models import FulfilmentType
-    from apps.promotions.services import calculate_discount, eligible_amount, validate_promo
+    from apps.promotions.services import calculate_discount, eligible_lines, validate_promo
 
     branch = cart.branch
     rate_bps = branch.vat_rate_bps
@@ -195,6 +199,8 @@ def price_cart(cart: Any) -> PricedCart:
     discount_total = 0
     free_delivery = False
     promo_code_label = ""
+    promo_eligible_subtotal = 0
+    promo_weights: list[int] = []
     promo = cart.promo_code
 
     if promo is not None:
@@ -207,7 +213,12 @@ def price_cart(cart: Any) -> PricedCart:
                 self.menu_item = menu_item
 
         candidate_lines = [_Line(line["line_subtotal"], line["menu_item"]) for line in raw_lines]
-        eligible = eligible_amount(promo, candidate_lines)
+        applies = eligible_lines(promo, candidate_lines)
+        eligible = sum(
+            line["line_subtotal"]
+            for line, matched in zip(raw_lines, applies, strict=True)
+            if matched
+        )
         check = validate_promo(
             promo=promo, subtotal=subtotal, user=cart.user, eligible_subtotal=eligible
         )
@@ -215,6 +226,13 @@ def price_cart(cart: Any) -> PricedCart:
             promo_code_label = promo.code
             discount_total = calculate_discount(promo, eligible)
             free_delivery = promo.discount_type == "free_delivery"
+            promo_eligible_subtotal = eligible
+            # Which lines the code may be written down against, for the
+            # allocation below. Ineligible lines weigh nothing.
+            promo_weights = [
+                line["line_subtotal"] if matched else 0
+                for line, matched in zip(raw_lines, applies, strict=True)
+            ]
 
     # ── 2b. Loyalty reward ────────────────────────────────────────────────────
     promo_discount = discount_total
@@ -237,10 +255,27 @@ def price_cart(cart: Any) -> PricedCart:
 
     # ── 3. Allocate the discount across lines, before VAT ─────────────────────
     weights = [line["line_subtotal"] for line in raw_lines]
-    if discount_total and any(weights):
-        allocations = allocate(discount_total, weights)
-    else:
+    targeted = bool(promo_discount) and any(promo_weights) and promo_weights != weights
+
+    if not (discount_total and any(weights)):
         allocations = [0] * len(raw_lines)
+    elif targeted:
+        # A targeted code is *sized* by the eligible lines, so it must be
+        # *allocated* across those same lines. Weighting by every line wrote
+        # part of the discount off dishes the code does not apply to and then
+        # computed their VAT on an amount nobody discounted — over- or
+        # under-remitting tax whenever the cart mixed tax classes.
+        reward_discount = discount_total - promo_discount
+        promo_parts = allocate(promo_discount, promo_weights)
+        reward_parts = (
+            allocate(reward_discount, weights) if reward_discount else [0] * len(raw_lines)
+        )
+        allocations = [
+            promo_part + reward_part
+            for promo_part, reward_part in zip(promo_parts, reward_parts, strict=True)
+        ]
+    else:
+        allocations = allocate(discount_total, weights)
 
     # ── 4. Delivery ───────────────────────────────────────────────────────────
     delivery_fee = 0
@@ -404,6 +439,7 @@ def price_cart(cart: Any) -> PricedCart:
         currency=branch.currency,
         promo_code=promo_code_label,
         promo_discount=promo_discount,
+        promo_eligible_subtotal=promo_eligible_subtotal,
         reward=reward_payload,
         delivery_note=delivery_note,
         vat_note=vat_note,

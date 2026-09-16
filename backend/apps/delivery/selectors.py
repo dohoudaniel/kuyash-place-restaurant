@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from apps.core.models import Branch
-from apps.delivery.models import DeliveryZone
+from apps.delivery.models import DeliveryArea, DeliveryZone, normalise_area
+
+#: The longest area name worth looking for, in words. "Lekki Phase 1" is three;
+#: six leaves room without turning a long address into hundreds of candidates.
+MAX_AREA_WORDS = 6
 
 
 def resolve_zone(
@@ -18,16 +22,36 @@ def resolve_zone(
     Matching is deliberately simple and case-insensitive. Lagos addressing makes
     automated geocoding unreliable, so staff can override the zone on an address
     when the match is wrong.
+
+    **How it works.** The address is folded to words, every run of up to
+    ``MAX_AREA_WORDS`` consecutive words becomes a candidate, and one indexed
+    ``IN`` lookup finds the zones whose area names are among them. This replaced
+    loading every active zone and running Python substring matching over every
+    one of its names, on every address save and every checkout price.
+
+    One behavioural difference, and it is an improvement: candidates are whole
+    words, so "VI" no longer matches inside "Victoria Island" — an area named
+    "VI" still matches an address that says VI.
     """
-    haystack = " ".join(part for part in (area, city, street) if part).lower()
-    if not haystack.strip():
+    haystack = normalise_area(" ".join(part for part in (area, city, street) if part))
+    if not haystack:
         return None
 
-    zones = DeliveryZone.objects.filter(branch=branch, is_active=True).order_by(
-        "display_order", "name"
+    words = haystack.split()
+    candidates = {
+        " ".join(words[start : start + length])
+        for length in range(1, MAX_AREA_WORDS + 1)
+        for start in range(len(words) - length + 1)
+    }
+    if not candidates:
+        return None
+
+    match = (
+        DeliveryArea.objects.filter(
+            normalised__in=candidates, zone__branch=branch, zone__is_active=True
+        )
+        .select_related("zone")
+        .order_by("zone__display_order", "zone__name")
+        .first()
     )
-    for zone in zones:
-        for name in zone.area_names:
-            if name and name in haystack:
-                return zone
-    return None
+    return match.zone if match else None

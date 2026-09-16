@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest
@@ -80,14 +81,45 @@ def send_verification_email(user: User) -> None:
     )
 
 
+def _address_for_key(key: str) -> EmailAddress | None:
+    """Resolve a confirmation key *without* allauth's ``verified=False`` filter.
+
+    ``EmailConfirmationHMAC.from_key`` refuses a key whose address is already
+    confirmed, and returns the same ``None`` it returns for a forged or expired
+    one. That collapsed the ordinary second click — a second device, a mail
+    client prefetching the link, a refresh — into "this link is invalid",
+    followed by an offer to resend an email the API had already decided not to
+    send. Reading the key again here is what lets the two cases be told apart.
+    """
+    from allauth.account import app_settings as allauth_settings
+
+    max_age = 60 * 60 * 24 * allauth_settings.EMAIL_CONFIRMATION_EXPIRE_DAYS
+    try:
+        pk = signing.loads(key, max_age=max_age, salt=allauth_settings.SALT)
+    except signing.BadSignature:  # also covers SignatureExpired, which subclasses it
+        return None
+    return EmailAddress.objects.filter(pk=pk).first()
+
+
 def verify_email(request: HttpRequest, key: str) -> User:
     """Confirm an email address from an emailed key."""
     confirmation = EmailConfirmationHMAC.from_key(key)
     if confirmation is None:
+        address = _address_for_key(key)
+        if address is not None and address.verified:
+            raise AuthError(
+                "That address is already confirmed — you can sign in.", "already_verified"
+            )
         raise AuthError("That confirmation link is invalid or has expired.", "invalid_token")
 
-    confirmation.confirm(request)
     user = confirmation.email_address.user
+    if not user.is_active:
+        # Django's auth backend refuses to load an inactive user, so signing one
+        # in produced an inert session rather than a real ban bypass. Refusing
+        # explicitly beats depending on that happy accident.
+        raise AuthError("This account has been deactivated.", "account_disabled")
+
+    confirmation.confirm(request)
     user.refresh_from_db()
     if not user.is_email_verified:
         user.is_email_verified = True
@@ -176,18 +208,42 @@ def change_password(*, user: User, current_password: str, new_password: str) -> 
     return user
 
 
+#: Session keys deleted per statement. Large enough that one statement covers
+#: any realistic user, small enough not to build a multi-megabyte query.
+_SESSION_DELETE_BATCH = 500
+
+
 def _invalidate_sessions(user: User) -> None:
     """Drop every stored session belonging to a user (AS-1).
 
-    Cheap at this scale: the session table is small and this runs on password
-    reset only. Fine to revisit if the table ever grows.
+    **The ceiling on this function**, measured: Django's session table carries
+    no user column, so finding one user's sessions means decoding every
+    unexpired row — roughly 80µs each, so ~160ms at 2,000 live sessions. It runs
+    on password reset *and* on account erasure, both of which are already slow
+    paths, but it scales with total sessions rather than with this user's.
+
+    What is fixed here is the part that could be: the deletes are batched into
+    one statement instead of one per session (previously N round trips inside
+    the reset transaction), and only the two columns needed are loaded rather
+    than whole rows. Removing the decode entirely needs either a cache-backed
+    session engine or a ``user → session`` index table — neither of which this
+    function can introduce on its own, and both of which are settings/schema
+    decisions rather than local ones.
     """
     from django.contrib.sessions.models import Session
 
-    now = timezone.now()
-    for session in Session.objects.filter(expire_date__gte=now).iterator():
-        if session.get_decoded().get("_auth_user_id") == str(user.pk):
-            session.delete()
+    target = str(user.pk)
+    doomed = [
+        session.session_key
+        for session in Session.objects.filter(expire_date__gte=timezone.now())
+        .only("session_key", "session_data")
+        .iterator(chunk_size=2000)
+        if session.get_decoded().get("_auth_user_id") == target
+    ]
+    for start in range(0, len(doomed), _SESSION_DELETE_BATCH):
+        Session.objects.filter(
+            session_key__in=doomed[start : start + _SESSION_DELETE_BATCH]
+        ).delete()
 
 
 # ──────────────────────────────────────────────────────────────────────────────

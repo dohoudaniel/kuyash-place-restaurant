@@ -120,9 +120,17 @@ class Branch(TimeStampedModel, SoftDeleteModel):
         """Whether the branch is open at a given local moment.
 
         Holiday overrides win over the weekly schedule.
+
+        The schedule is read through ``apps.core.selectors``, which caches it and
+        drops that cache whenever a window or an override changes. So this costs
+        no queries on the hot path — ``/core/branch/`` computed it three times
+        per request — while still answering about *now* rather than about
+        whenever the branch row happened to be cached.
         """
+        from apps.core import selectors
+
         moment = moment or self.local_now()
-        override = self.holiday_overrides.filter(date=moment.date()).first()
+        override = selectors.holiday_override_on(self, moment.date())
         if override is not None:
             if override.is_closed:
                 return False
@@ -130,8 +138,10 @@ class Branch(TimeStampedModel, SoftDeleteModel):
                 return override.opens_at <= moment.time() <= override.closes_at
             return True
 
-        windows = self.opening_hours.filter(weekday=moment.weekday(), is_closed=False)
-        return any(window.opens_at <= moment.time() <= window.closes_at for window in windows)
+        return any(
+            window.opens_at <= moment.time() <= window.closes_at
+            for window in selectors.opening_windows(self, moment.weekday())
+        )
 
     @property
     def accepts_bank_transfer(self) -> bool:

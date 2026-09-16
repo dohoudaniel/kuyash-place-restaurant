@@ -235,3 +235,76 @@ def test_order_history_rows_carry_a_short_preview(api_client, verified_user, rea
     assert row["preview"][0]["quantity"] == 2
     assert row["preview"][0]["line_subtotal"]["display"].startswith("₦")
     assert len(row["preview"]) <= 2
+
+
+def test_a_rider_only_reads_the_orders_they_are_carrying(  # type: ignore[no-untyped-def]
+    api_client, verified_user, ready_cart
+) -> None:
+    """Group membership alone used to expose every customer's name, phone,
+    street, area, landmark, delivery notes and receipt, for every order in the
+    business."""
+    from django.contrib.auth.models import Group
+
+    from apps.accounts.models import User
+    from apps.delivery.models import DeliveryAssignment, RiderProfile
+
+    api_client.force_authenticate(user=verified_user)
+    reference = place_via_api(api_client).json()["reference"]
+
+    rider_user = User.objects.create_user(
+        email="emeka@kuyashplace.com",
+        password="correct-horse-battery-staple",
+        full_name="Emeka Rider",
+    )
+    rider_user.groups.add(Group.objects.get_or_create(name="riders")[0])
+    rider = RiderProfile.objects.create(user=rider_user)
+
+    api_client.force_authenticate(user=rider_user)
+    url = reverse("v1:orders:detail", kwargs={"reference": reference})
+    # 404, not 403: existence itself is not disclosed.
+    assert api_client.get(url).status_code == 404
+
+    DeliveryAssignment.objects.create(order=Order.objects.get(reference=reference), rider=rider)
+    assert api_client.get(url).status_code == 200
+
+
+def test_listing_orders_returns_the_callers_history(api_client, verified_user, ready_cart) -> None:  # type: ignore[no-untyped-def]
+    """``GET /orders/`` answered 405: the route and the view were both named for
+    a list, and the scoped throttle already counted writes only, but only
+    ``post`` was ever implemented."""
+    api_client.force_authenticate(user=verified_user)
+    place_via_api(api_client)
+
+    listed = api_client.get(reverse("v1:orders:create"))
+
+    assert listed.status_code == 200
+    assert (
+        listed.json()["results"] == api_client.get(reverse("v1:orders:history")).json()["results"]
+    )
+
+
+def test_listing_orders_requires_authentication(api_client, db) -> None:  # type: ignore[no-untyped-def]
+    assert api_client.get(reverse("v1:orders:create")).status_code in (401, 403)
+
+
+def test_the_etag_reads_the_events_it_already_prefetched(  # type: ignore[no-untyped-def]
+    api_client, verified_user, ready_cart, django_assert_num_queries
+) -> None:
+    """This is the most polled endpoint in the system, and the ETag exists to
+    make it cheap — then spent a query of its own re-reading the prefetch."""
+    from apps.orders.views import _order_etag
+
+    api_client.force_authenticate(user=verified_user)
+    reference = place_via_api(api_client).json()["reference"]
+
+    order = Order.objects.prefetch_related("events").get(reference=reference)
+    with django_assert_num_queries(0):
+        _order_etag(order)
+
+
+def test_orders_are_indexed_for_reports_and_the_kitchen_queue() -> None:
+    """Every report and the KDS summary range-filter on ``placed_at``, and the
+    queue filtered on one index while sorting on another."""
+    indexed = {tuple(index.fields) for index in Order._meta.indexes}
+    assert ("branch", "placed_at") in indexed
+    assert ("branch", "status", "placed_at") in indexed

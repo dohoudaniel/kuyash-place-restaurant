@@ -620,11 +620,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List my orders
+         * @description Place an order, or list the caller's own.
+         *
+         *     ``GET`` returns exactly what ``/orders/mine/`` returns. The route and this
+         *     class have always been named for both verbs, and the scoped throttle
+         *     deliberately counts writes only so that reading your own orders cannot use
+         *     up the allowance for placing one — but only ``post`` was ever implemented,
+         *     so listing answered 405.
+         */
+        get: operations["orders_list"];
         put?: never;
         /**
          * Place an order
          * @description Place an order, or list the caller's own.
+         *
+         *     ``GET`` returns exactly what ``/orders/mine/`` returns. The route and this
+         *     class have always been named for both verbs, and the scoped throttle
+         *     deliberately counts writes only so that reading your own orders cannot use
+         *     up the allowance for placing one — but only ``post`` was ever implemented,
+         *     so listing answered 405.
          */
         post: operations["orders_create"];
         delete?: never;
@@ -909,6 +925,11 @@ export interface paths {
          *     Called when the browser returns from the provider. The browser's return is
          *     a *hint to verify*, never proof: this endpoint asks the provider directly,
          *     so the outcome does not depend on anything the client asserts.
+         *
+         *     Who may ask is a separate question from what the answer is, and this endpoint
+         *     used not to ask it: a reference alone reached any order's status, and spent
+         *     one outbound provider call per request doing so. It now gates on the same
+         *     rule as every other order read — owner, staff, or the guest token.
          */
         get: operations["payments_verify_retrieve"];
         put?: never;
@@ -1265,7 +1286,7 @@ export interface paths {
         };
         /**
          * List FAQ entries
-         * @description Published answers. Powers the help page.
+         * @description Published answers. Powers the help page, and the chat assistant behind it.
          */
         get: operations["support_faq_list"];
         put?: never;
@@ -2036,6 +2057,11 @@ export interface paths {
          *
          *     Unauthenticated by design (WH-5): the signature is the authentication.
          *     CSRF is exempt because the caller is a server, not a browser session.
+         *
+         *     Unauthenticated is not the same as unlimited, though, and this endpoint used
+         *     to be both: anyone could post junk at it as fast as they liked, and every
+         *     request wrote a row. The signature still decides what is *acted* on; the
+         *     throttle decides how often anyone may ask.
          */
         post: operations["webhooks_paystack_create"];
         delete?: never;
@@ -2059,6 +2085,11 @@ export interface paths {
          *
          *     Unauthenticated by design (WH-5): the signature is the authentication.
          *     CSRF is exempt because the caller is a server, not a browser session.
+         *
+         *     Unauthenticated is not the same as unlimited, though, and this endpoint used
+         *     to be both: anyone could post junk at it as fast as they liked, and every
+         *     request wrote a row. The signature still decides what is *acted* on; the
+         *     throttle decides how often anyone may ask.
          */
         post: operations["webhooks_flutterwave_create"];
         delete?: never;
@@ -4039,31 +4070,31 @@ export interface components {
         Session: {
             user: components["schemas"]["CurrentUser"] | null;
         };
+        /** @description What `/core/settings/` publishes to anyone who asks.
+         *
+         *     An explicit allowlist, not ``exclude``. With ``exclude`` this endpoint served
+         *     ``support_email`` and ``orders_email`` — the internal mailboxes alerts are
+         *     delivered to — unauthenticated, and every field added to the model later
+         *     would have been published automatically by the same omission. Adding a field
+         *     to this list is now a deliberate act. */
         SiteSettings: {
-            site_name?: string;
-            tagline?: string;
-            meta_description?: string;
+            readonly site_name: string;
+            readonly tagline: string;
+            readonly meta_description: string;
             /** Format: uri */
-            instagram_url?: string;
+            readonly instagram_url: string;
             /** Format: uri */
-            facebook_url?: string;
+            readonly facebook_url: string;
             /** Format: uri */
-            twitter_url?: string;
+            readonly twitter_url: string;
             /** Format: uri */
-            tiktok_url?: string;
-            /** Format: email */
-            support_email?: string;
-            /** Format: email */
-            orders_email?: string;
-            /**
-             * Format: int64
-             * @description Shown on the About page. Leave blank to hide it.
-             */
-            established_year?: number | null;
-            stat_customers?: string;
-            stat_dishes?: string;
-            stat_years?: string;
-            stat_rating?: string;
+            readonly tiktok_url: string;
+            /** @description Shown on the About page. Leave blank to hide it. */
+            readonly established_year: number | null;
+            readonly stat_customers: string;
+            readonly stat_dishes: string;
+            readonly stat_years: string;
+            readonly stat_rating: string;
         };
         /** @description Folds a browser's saved list into the account on first sign-in. */
         SyncWishlistRequest: {
@@ -4928,6 +4959,30 @@ export interface operations {
             };
         };
     };
+    orders_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedOrderListList"];
+                };
+            };
+        };
+    };
     orders_create: {
         parameters: {
             query?: never;
@@ -5255,7 +5310,10 @@ export interface operations {
     payments_verify_retrieve: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Guests only: the token returned when the order was placed. */
+                "X-Guest-Token"?: string;
+            };
             path: {
                 reference: string;
             };
@@ -5276,7 +5334,10 @@ export interface operations {
     payments_refund_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Send one so a double-clicked Refund cannot send the money back twice. Replaying a completed refund returns it unchanged. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 reference: string;
             };

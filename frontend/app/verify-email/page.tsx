@@ -7,7 +7,7 @@ import { CheckCircle, Loader2, MailWarning } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/store/authStore";
 
-type State = "verifying" | "verified" | "failed";
+type State = "verifying" | "verified" | "already" | "failed";
 
 function VerifyEmail() {
   const key = useSearchParams().get("key");
@@ -32,6 +32,13 @@ function VerifyEmail() {
         setState("verified");
       })
       .catch((err) => {
+        // Opening the link twice — a second device, a mail client prefetching,
+        // a refresh — used to say "link not valid" and offer a resend that
+        // deliberately sends nothing. The address is confirmed; say so.
+        if (err instanceof ApiError && err.code === "already_verified") {
+          setState("already");
+          return;
+        }
         setMessage(err instanceof ApiError ? err.message : "We couldn't confirm your email. Please try again.");
         setState("failed");
       });
@@ -56,6 +63,27 @@ function VerifyEmail() {
           <Loader2 className="w-8 h-8 animate-spin" style={{ color: "var(--red)" }} />
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>Confirming your email…</p>
         </div>
+      )}
+
+      {state === "already" && (
+        <>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "#10b98115" }}>
+            <CheckCircle className="w-8 h-8" style={{ color: "#10b981" }} />
+          </div>
+          <h1 className="font-black text-2xl mb-2" style={{ fontFamily: "var(--font-playfair)", color: "var(--black)" }}>
+            Already confirmed
+          </h1>
+          <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+            This email address is confirmed. Sign in and carry on.
+          </p>
+          <Link
+            href="/?auth=login"
+            className="inline-flex items-center justify-center w-full px-6 py-3 rounded-full font-bold text-white transition-all hover:opacity-90"
+            style={{ background: "var(--red)" }}
+          >
+            Sign In
+          </Link>
+        </>
       )}
 
       {state === "verified" && (

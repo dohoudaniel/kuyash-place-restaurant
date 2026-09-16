@@ -344,6 +344,65 @@ def test_a_database_level_overlap_is_reported_as_a_lost_slot(  # type: ignore[no
         book(branch, dining_room, booking_time)
 
 
+def test_two_bookings_cannot_share_an_idempotency_key(branch, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
+    """The database backstop, at the model.
+
+    Without it the cache was the *only* guard against a double submission, and
+    a cache is allowed to forget.
+    """
+    from django.db import IntegrityError
+
+    book(branch, dining_room, booking_time, email="a@example.com", idempotency_key="key-1")
+
+    with pytest.raises(IntegrityError):
+        Reservation.objects.create(
+            branch=branch,
+            area=dining_room,
+            reserved_for=booking_time,
+            party_size=2,
+            guest_name="Ben",
+            guest_email="b@example.com",
+            guest_phone="+2348012345678",
+            idempotency_key="key-1",
+        )
+
+
+def test_bookings_without_a_key_do_not_collide(branch, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
+    """Staff and phone bookings carry no key; several blanks are not duplicates."""
+    book(branch, dining_room, booking_time, email="a@example.com")
+    book(branch, dining_room, booking_time, email="b@example.com")
+    assert Reservation.objects.filter(idempotency_key="").count() == 2
+
+
+def test_a_duplicate_key_returns_the_original_booking(branch, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
+    """A lost cache claim must replay, not raise and not book a second table."""
+    first = book(branch, dining_room, booking_time, email="a@example.com", idempotency_key="key-1")
+    again = book(branch, dining_room, booking_time, email="a@example.com", idempotency_key="key-1")
+
+    assert again.pk == first.pk
+    assert Reservation.objects.count() == 1
+
+
+def test_a_lost_reschedule_race_is_a_lost_slot_not_a_500(  # type: ignore[no-untyped-def]
+    branch, dining_room, booking_time, monkeypatch
+) -> None:
+    """``book()`` has always handled the exclusion constraint firing;
+    ``reschedule()`` did not, so losing the same race returned a 500."""
+    from django.db import IntegrityError
+
+    reservation = book(branch, dining_room, booking_time)
+
+    def explode(*args: object, **kwargs: object) -> None:
+        raise IntegrityError("no_double_booked_table")
+
+    monkeypatch.setattr(Reservation, "save", explode)
+
+    with pytest.raises(SlotUnavailable, match="taken while you were rescheduling"):
+        booking.reschedule(
+            reservation=reservation, reserved_for=booking_time + dt.timedelta(days=1)
+        )
+
+
 def test_rescheduling_to_an_impossible_time_is_refused(branch, dining_room, booking_time) -> None:  # type: ignore[no-untyped-def]
     reservation = book(branch, dining_room, booking_time)
     with pytest.raises(BookingRejected, match="notice"):

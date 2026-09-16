@@ -123,7 +123,7 @@ DJANGO_SECRET_KEY=<50+ random chars>
 # Admin two-factor step (default true). Rotating DJANGO_SECRET_KEY makes staff re-enrol their authenticator app.
 STAFF_MFA_REQUIRED=true
 # Proxies in front of Django that append to X-Forwarded-For (Nginx or the platform load balancer: 1).
-# 0 behind a proxy puts every visitor on one IP, so one person's failed logins throttle everyone (kuyash.W021).
+# 0 behind a proxy puts every visitor on one IP, so one person's failed logins throttle everyone (kuyash.E021).
 TRUSTED_PROXY_COUNT=1
 # Optional: addresses/CIDR ranges allowed to reach the admin; everyone else gets 404. Empty = off.
 ADMIN_ALLOWED_IPS=

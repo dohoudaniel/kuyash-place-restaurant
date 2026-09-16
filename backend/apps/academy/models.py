@@ -197,10 +197,18 @@ class Enrolment(TimeStampedModel):
     certificate_issued_at = models.DateTimeField(null=True, blank=True)
 
     guest_token = models.CharField(max_length=64, default=generate_guest_token, editable=False)
-    idempotency_key = models.CharField(max_length=64, blank=True)
+    idempotency_key = models.CharField(max_length=64, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            # See Order: the database is the backstop when the cache is not there.
+            models.UniqueConstraint(
+                fields=["idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="unique_enrolment_idempotency_key",
+            )
+        ]
         indexes = [
             models.Index(fields=["cohort", "status"]),
             models.Index(fields=["user", "-created_at"]),

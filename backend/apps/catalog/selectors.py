@@ -13,7 +13,7 @@ from typing import Any
 from django.conf import settings
 from django.db.models import F, Q, QuerySet
 
-from apps.catalog.models import Category, MenuItem
+from apps.catalog.models import SEARCH_CONFIG, Category, MenuItem
 
 SORT_OPTIONS = {
     "popular": ("-order_count", "display_order", "name"),
@@ -43,22 +43,28 @@ def base_queryset() -> QuerySet[MenuItem]:
 def _apply_search(queryset: QuerySet[MenuItem], term: str) -> QuerySet[MenuItem]:
     """Full-text search on Postgres, substring matching elsewhere.
 
-    Local development runs on SQLite (ADR-015), which has no ``search_vector``,
-    so the behaviour degrades rather than crashing.
+    On Postgres this matches against the **stored** ``search_vector`` column,
+    which the GIN index in migration 0003 covers. It used to build a
+    ``SearchVector`` from ``name`` and ``description`` at query time and rank
+    every row — a sequential scan of the whole menu per search — and then OR in
+    a ``name__icontains``, which no index can ever serve and which quietly made
+    the scan mandatory even when the full-text half matched nothing.
+
+    Local development runs on SQLite (ADR-015), which has no ``tsvector``, so
+    the behaviour degrades to substring matching rather than crashing.
     """
     term = term.strip()
     if not term:
         return queryset
 
     if settings.USING_POSTGRES:  # pragma: no cover - exercised in Postgres CI
-        from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+        from django.contrib.postgres.search import SearchQuery, SearchRank
 
-        vector = SearchVector("name", weight="A") + SearchVector("description", weight="B")
-        query = SearchQuery(term, search_type="websearch")
+        query = SearchQuery(term, search_type="websearch", config=SEARCH_CONFIG)
         return (
-            queryset.annotate(rank=SearchRank(vector, query))
-            .filter(Q(rank__gt=0) | Q(name__icontains=term))
-            .order_by("-rank")
+            queryset.filter(search_vector=query)
+            .annotate(rank=SearchRank(F("search_vector"), query))
+            .order_by("-rank", "display_order", "name")
         )
 
     return queryset.filter(Q(name__icontains=term) | Q(description__icontains=term))

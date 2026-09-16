@@ -13,7 +13,7 @@ import { useSiteInfo } from "@/lib/site/useSiteInfo";
  * ₦2,500 minimum, "free delivery over ₦10,000"), and a placeholder phone number.
  */
 export default function HelpPage() {
-  const { branch, settings } = useSiteInfo();
+  const { branch } = useSiteInfo();
   const [faqs, setFaqs] = useState<Faq[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -49,7 +49,7 @@ export default function HelpPage() {
     return matchesCategory && matchesSearch;
   });
 
-  const email = settings?.support_email || branch?.email;
+  const email = branch?.email;
   const quickLinks = [
     { icon: <FileText className="w-8 h-8" />, title: "Track Order", link: "/orders" },
     { icon: <MessageCircle className="w-8 h-8" />, title: "Contact Support", link: "/contact" },

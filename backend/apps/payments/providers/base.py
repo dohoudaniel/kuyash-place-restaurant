@@ -11,6 +11,39 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
+import requests
+
+
+class ProviderResponseUnreadable(requests.RequestException):
+    """A provider answered with something that is not a JSON object.
+
+    Deliberately a :class:`requests.RequestException`: a 502 HTML error page and
+    a dropped connection are the same kind of event — *we do not know what
+    happened* — and every call site already treats a ``RequestException`` as
+    retryable. Before this existed, an HTML body raised ``ValueError`` out of
+    ``json.loads``, which no handler caught, and the customer returning from the
+    provider got an unhandled 500.
+    """
+
+
+def read_json(response: requests.Response) -> dict[str, Any]:
+    """Parse a provider response body, or raise a retryable transport error.
+
+    Note what this does **not** do: it does not ``raise_for_status()``. Both
+    providers report real, terminal outcomes with a 4xx status and a meaningful
+    JSON body ("Transaction reference not found"), and that message is worth
+    keeping. Only an unreadable body is treated as transport failure.
+    """
+    try:
+        body = parse_money_json(response.content)
+    except ValueError as exc:
+        raise ProviderResponseUnreadable(
+            f"{response.status_code} response was not JSON ({len(response.content)} bytes)"
+        ) from exc
+    if not isinstance(body, dict):
+        raise ProviderResponseUnreadable(f"{response.status_code} response was not an object")
+    return body
+
 
 def parse_money_json(raw: bytes | str) -> Any:
     """Parse provider JSON with **Decimal**, never float.
@@ -46,6 +79,10 @@ class VerifyResult:
     status: str  # success | failed | pending | abandoned
     amount_kobo: int = 0
     currency: str = "NGN"
+    #: The provider's **own** identifier for the transaction, when it differs
+    #: from the reference we sent. Flutterwave refunds address this, not the
+    #: ``tx_ref``, so settlement persists it (docs/PAYMENTS.md §5).
+    provider_reference: str = ""
     channel: str = ""
     authorization_code: str = ""
     card_last4: str = ""
@@ -81,6 +118,7 @@ class PaymentProvider(Protocol):
         email: str,
         reference: str,
         callback_url: str,
+        currency: str = "NGN",
         metadata: Mapping[str, Any] | None = None,
     ) -> InitResult: ...
 

@@ -59,13 +59,36 @@ def as_money(value: int) -> dict[str, Any]:
     return money(value)
 
 
+#: A spreadsheet treats a cell beginning with any of these as a formula, and
+#: Excel's DDE syntax (`=cmd|'/c …'!A1`) runs a program.
+#:
+#: This is not theoretical here. One of the exported values is a rider's own
+#: `full_name`, which they set themselves through `PATCH /accounts/me/` and
+#: which nothing validates. A rider renames themselves, a manager opens
+#: `/reports/riders/?export=csv`, and the lowest staff role has code execution
+#: on the highest.
+FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def csv_cell(value: Any) -> Any:
+    """Neutralise a value a spreadsheet would read as a formula.
+
+    A leading apostrophe makes the cell literal text. Applied to every value,
+    not just the ones that look risky today, because the next column someone
+    adds will not come with a reminder. The visible cost is that a genuinely
+    negative number would render as text; nothing exported here can be negative.
+    """
+    text = value if isinstance(value, str) else str(value)
+    return f"'{text}" if text[:1] in FORMULA_TRIGGERS else value
+
+
 def csv_response(
     name: str, window: services.Period, header: list[str], rows: list[list[Any]]
 ) -> HttpResponse:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(header)
-    writer.writerows(rows)
+    writer.writerow([csv_cell(column) for column in header])
+    writer.writerows([csv_cell(value) for value in row] for row in rows)
     response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = (
         f'attachment; filename="kuyash-{name}-{window.start}-to-{window.end}.csv"'

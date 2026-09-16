@@ -8,18 +8,24 @@ or later partly or fully refunded) or when it was a cash order that was
 delivered. Unpaid, expired and failed orders are not sales; they are reported
 separately as orders that did not complete. Refunds are subtracted in the
 period they were issued, so a refund never rewrites last month's figures.
+
+**Bucketing happens in the database.** Every figure here used to be computed by
+pulling the whole result set into Python and adding it up row by row — up to
+366 days of orders, in a synchronous request. The local day and hour are now
+``TruncDate``/``Extract`` with the branch's ``tzinfo``, so the answer is the same
+and the work is the database's.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
-from django.db.models import Count, F, Q, QuerySet, Sum
-from django.utils import timezone
+from django.db.models import Count, DurationField, F, Q, QuerySet, Sum, Value
+from django.db.models.functions import Coalesce, ExtractHour, ExtractIsoWeekDay, TruncDate
 
+from apps.core.cache import SALES_REPORT_KEY, cached
 from apps.orders.models import (
     Order,
     OrderItem,
@@ -43,6 +49,13 @@ INCOMPLETE_STATUSES = (
     OrderStatus.FAILED,
 )
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+#: The kitchen display polls its summary every ten seconds per screen, and that
+#: summary asks for today's sales — the same figures, recomputed for every poll
+#: of every screen. Half a minute of staleness on a running revenue total is
+#: invisible to a manager and turns a per-poll aggregate into a cache read.
+#: Managers' own reports ride along; pass ``refresh=True`` to bypass.
+SALES_CACHE_SECONDS = 30
 
 
 class PeriodError(ValueError):
@@ -90,10 +103,6 @@ def period(branch: Any, *, start: str = "", end: str = "") -> Period:
     return result
 
 
-def _local(moment: dt.datetime, tz: dt.tzinfo) -> dt.datetime:
-    return timezone.localtime(moment, timezone=tz)
-
-
 def counted_orders(branch: Any, window: Period) -> QuerySet[Order]:
     start, end = window.bounds
     return Order.objects.filter(branch=branch, placed_at__gte=start, placed_at__lt=end).filter(
@@ -102,15 +111,46 @@ def counted_orders(branch: Any, window: Period) -> QuerySet[Order]:
     )
 
 
+def _average_minutes(total: Any, count: int) -> float | None:
+    """The mean of a summed duration, in minutes.
+
+    Postgres sums intervals and hands back a ``timedelta``; SQLite stores
+    durations as microseconds and hands back a number. Both are handled here so
+    a report reads the same on a laptop as in production.
+    """
+    if not count or total is None:
+        return None
+    seconds = total.total_seconds() if isinstance(total, dt.timedelta) else float(total) / 1_000_000
+    return round(seconds / count / 60, 1)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Sales
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def sales(branch: Any, window: Period) -> dict[str, Any]:
+def sales(branch: Any, window: Period, *, refresh: bool = False) -> dict[str, Any]:
+    """Sales for a period. Briefly cached — see ``SALES_CACHE_SECONDS``."""
+    key = SALES_REPORT_KEY.format(branch=branch.pk, start=window.start, end=window.end)
+    if refresh:
+        from apps.core.cache import invalidate
+
+        invalidate(key)
+    return cached(key, SALES_CACHE_SECONDS, lambda: _sales(branch, window))
+
+
+def _sales(branch: Any, window: Period) -> dict[str, Any]:
     from apps.payments.models import Refund, RefundStatus
 
     orders = counted_orders(branch, window)
+    start, end = window.bounds
+
+    #: Prep time is only meaningful when both stamps exist and run forwards.
+    timed = Q(
+        accepted_at__isnull=False,
+        ready_at__isnull=False,
+        ready_at__gte=F("accepted_at"),
+    )
     totals = orders.aggregate(
         orders=Count("id"),
         gross=Sum("grand_total"),
@@ -120,9 +160,15 @@ def sales(branch: Any, window: Period) -> dict[str, Any]:
         service_charges=Sum("service_charge"),
         vat=Sum("vat_total"),
         tips=Sum("tip"),
+        prep_total=Sum(
+            F("ready_at") - F("accepted_at"), filter=timed, output_field=DurationField()
+        ),
+        prep_count=Count("id", filter=timed),
     )
+    prep_total = totals.pop("prep_total")
+    prep_count = totals.pop("prep_count") or 0
     totals = {key: value or 0 for key, value in totals.items()}
-    start, end = window.bounds
+
     refunds = (
         Refund.objects.filter(
             order__branch=branch,
@@ -133,32 +179,25 @@ def sales(branch: Any, window: Period) -> dict[str, Any]:
         or 0
     )
 
+    # Every day in the window is present even when nothing was sold, so a chart
+    # has no gaps. The database returns only the days that have rows.
     daily: dict[dt.date, dict[str, int]] = {
         day: {"orders": 0, "gross": 0} for day in window.dates()
     }
-    by_payment: dict[str, dict[str, int]] = defaultdict(lambda: {"orders": 0, "gross": 0})
-    by_fulfilment: dict[str, dict[str, int]] = defaultdict(lambda: {"orders": 0, "gross": 0})
-    prep_minutes: list[float] = []
-    for row in orders.values(
-        "placed_at", "grand_total", "payment_method", "fulfilment_type", "accepted_at", "ready_at"
+    for row in (
+        orders.order_by()
+        .annotate(day=TruncDate("placed_at", tzinfo=window.tz))
+        .values("day")
+        .annotate(count=Count("id"), gross=Sum("grand_total"))
     ):
-        if row["placed_at"] is None:  # pragma: no cover - the range filter excludes it
-            continue
-        day = _local(row["placed_at"], window.tz).date()
-        for bucket in (
-            daily[day],
-            by_payment[row["payment_method"]],
-            by_fulfilment[row["fulfilment_type"]],
-        ):
-            bucket["orders"] += 1
-            bucket["gross"] += row["grand_total"]
-        if row["accepted_at"] and row["ready_at"] and row["ready_at"] >= row["accepted_at"]:
-            prep_minutes.append((row["ready_at"] - row["accepted_at"]).total_seconds() / 60)
+        if row["day"] in daily:
+            daily[row["day"]] = {"orders": row["count"], "gross": row["gross"] or 0}
 
     incomplete = dict(
         Order.objects.filter(
             branch=branch, placed_at__gte=start, placed_at__lt=end, status__in=INCOMPLETE_STATUSES
         )
+        .order_by()
         .values_list("status")
         .annotate(total=Count("id"))
     )
@@ -168,13 +207,26 @@ def sales(branch: Any, window: Period) -> dict[str, Any]:
         "refunds": refunds,
         "net": totals["gross"] - refunds,
         "average_order": totals["gross"] // totals["orders"] if totals["orders"] else 0,
-        "average_prep_minutes": round(sum(prep_minutes) / len(prep_minutes), 1)
-        if prep_minutes
-        else None,
-        "by_payment_method": dict(by_payment),
-        "by_fulfilment": dict(by_fulfilment),
+        "average_prep_minutes": _average_minutes(prep_total, prep_count),
+        "by_payment_method": _grouped(orders, "payment_method"),
+        "by_fulfilment": _grouped(orders, "fulfilment_type"),
         "incomplete_orders": {status: incomplete.get(status, 0) for status in INCOMPLETE_STATUSES},
         "daily": [{"date": day, **values} for day, values in daily.items()],
+    }
+
+
+def _grouped(orders: QuerySet[Order], field: str) -> dict[str, dict[str, int]]:
+    """Order count and gross, grouped by one column.
+
+    ``.order_by()`` clears any default ordering first: a model's ``Meta.ordering``
+    columns are added to the ``GROUP BY``, which would silently split every
+    bucket into one row per order.
+    """
+    return {
+        row[field]: {"orders": row["count"], "gross": row["gross"] or 0}
+        for row in orders.order_by()
+        .values(field)
+        .annotate(count=Count("id"), gross=Sum("grand_total"))
     }
 
 
@@ -213,13 +265,28 @@ def popular_items(branch: Any, window: Period, *, limit: int = 20) -> list[dict[
 
 
 def peak_hours(branch: Any, window: Period) -> dict[str, Any]:
-    """Orders by local weekday and hour."""
+    """Orders by local weekday and hour.
+
+    One grouped query. ``ExtractIsoWeekDay`` is 1 = Monday on every backend,
+    which is Python's ``weekday()`` plus one — unlike ``ExtractWeekDay``, which
+    starts on Sunday.
+    """
     grid = [[0] * 24 for _ in WEEKDAYS]
-    for placed_at in counted_orders(branch, window).values_list("placed_at", flat=True):
-        if placed_at is None:  # pragma: no cover - the range filter excludes it
+    rows = (
+        counted_orders(branch, window)
+        .order_by()
+        .annotate(
+            weekday=ExtractIsoWeekDay("placed_at", tzinfo=window.tz),
+            hour=ExtractHour("placed_at", tzinfo=window.tz),
+        )
+        .values("weekday", "hour")
+        .annotate(total=Count("id"))
+    )
+    for row in rows:
+        if row["weekday"] is None or row["hour"] is None:  # pragma: no cover - range filter
             continue
-        local = _local(placed_at, window.tz)
-        grid[local.weekday()][local.hour] += 1
+        grid[row["weekday"] - 1][row["hour"]] += row["total"]
+
     by_hour = [sum(day[hour] for day in grid) for hour in range(24)]
     busiest = max(
         ((weekday, hour, grid[weekday][hour]) for weekday in range(7) for hour in range(24)),
@@ -247,60 +314,83 @@ def rider_performance(branch: Any, window: Period) -> list[dict[str, Any]]:
 
     Delivery time runs from pick-up (or assignment, if pick-up was not recorded)
     to hand-over. On time means delivered by the estimate the customer was shown.
+
+    Three queries whatever the volume: one aggregate over the assignments, one
+    over the failed-delivery events, and one to put names to the riders that
+    turned up in either.
     """
-    from apps.delivery.models import DeliveryAssignment
+    from apps.delivery.models import DeliveryAssignment, RiderProfile
 
     start, end = window.bounds
-    stats: dict[Any, dict[str, Any]] = {}
+    began = Coalesce("picked_up_at", "assigned_at")
+    #: A hand-over recorded as happening before the pick-up is a data-entry
+    #: error, not a negative delivery time; it is left out of the average.
+    measurable = Q(delivered_at__gte=began)
+    on_estimate = Q(order__estimated_delivery_at__isnull=False)
 
-    def entry(rider: Any) -> dict[str, Any]:
-        return stats.setdefault(
-            rider.pk,
-            {
-                "rider": rider.user.get_full_name(),
-                "deliveries": 0,
-                "minutes": [],
-                "estimated": 0,
-                "on_time": 0,
-                "failed": 0,
-                "cash_collected": 0,
-            },
+    rows = list(
+        DeliveryAssignment.objects.filter(
+            order__branch=branch, delivered_at__gte=start, delivered_at__lt=end
         )
+        .order_by()
+        .values("rider_id")
+        .annotate(
+            deliveries=Count("id"),
+            cash=Coalesce(Sum("cash_collected"), Value(0)),
+            estimated=Count("id", filter=on_estimate),
+            on_time=Count(
+                "id",
+                filter=on_estimate & Q(delivered_at__lte=F("order__estimated_delivery_at")),
+            ),
+            timed_total=Sum(
+                F("delivered_at") - began, filter=measurable, output_field=DurationField()
+            ),
+            timed_count=Count("id", filter=measurable),
+        )
+    )
 
-    assignments = DeliveryAssignment.objects.filter(
-        order__branch=branch, delivered_at__gte=start, delivered_at__lt=end
-    ).select_related("rider__user", "order")
-    for assignment in assignments:
-        delivered = assignment.delivered_at
-        if delivered is None:  # pragma: no cover - the range filter excludes it
-            continue
-        row = entry(assignment.rider)
-        row["deliveries"] += 1
-        began = assignment.picked_up_at or assignment.assigned_at
-        if began and delivered >= began:
-            row["minutes"].append((delivered - began).total_seconds() / 60)
-        estimate = assignment.order.estimated_delivery_at
-        if estimate:
-            row["estimated"] += 1
-            row["on_time"] += int(delivered <= estimate)
-        row["cash_collected"] += assignment.cash_collected or 0
+    failures = dict(
+        OrderStatusEvent.objects.filter(
+            order__branch=branch,
+            to_status=OrderStatus.FAILED_DELIVERY,
+            created_at__gte=start,
+            created_at__lt=end,
+            order__delivery_assignment__isnull=False,
+        )
+        .order_by()
+        .values_list("order__delivery_assignment__rider_id")
+        .annotate(total=Count("id"))
+    )
 
-    failures = OrderStatusEvent.objects.filter(
-        order__branch=branch,
-        to_status=OrderStatus.FAILED_DELIVERY,
-        created_at__gte=start,
-        created_at__lt=end,
-        order__delivery_assignment__isnull=False,
-    ).select_related("order__delivery_assignment__rider__user")
-    for event in failures:
-        entry(event.order.delivery_assignment.rider)["failed"] += 1
+    rider_ids = {row["rider_id"] for row in rows} | set(failures)
+    names = {
+        profile.pk: profile.user.get_full_name()
+        for profile in RiderProfile.objects.filter(pk__in=rider_ids).select_related("user")
+    }
 
-    report = []
-    for row in stats.values():
-        minutes = row.pop("minutes")
-        estimated = row.pop("estimated")
-        on_time = row.pop("on_time")
-        row["average_delivery_minutes"] = round(sum(minutes) / len(minutes), 1) if minutes else None
-        row["on_time_percent"] = round(on_time * 100 / estimated) if estimated else None
-        report.append(row)
-    return sorted(report, key=lambda row: (-row["deliveries"], row["rider"]))
+    def blank(rider_id: Any) -> dict[str, Any]:
+        return {
+            "rider": names.get(rider_id, ""),
+            "deliveries": 0,
+            "failed": 0,
+            "cash_collected": 0,
+            "average_delivery_minutes": None,
+            "on_time_percent": None,
+        }
+
+    stats: dict[Any, dict[str, Any]] = {}
+    for row in rows:
+        rider_id = row["rider_id"]
+        stats[rider_id] = {
+            **blank(rider_id),
+            "deliveries": row["deliveries"],
+            "cash_collected": row["cash"] or 0,
+            "average_delivery_minutes": _average_minutes(row["timed_total"], row["timed_count"]),
+            "on_time_percent": (
+                round(row["on_time"] * 100 / row["estimated"]) if row["estimated"] else None
+            ),
+        }
+    for rider_id, count in failures.items():
+        stats.setdefault(rider_id, blank(rider_id))["failed"] = count
+
+    return sorted(stats.values(), key=lambda row: (-row["deliveries"], row["rider"]))

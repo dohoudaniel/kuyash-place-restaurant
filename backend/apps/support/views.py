@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from apps.common.client_ip import client_ip
 from apps.common.permissions import IsStaffMember, current_user
 from apps.common.throttling import SCOPED_THROTTLES
+from apps.core.cache import FAQ_KEY, TTL_MEDIUM, PublicCacheMixin, cached
 from apps.core.selectors import get_current_branch
 from apps.support.models import FaqEntry, Ticket
 from apps.support.serializers import (
@@ -76,23 +77,29 @@ class ContactView(APIView):
         )
 
 
-class FaqListView(ListAPIView):
-    """Published answers. Powers the help page."""
+class FaqListView(PublicCacheMixin, APIView):
+    """Published answers. Powers the help page, and the chat assistant behind it."""
 
     permission_classes = [AllowAny]
-    serializer_class = FaqSerializer
-    pagination_class = None
+    cache_max_age = TTL_MEDIUM
 
-    def get_queryset(self) -> Any:
-        queryset = FaqEntry.objects.filter(is_active=True)
-        category = self.request.query_params.get("category", "")
-        if category:
-            queryset = queryset.filter(category=category)
-        return queryset
+    @extend_schema(
+        summary="List FAQ entries",
+        responses={200: FaqSerializer(many=True)},
+        tags=["support"],
+    )
+    def get(self, request: Request) -> Response:
+        category = request.query_params.get("category", "")
+        return Response(
+            cached(FAQ_KEY.format(category=category or "all"), TTL_MEDIUM, lambda: _faq(category))
+        )
 
-    @extend_schema(summary="List FAQ entries", tags=["support"])
-    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        return super().get(request, *args, **kwargs)
+
+def _faq(category: str) -> list[dict[str, Any]]:
+    queryset = FaqEntry.objects.filter(is_active=True)
+    if category:
+        queryset = queryset.filter(category=category)
+    return [dict(row) for row in FaqSerializer(queryset, many=True).data]
 
 
 class MyTicketsView(ListAPIView):

@@ -23,7 +23,9 @@ from apps.academy.models import (
     CohortStatus,
     Course,
     Enrolment,
+    EnrolmentPaymentMethod,
     EnrolmentStatus,
+    ExperienceLevel,
     Instructor,
 )
 from apps.academy.seed import COURSES, seed_academy
@@ -278,7 +280,13 @@ def test_a_payment_after_cancellation_is_kept_and_flagged(cohort, caplog) -> Non
     assert "payment_for_cancelled_enrolment" in caplog.text
 
 
-def test_a_late_payment_into_a_filled_cohort_is_flagged(cohort, caplog) -> None:  # type: ignore[no-untyped-def]
+def test_a_late_payment_into_a_filled_cohort_is_not_confirmed(cohort, caplog) -> None:  # type: ignore[no-untyped-def]
+    """The hold lapsed and the seat went to someone else.
+
+    Confirming anyway sold one seat twice, and the student found out by turning
+    up to a class with no place for them. The fee is recorded and flagged
+    instead, and a person decides between a refund and another place.
+    """
     late = enrol(cohort, "late@example.com")
     record = initialise_enrolment_payment(enrolment=late)
     Enrolment.objects.filter(pk=late.pk).update(
@@ -286,11 +294,24 @@ def test_a_late_payment_into_a_filled_cohort_is_flagged(cohort, caplog) -> None:
     )
     pay(enrol(cohort, "one@example.com"))
     pay(enrol(cohort, "two@example.com"))
+
     with caplog.at_level(logging.CRITICAL):
         verify_by_reference(record.our_reference)
+
+    late.refresh_from_db()
+    record.refresh_from_db()
     cohort.refresh_from_db()
-    assert cohort.enrolled_count == 3
-    assert "cohort_overbooked" in caplog.text
+    assert late.status == EnrolmentStatus.PENDING_PAYMENT  # not confirmed
+    assert late.paid_at is not None and late.amount_paid == 5_000_000  # but the money is kept
+    assert cohort.enrolled_count == 2  # and the cohort is not overbooked
+    assert record.needs_review is True
+    assert "refund or seat decision needed" in record.review_reason
+    assert "payment_for_unavailable_seat" in caplog.text
+    # The two students who did get seats are confirmed; this one is not told
+    # they have a place, because they do not have one.
+    assert not Notification.objects.filter(
+        template_key="enrolment_confirmed", body__contains=late.reference
+    ).exists()
 
 
 def test_staff_record_a_transfer(cohort, bank) -> None:  # type: ignore[no-untyped-def]
@@ -614,17 +635,61 @@ def test_verify_unknown_reference(api_client) -> None:  # type: ignore[no-untype
     )
 
 
-def test_order_payments_are_untouched(api_client, ready_cart) -> None:  # type: ignore[no-untyped-def]
+def test_order_payments_are_untouched(api_client, ready_cart, verified_user) -> None:  # type: ignore[no-untyped-def]
     from apps.orders.services.placement import place_order
     from apps.payments.services.payments import initialise_payment
 
     order = place_order(cart=ready_cart, payment_method="card")
     record = initialise_payment(order=order)
     assert record.enrolment is None
+
+    # The order endpoint gates on ownership, so the customer signs in for it.
+    api_client.force_authenticate(verified_user)
     verify = api_client.get(
         reverse("v1:payments:verify", kwargs={"reference": record.our_reference})
     ).json()
     assert verify["order_status"] == "paid"
+
+
+def test_the_course_list_does_not_query_once_per_cohort(api_client, course, cohort) -> None:  # type: ignore[no-untyped-def]
+    """``seats_left`` cost a COUNT(*) per cohort, on a list with no pagination.
+
+    Measured at +3 queries per course. Seats are annotated onto the prefetched
+    cohorts now, so the count is flat however many classes are scheduled.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    def queries() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            api_client.get(COURSES_URL)
+        return len(captured)
+
+    queries()  # warm anything cached on first use
+    baseline = queries()
+
+    for offset in (20, 30, 40):
+        Cohort.objects.create(
+            course=course, starts_on=in_days(offset), ends_on=in_days(offset + 20), capacity=5
+        )
+
+    assert queries() == baseline
+
+
+def test_an_enrolment_token_is_accepted_only_as_a_header(api_client, cohort) -> None:  # type: ignore[no-untyped-def]
+    """Tokens must not travel in URLs (SECURITY.md §7.5).
+
+    The emailed link still carries one — customers already have those links, and
+    the frontend lifts it into storage and strips it from the address bar — but
+    the API itself reads the token from a header and nowhere else, so a copied
+    URL in a log, a Referer header or a shared screenshot is not a credential
+    the API will accept.
+    """
+    enrolment = enrol(cohort)
+    url = reverse("v1:academy:enrolment", kwargs={"reference": enrolment.reference})
+
+    assert api_client.get(url, {"token": enrolment.guest_token}).status_code == 404
+    assert api_client.get(url, HTTP_X_ENROLMENT_TOKEN=enrolment.guest_token).status_code == 200
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -688,3 +753,58 @@ def test_seed_is_inactive_and_idempotent(branch) -> None:  # type: ignore[no-unt
     assert seed_academy(branch) == 0
     assert not Course.objects.filter(is_active=True).exists()
     assert Course.objects.get(slug="culinary-masterclass").price == 15_000_000
+
+
+def test_a_cohort_past_capacity_is_reported_critically(cohort, caplog) -> None:  # type: ignore[no-untyped-def]
+    """A payment settling after its hold lapsed can oversell a seat.
+
+    The count is authoritative, so the enrolment stands and a person must sort
+    it out — but it must never pass silently.
+    """
+    cohort.capacity = 1
+    cohort.save(update_fields=["capacity"])
+    for index in range(2):
+        Enrolment.objects.create(
+            course=cohort.course,
+            cohort=cohort,
+            name=f"Student {index}",
+            email=f"student-{index}@example.com",
+            phone="+2348012345678",
+            experience_level=ExperienceLevel.values[0],
+            payment_method=EnrolmentPaymentMethod.values[0],
+            status=EnrolmentStatus.CONFIRMED,
+            amount=cohort.course.price,
+        )
+
+    with caplog.at_level(logging.CRITICAL, logger="apps.academy.services"):
+        services._refresh_cohort(cohort)
+
+    [record] = [r for r in caplog.records if r.getMessage() == "cohort_overbooked"]
+    assert record.enrolled == 2 and record.capacity == 1  # type: ignore[attr-defined]
+
+
+def _keyed_enrolment(cohort, key: str) -> Enrolment:
+    return Enrolment.objects.create(
+        course=cohort.course,
+        cohort=cohort,
+        name="Student",
+        email="student@example.com",
+        phone="+2348012345678",
+        experience_level=ExperienceLevel.values[0],
+        payment_method=EnrolmentPaymentMethod.values[0],
+        status=EnrolmentStatus.PENDING_PAYMENT,
+        amount=cohort.course.price,
+        idempotency_key=key,
+    )
+
+
+def test_two_enrolments_cannot_share_an_idempotency_key(cohort) -> None:  # type: ignore[no-untyped-def]
+    _keyed_enrolment(cohort, "enrol-abc")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        _keyed_enrolment(cohort, "enrol-abc")
+
+
+def test_blank_enrolment_keys_do_not_collide(cohort) -> None:  # type: ignore[no-untyped-def]
+    _keyed_enrolment(cohort, "")
+    _keyed_enrolment(cohort, "")
+    assert Enrolment.objects.filter(idempotency_key="").count() == 2

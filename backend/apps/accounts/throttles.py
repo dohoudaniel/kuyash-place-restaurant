@@ -50,11 +50,29 @@ class ResendVerificationThrottle(_EmailKeyedThrottle):
     scope = "resend_verification"
 
 
+class ResendVerificationIPThrottle(AnonRateThrottle):
+    """Per-IP companion to :class:`ResendVerificationThrottle`.
+
+    Declaring ``throttle_classes`` on a view *replaces* the global anon
+    throttle, so the resend endpoint was left with only the email-keyed limit —
+    which keys on the address in the body. One host could therefore send three
+    emails an hour to an unlimited number of addresses: a mail-bomb amplifier
+    pointed at the restaurant's sending reputation.
+
+    Shares the ``resend_verification`` rate with the email-keyed class. The two
+    never collide because ``SimpleRateThrottle`` keys on ``(scope, ident)`` and
+    the idents are an IP and an email address.
+    """
+
+    scope = "resend_verification"
+
+
 __all__: list[Any] = [
     "LoginEmailThrottle",
     "LoginIPThrottle",
     "PasswordResetEmailThrottle",
     "PasswordResetIPThrottle",
     "RegisterThrottle",
+    "ResendVerificationIPThrottle",
     "ResendVerificationThrottle",
 ]

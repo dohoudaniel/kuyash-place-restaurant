@@ -308,17 +308,26 @@ def track_for_user(session: ChatSession, user: Any) -> BotReply:
 
 
 def hours_reply(branch: Any) -> BotReply:
+    # The schedule is read through the core selectors, which cache it: the
+    # assistant answers "when do you close?" from memory rather than from two
+    # queries per question.
+    from apps.core import selectors
+
     tz = branch.tzinfo()
     now = branch.local_now()
     action = {"type": "link", "label": "Opening hours", "url": "/contact"}
     if branch.is_open_now:
-        override = branch.holiday_overrides.filter(date=now.date()).first()
+        override = selectors.holiday_override_on(branch, now.date())
         if override is not None and override.closes_at:
             closes: dt.time | None = override.closes_at
         else:
-            windows = branch.opening_hours.filter(weekday=now.weekday(), is_closed=False)
             closes = next(
-                (w.closes_at for w in windows if w.opens_at <= now.time() <= w.closes_at), None
+                (
+                    w.closes_at
+                    for w in selectors.opening_windows(branch, now.weekday())
+                    if w.opens_at <= now.time() <= w.closes_at
+                ),
+                None,
             )
         body = f"We're open now until {closes.strftime('%H:%M')}." if closes else "We're open now."
         return BotReply(body=body, action=action)

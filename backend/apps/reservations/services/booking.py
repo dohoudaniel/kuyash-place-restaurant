@@ -123,23 +123,42 @@ def book(
         raise SlotUnavailable("That time is fully booked. Please choose another.")
 
     try:
-        reservation = Reservation.objects.create(
-            branch=branch,
-            user=user if user is not None and getattr(user, "is_authenticated", False) else None,
-            area=area,
-            table=table,
-            reserved_for=reserved_for,
-            duration_minutes=duration,
-            party_size=party_size,
-            guest_name=guest_name.strip(),
-            guest_email=guest_email.strip().lower(),
-            guest_phone=guest_phone.strip(),
-            special_requests=special_requests.strip(),
-            source=source,
-            idempotency_key=idempotency_key,
-        )
+        # A savepoint, so an IntegrityError leaves the surrounding transaction
+        # usable: on Postgres the follow-up query below would otherwise raise
+        # TransactionManagementError instead of answering.
+        with transaction.atomic():
+            reservation = Reservation.objects.create(
+                branch=branch,
+                user=user
+                if user is not None and getattr(user, "is_authenticated", False)
+                else None,
+                area=area,
+                table=table,
+                reserved_for=reserved_for,
+                duration_minutes=duration,
+                party_size=party_size,
+                guest_name=guest_name.strip(),
+                guest_email=guest_email.strip().lower(),
+                guest_phone=guest_phone.strip(),
+                special_requests=special_requests.strip(),
+                source=source,
+                idempotency_key=idempotency_key,
+            )
     except IntegrityError as exc:
-        # The database exclusion constraint caught an overlap the application
+        # Two different constraints can land here.
+        if idempotency_key:
+            replayed = Reservation.objects.filter(idempotency_key=idempotency_key).first()
+            if replayed is not None:
+                # The unique key caught a duplicate the cache let through — an
+                # eviction, a flush, a Redis failover. The customer gets their
+                # original booking back rather than a second table or a 500,
+                # which is the entire point of having a database backstop.
+                logger.warning(
+                    "reservation_idempotency_replayed_from_database",
+                    extra={"reservation": replayed.reference},
+                )
+                return replayed
+        # Otherwise the exclusion constraint caught an overlap the application
         # missed — a genuine race. Report it as a lost slot, not a 500.
         logger.warning("reservation_overlap_rejected_by_database", extra={"table": table.pk})
         raise SlotUnavailable("That table was taken while you were booking.") from exc
@@ -180,7 +199,17 @@ def reschedule(
     reservation.duration_minutes = duration
     reservation.party_size = size
     reservation.table = table
-    reservation.save()
+    try:
+        with transaction.atomic():
+            reservation.save()
+    except IntegrityError as exc:
+        # book() has always handled this; reschedule() did not, so losing the
+        # same race here returned a 500 rather than "that time just went".
+        logger.warning(
+            "reservation_overlap_rejected_by_database_on_reschedule",
+            extra={"table": table.pk},
+        )
+        raise SlotUnavailable("That table was taken while you were rescheduling.") from exc
 
     _notify(reservation, "reservation_rescheduled")
     return reservation

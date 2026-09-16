@@ -20,7 +20,7 @@ from apps.payments.providers.base import (
     InitResult,
     RefundResult,
     VerifyResult,
-    parse_money_json,
+    read_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,17 +71,18 @@ class FlutterwaveProvider:
         email: str,
         reference: str,
         callback_url: str,
+        currency: str = "NGN",
         metadata: Mapping[str, Any] | None = None,
     ) -> InitResult:
-        # Flutterwave takes naira, so convert from our canonical kobo.
-        amount_naira = (Decimal(amount_kobo) / 100).quantize(Decimal("0.01"))
+        # Flutterwave takes major units, so convert from our canonical minor ones.
+        amount_major = (Decimal(amount_kobo) / 100).quantize(Decimal("0.01"))
         try:
             response = requests.post(
                 f"{API_ROOT}/payments",
                 json={
                     "tx_ref": reference,
-                    "amount": str(amount_naira),
-                    "currency": "NGN",
+                    "amount": str(amount_major),
+                    "currency": currency,
                     "redirect_url": callback_url,
                     "customer": {"email": email},
                     "meta": dict(metadata or {}),
@@ -89,7 +90,7 @@ class FlutterwaveProvider:
                 headers=self._headers(),
                 timeout=TIMEOUT,
             )
-            body = parse_money_json(response.content)
+            body = read_json(response)
         except requests.RequestException as exc:
             logger.warning("flutterwave_initialise_failed", extra={"reference": reference})
             return InitResult(ok=False, error=f"{exc.__class__.__name__}: {exc}")
@@ -112,12 +113,15 @@ class FlutterwaveProvider:
                 headers=self._headers(),
                 timeout=TIMEOUT,
             )
-            body = parse_money_json(response.content)
+            body = read_json(response)
         except requests.RequestException as exc:
             return VerifyResult(status="pending", message=f"{exc.__class__.__name__}: {exc}")
 
         if str(body.get("status", "")).lower() != "success":
-            return VerifyResult(status="failed", message=str(body.get("message", "")))
+            # The envelope, not the payment: an expired key or a tx_ref that has
+            # not landed yet. Retryable, never terminal — see the same note in
+            # the Paystack adapter.
+            return VerifyResult(status="pending", message=str(body.get("message", "")))
 
         data = body.get("data") or {}
         card = data.get("card") or {}
@@ -125,6 +129,8 @@ class FlutterwaveProvider:
             status=_STATUS.get(str(data.get("status", "")).lower(), "pending"),
             amount_kobo=_to_kobo(data.get("amount")),
             currency=data.get("currency", "NGN"),
+            # Flutterwave's own numeric id. Refunds address this, not the tx_ref.
+            provider_reference=str(data.get("id", "")),
             channel=data.get("payment_type", ""),
             authorization_code=str(data.get("id", "")),
             card_last4=card.get("last_4digits", ""),
@@ -146,7 +152,7 @@ class FlutterwaveProvider:
                 headers=self._headers(),
                 timeout=TIMEOUT,
             )
-            body = parse_money_json(response.content)
+            body = read_json(response)
         except requests.RequestException as exc:
             return RefundResult(ok=False, error=f"{exc.__class__.__name__}: {exc}")
 

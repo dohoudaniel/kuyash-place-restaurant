@@ -230,7 +230,7 @@ No gzip middleware. No `Cache-Control` or `Vary` on anything, so no CDN or brows
 
 ### 6.6 The launch-day landmine
 
-`TRUSTED_PROXY_COUNT` defaults to `0`. Behind any load balancer that means every visitor shares the balancer's IP, so `anon: 100/min` becomes 100 requests per minute **for the entire site**, and `order_create: 10/hour` becomes **ten orders per hour, total**. The `kuyash.W021` check anticipates exactly this — but `Makefile:54` runs the deploy check with `|| true`, so CI can never fail on it.
+`TRUSTED_PROXY_COUNT` defaults to `0`. Behind any load balancer that means every visitor shares the balancer's IP, so `anon: 100/min` becomes 100 requests per minute **for the entire site**, and `order_create: 10/hour` becomes **ten orders per hour, total**. **Fixed:** `kuyash.E021` is now an *error*, not a warning, so `check --deploy` fails outright; the `|| true` that hid it has been removed from the Makefile. Setting `TRUSTED_PROXY_COUNT` correctly is still a deployment step.
 
 Second-order: even correctly configured, per-IP limits behave badly against Nigerian carrier-grade NAT, where many customers share few addresses. Checkout throttles should key on cart or session, not IP.
 
@@ -375,3 +375,32 @@ Honesty about the edges of this audit:
 - **Deadlock risk** between checkout and refund lock ordering is reasoned, not reproduced.
 - The **Flutterwave refund identifier** and the **non-NGN currency** findings need a sandbox call to confirm.
 - The default test run uses SQLite, eager Celery, locmem cache, MD5 hashing, no throttling and no MFA — each individually defensible, collectively meaning **the default suite exercises no row locking, no cache eviction, no throttling and no MFA**.
+
+---
+
+## 12. Implementation — 2026-09-16
+
+Four parallel streams with strict file ownership, plus my own work on the load tests and the consolidation below. **The backend suite is green at 1,520 tests, both money-path coverage gates are at 100%, ruff, mypy, `makemigrations --check`, `check --deploy`, the three frontend gates, `tsc`, ESLint and the production build all pass.**
+
+### Landed
+
+**Money and data (§3)** — the cart receiver now clears only the order's own cart (snapshotted at placement); `amount_paid` is derived from settled transactions; duplicate settlements are detected and logged critically instead of skipping silently; transient provider errors map to `pending` so the reconciliation sweep retries them; the free-delivery redemption is written to the ledger; promo reversal covers `EXPIRED` and `FAILED`; `first_order_only` reads real order history; the promo row is locked during placement; targeted discounts are allocated across eligible lines only; cash orders can be marked collected; the table surcharge, the academy overbooking path and `record_manual_payment`'s amount check are all addressed.
+
+**Idempotency (§3.4)** — `cache.add` (atomic `SETNX`), keyed on `(scope, key)` with the body fingerprint in the *value* so a changed payload is a 422 rather than a second order, a short in-flight TTL, one shared decorator, and — new in this pass — **partial unique constraints on `Order` and `Enrolment`**, matching `Reservation`, with tests proving the database refuses a duplicate key and that blank keys still coexist.
+
+**Email (§3.5)** — dispatch moved to `transaction.on_commit`, real retry with backoff and jitter, `acks_late`, and an admin requeue action.
+
+**Performance (§6)** — a read-through cache module with signal invalidation, the branch selector cached and memoised per request, a stored `search_vector` with a GIN index, the KDS rider and academy seat N+1s closed, new indexes on orders and the loyalty ledger, `cached_db` sessions with per-request writes off, gzip, public cache headers, and batched loyalty expiry.
+
+**Security (§7)** — CSV formula neutralisation, the headless account-management routes closed off, the site-settings allowlist, gallery `LIMIT 1` neighbours, WebSocket authorisation before accept, a per-process-cache deploy check, and `kuyash.E021` promoted to an error.
+
+**Auth (§8)** — `already_verified` so the second click says "you're all set" instead of offering a resend that sends nothing, `weak_password` as its own code (the frontend regex hack is gone), a per-IP resend throttle, MFA elevation that expires, recovery-code download, and a `reset_staff_mfa` break-glass command.
+
+**Load tests (§8.4)** — rewritten. Real order references, a card path that exercises payment initialisation, an authenticated kitchen client, a WebSocket scenario, and scenario-level failures so an idle scenario can never again report a pass.
+
+### Not done, and why
+
+- **Throughput is still unmeasured.** The process-model finding (§6.1) remains a hypothesis. The rewritten load tests are the instrument; they need a Postgres staging environment and a run.
+- **The four streams were cut short by a rate limit.** Three had finished their work and passed their own gates; one stopped mid-way, and the remainder of its list — plus everything above under "landed" that it had not reached — was completed and verified by hand afterwards.
+- **One flake observed:** `test_proving_ownership_cancels_the_deadline` failed once in a loaded full-suite run and passed in isolation, after its neighbours, and in the final suite. Timing-sensitive socket deadline; worth pinning down before it erodes trust in the suite.
+- **Deferred refactors:** the seven-way authorisation duplication, the money-envelope consolidation, and splitting `price_cart` (§8.3). All are safe-but-large changes that would have collided with four concurrent streams; they remain the highest-leverage structural work.

@@ -273,11 +273,14 @@ def reject_reason_choices() -> list[dict[str, str]]:
 
 
 def _kds_rider(order: Order) -> dict[str, str] | None:
-    from apps.delivery.models import DeliveryAssignment
+    """The assigned rider, read from the prefetched one-to-one.
 
-    assignment = (
-        DeliveryAssignment.objects.filter(order=order).select_related("rider__user").first()
-    )
+    This used to run a ``DeliveryAssignment`` query per ticket — an N+1 on the
+    kitchen's primary screen, which is polled every ten seconds and is worst
+    exactly when the restaurant is busiest. The queue queryset now
+    ``select_related``s the assignment, its rider and the rider's user.
+    """
+    assignment = getattr(order, "delivery_assignment", None)
     return {"name": assignment.rider.user.get_short_name()} if assignment else None
 
 

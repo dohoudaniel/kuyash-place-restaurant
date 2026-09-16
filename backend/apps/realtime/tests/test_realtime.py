@@ -101,15 +101,54 @@ async def test_an_unknown_order_closes_the_same_way(db) -> None:  # type: ignore
     assert (await ws.receive_output())["code"] == consumers.CLOSE_NOT_FOUND
 
 
-async def test_other_customers_see_nothing(order, stranger) -> None:  # type: ignore[no-untyped-def]
+async def test_other_customers_are_refused_at_the_handshake(order, stranger) -> None:  # type: ignore[no-untyped-def]
+    """A signed-in visitor who is not the owner has nothing left to prove.
+
+    The socket used to be accepted first and the check run afterwards, and a
+    caller who failed it was simply left connected — no close, no idle timeout,
+    no cap on how many they could hold open.
+    """
+    ws = socket(f"/ws/orders/{order.reference}/", stranger)
+    connected, code = await ws.connect()
+    assert not connected
+    assert code == consumers.CLOSE_NOT_FOUND
+
+
+@pytest.mark.parametrize("message", [{"type": "hello"}, ["not", "an", "object"], "plain"])
+async def test_a_message_that_is_not_the_auth_message_closes_the_socket(
+    guest_order, message
+) -> None:  # type: ignore[no-untyped-def]
+    """The only thing this socket ever expects to hear is the auth message."""
+    ws = socket(f"/ws/orders/{guest_order.reference}/")
+    await ws.connect()
+    await ws.send_json_to(message)
+    assert (await ws.receive_output())["code"] == consumers.CLOSE_FORBIDDEN
+
+
+async def test_a_guest_who_never_proves_ownership_is_closed(guest_order, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Accepting is the only way to hear the token, so the window is bounded."""
+    monkeypatch.setattr(consumers, "AUTH_TIMEOUT_SECONDS", 0.05)
+    ws = socket(f"/ws/orders/{guest_order.reference}/")
+    assert (await ws.connect())[0]
+    closed = await ws.receive_output(timeout=2)
+    assert closed == {"type": "websocket.close", "code": consumers.CLOSE_NOT_FOUND}
+
+
+async def test_proving_ownership_cancels_the_deadline(guest_order, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(consumers, "AUTH_TIMEOUT_SECONDS", 0.05)
+    ws = socket(f"/ws/orders/{guest_order.reference}/")
+    await ws.connect()
+    await ws.send_json_to({"type": "auth", "token": guest_order.guest_token})
+    assert (await ws.receive_json_from())["order"]["reference"] == guest_order.reference
+    assert await ws.receive_nothing(timeout=0.3)  # the deadline did not fire
+    await ws.disconnect()
+
+
+async def test_a_stranger_is_never_pushed_another_customers_order(order, stranger) -> None:  # type: ignore[no-untyped-def]
     ws = socket(f"/ws/orders/{order.reference}/", stranger)
     await ws.connect()
-    await ws.send_json_to({"type": "hello"})  # not an auth message: ignored
-    await ws.send_json_to(["not", "an", "object"])
-    assert await ws.receive_nothing(timeout=0.3)
     await database_sync_to_async(transition)(order, "paid")
     assert await ws.receive_nothing(timeout=0.3)  # not in the group, so no push
-    await ws.disconnect()
 
 
 async def test_staff_may_follow_any_order(order, kitchen_user) -> None:  # type: ignore[no-untyped-def]
@@ -148,6 +187,15 @@ async def test_the_kitchen_socket_refuses_everyone_else(branch, verified_user, w
     connected, code = await ws.connect()
     assert not connected
     assert code == consumers.CLOSE_FORBIDDEN
+
+
+async def test_the_kitchen_socket_closes_on_anything_a_client_sends(order, kitchen_user) -> None:  # type: ignore[no-untyped-def]
+    """Server → client only. A client that talks here is not one of ours."""
+    ws = socket("/ws/kds/", kitchen_user)
+    await ws.connect()
+    await ws.receive_json_from()  # the queue
+    await ws.send_json_to({"type": "anything"})
+    assert (await ws.receive_output())["code"] == consumers.CLOSE_FORBIDDEN
 
 
 # ──────────────────────────────────────────────────────────────────────────────

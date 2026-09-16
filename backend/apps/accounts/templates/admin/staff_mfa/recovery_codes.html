@@ -4,8 +4,20 @@
 {% block content %}
 <div id="content-main" style="max-width:34rem">
   <p><strong>Two-factor authentication is on.</strong> These recovery codes are shown only once. Store them somewhere safe — each one works a single time if you lose your phone.</p>
-  <pre style="font-size:1.2em;line-height:1.8;background:var(--darkened-bg);padding:12px 16px;border-radius:8px">{% for code in codes %}{{ code }}
+  <pre style="font-size:1.2em;line-height:1.8;background:var(--darkened-bg);padding:12px 16px;border-radius:8px;user-select:all">{% for code in codes %}{{ code }}
 {% endfor %}</pre>
-  <p><a class="button default" href="{{ next }}" style="padding:10px 16px">I've saved them — continue</a></p>
+  <p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <a class="button" download="kuyash-recovery-codes.txt" href="data:text/plain;charset=utf-8,{{ codes_text|urlencode }}" style="padding:10px 16px">Download as a file</a>
+    <a class="button default" href="{{ next }}" style="padding:10px 16px">I've saved them — continue</a>
+  </p>
+  <p style="margin-top:1.5em;color:var(--body-quiet-color)">
+    Clicking the block above selects every code, so you can copy them in one go.
+  </p>
+  <p style="color:var(--body-quiet-color)">
+    Lost the codes <em>and</em> your phone? A superuser can clear your authenticators from the
+    Users page, or anyone with shell access can run
+    <code>python manage.py reset_staff_mfa &lt;your email&gt;</code>. Either way you re-enrol at
+    your next sign-in.
+  </p>
 </div>
 {% endblock %}

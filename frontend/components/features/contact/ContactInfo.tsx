@@ -11,7 +11,7 @@ import { useSiteInfo } from "@/lib/site/useSiteInfo";
  */
 export default function ContactInfo() {
   const { branch, settings, hours } = useSiteInfo();
-  const email = settings?.support_email || branch?.email || "";
+  const email = branch?.email || "";
   const schedule = hours ? summariseHours(hours.hours) : [];
 
   const contactDetails = [

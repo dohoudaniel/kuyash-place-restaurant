@@ -12,6 +12,21 @@ from apps.payments.models import PaymentTransaction, TransactionStatus
 
 logger = logging.getLogger(__name__)
 
+#: Statuses the sweep will re-check.
+#:
+#: ``FAILED`` is in this list, and that is the point. A provider answering
+#: "invalid key", "rate limited" or "reference not found" used to be recorded as
+#: a terminal failure, and the sweep only ever looked at initialised and pending
+#: records — so a transaction the customer really had paid was marked failed
+#: forever, in exactly the provider incident this task exists to recover from.
+#: The adapters now report those as ``pending``; this covers the records the old
+#: mapping already stranded, and any future adapter that gets it wrong.
+RETRYABLE_STATUSES = [
+    TransactionStatus.INITIALISED,
+    TransactionStatus.PENDING,
+    TransactionStatus.FAILED,
+]
+
 
 @shared_task(name="payments.verify_pending")
 def verify_pending_payments() -> dict[str, int]:
@@ -24,13 +39,21 @@ def verify_pending_payments() -> dict[str, int]:
 
     Runs every 10 minutes via beat.
     """
-    from apps.payments.services.payments import PaymentAmountMismatch, verify_and_settle
+    from apps.payments.services.payments import (
+        AMOUNT_MISMATCH_REASON,
+        PaymentAmountMismatch,
+        verify_and_settle,
+    )
 
     now = timezone.now()
     stale = PaymentTransaction.objects.filter(
-        status__in=[TransactionStatus.INITIALISED, TransactionStatus.PENDING],
+        status__in=RETRYABLE_STATUSES,
         initialised_at__lt=now - dt.timedelta(minutes=5),
         initialised_at__gt=now - dt.timedelta(hours=24),
+    ).exclude(
+        # A confirmed amount mismatch is a verdict, not an outage: re-asking
+        # cannot change it, and every retry would re-raise a security alert.
+        failure_reason=AMOUNT_MISMATCH_REASON
     )
 
     counts = {"checked": 0, "settled": 0, "failed": 0}
@@ -51,6 +74,23 @@ def verify_pending_payments() -> dict[str, int]:
     if counts["settled"]:
         logger.info("reconciliation_settled", extra=counts)
     return counts
+
+
+@shared_task(name="payments.settle_webhook_event")
+def settle_webhook_event(event_id: str) -> str:
+    """Settle one signature-verified webhook, off the provider's own request.
+
+    Keyed on the event id (WH-8): the row is the unit of work and the unit of
+    idempotency, so a redelivery that gets this far finds it already processed.
+    """
+    from apps.payments.models import WebhookEvent
+    from apps.payments.services.webhooks import settle_event
+
+    event = WebhookEvent.objects.filter(pk=event_id).first()
+    if event is None:
+        logger.warning("webhook_event_missing", extra={"event": event_id})
+        return "missing"
+    return settle_event(event)
 
 
 @shared_task(name="payments.expire_stale_orders")
