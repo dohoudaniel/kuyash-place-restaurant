@@ -2126,16 +2126,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description One saved address. */
+        /**
+         * Retrieve an address
+         * @description One saved address.
+         */
         get: operations["accounts_addresses_retrieve"];
-        /** @description One saved address. */
+        /**
+         * Replace an address
+         * @description One saved address.
+         */
         put: operations["accounts_addresses_update"];
         post?: never;
-        /** @description One saved address. */
+        /**
+         * Delete an address
+         * @description One saved address.
+         */
         delete: operations["accounts_addresses_destroy"];
         options?: never;
         head?: never;
-        /** @description One saved address. */
+        /**
+         * Update an address
+         * @description One saved address.
+         */
         patch: operations["accounts_addresses_partial_update"];
         trace?: never;
     };

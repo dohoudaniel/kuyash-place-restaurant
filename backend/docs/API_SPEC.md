@@ -3,7 +3,7 @@
 **Base URL:** `/api/v1/`
 **Auth:** session cookie (HttpOnly, Secure, SameSite=Lax) — see [`AUTH.md`](AUTH.md)
 **Content type:** `application/json`; bodies `snake_case`; paths `kebab-case`
-**Schema:** auto-generated OpenAPI 3.1 at `/api/v1/schema/`, Swagger UI at `/api/v1/docs/`
+**Schema:** auto-generated OpenAPI 3.0.3 at `/api/v1/schema/`, Swagger UI at `/api/v1/docs/`
 
 ---
 

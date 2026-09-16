@@ -10,7 +10,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.middleware.csrf import get_token
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -396,6 +396,12 @@ class AddressListCreateView(ListCreateAPIView):
         serializer.save(user=user, is_default=make_default)
 
 
+@extend_schema_view(
+    get=extend_schema(summary="Retrieve an address", tags=["accounts"]),
+    put=extend_schema(summary="Replace an address", tags=["accounts"]),
+    patch=extend_schema(summary="Update an address", tags=["accounts"]),
+    delete=extend_schema(summary="Delete an address", tags=["accounts"]),
+)
 class AddressDetailView(RetrieveUpdateDestroyAPIView):
     """One saved address."""
 

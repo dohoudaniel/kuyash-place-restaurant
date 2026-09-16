@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kuyash Place — frontend
 
-## Getting Started
+Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4. The customer site and the kitchen display screen.
 
-First, run the development server:
+Every screen runs on the Django API in [`../backend`](../backend): prices, availability, orders and order state all come from the server. There is no business logic here.
+
+## Running it
+
+See [`../SETUP.md`](../SETUP.md). The short version:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The backend must be running, or every screen shows a network error.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What |
+|---|---|
+| `npm run dev` | Development server (webpack, not turbopack) |
+| `npm run build` / `npm run start` | Production build and server |
+| `npm run lint` | ESLint — clean today, keep it that way |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run api:sync` | Regenerate `lib/api/openapi.yml` and `lib/api/schema.d.ts` from the backend |
 
-## Learn More
+There is no test runner here; the suite lives in the backend.
 
-To learn more about Next.js, take a look at the following resources:
+## Rules that matter
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Use the existing design system.** Import `components/ui/*` and the brand tokens in `app/globals.css`; don't introduce a new one.
+- **No money arithmetic in components.** Render `Money.display` from the API.
+- **No card fields, ever.** Payment is a redirect to the provider's hosted page.
+- **No `fetch` in components.** Everything goes through `api()` in `lib/api/client.ts`.
+- **Never hand-edit `lib/api/schema.d.ts`** — run `npm run api:sync`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Each of the first three is enforced by a CI gate (`backend/scripts/check-no-*.sh`).
 
-## Deploy on Vercel
+## Where things live
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Path | What |
+|---|---|
+| `app/` | Routes — thin shells that compose features |
+| `components/features/<feature>/` | One folder per domain, with an `index.ts` barrel |
+| `components/ui/` | shadcn/ui primitives |
+| `lib/api/` | The backend boundary: `client.ts`, generated `schema.d.ts`, typed helpers |
+| `proxy.ts` | Next 16's middleware: the Content Security Policy and route gating |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Further reading: [`../API-DOCS.md`](../API-DOCS.md) for endpoints, [`../backend/docs/FRONTEND_INTEGRATION.md`](../backend/docs/FRONTEND_INTEGRATION.md) for how each screen was wired.

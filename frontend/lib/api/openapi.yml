@@ -2996,6 +2996,7 @@ paths:
     get:
       operationId: accounts_addresses_retrieve
       description: One saved address.
+      summary: Retrieve an address
       parameters:
       - in: path
         name: id
@@ -3017,6 +3018,7 @@ paths:
     put:
       operationId: accounts_addresses_update
       description: One saved address.
+      summary: Replace an address
       parameters:
       - in: path
         name: id
@@ -3050,6 +3052,7 @@ paths:
     patch:
       operationId: accounts_addresses_partial_update
       description: One saved address.
+      summary: Update an address
       parameters:
       - in: path
         name: id
@@ -3082,6 +3085,7 @@ paths:
     delete:
       operationId: accounts_addresses_destroy
       description: One saved address.
+      summary: Delete an address
       parameters:
       - in: path
         name: id

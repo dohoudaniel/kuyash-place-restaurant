@@ -15,6 +15,9 @@ card fields from `frontend/`. See `docs/ROADMAP.md` for the Gate 1 checklist.
 
 ## Start here
 
+**Running it for the first time?** [`../SETUP.md`](../SETUP.md) — both applications, end to end.
+**Calling the API?** [`../API-DOCS.md`](../API-DOCS.md), or Swagger UI at `/api/v1/docs/`.
+
 **If you read one thing:** [`docs/FRONTEND_AUDIT.md`](docs/FRONTEND_AUDIT.md).
 
 The `frontend/` application is a 16,432-line prototype with **no network layer whatsoever** — zero `fetch()` calls, zero API routes, zero server actions. Orders, reservations, catering enquiries, reviews, enrolments and user accounts are simulated with `alert()` and `setTimeout`. Prices, VAT, discounts and delivery fees are computed in the browser from hardcoded strings.
@@ -140,7 +143,7 @@ services when you want them — see `docs/DEPLOYMENT.md` §1a.
 | URL | What |
 |---|---|
 | `http://localhost:8000/api/v1/docs/` | Swagger UI |
-| `http://localhost:8000/api/v1/schema/` | OpenAPI 3.1 schema |
+| `http://localhost:8000/api/v1/schema/` | OpenAPI schema (3.0.3) |
 | `http://localhost:8000/admin/` | Django admin |
 
 ### Quality gates
